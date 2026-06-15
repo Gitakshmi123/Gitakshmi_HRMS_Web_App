@@ -187,7 +187,8 @@ exports.getMyBalances = async (req, res) => {
         }
 
         const { LeaveBalance, LeavePolicy } = getModels(req);
-        const tenantIdStr = req.tenantId;
+        const tenantIdStr = req.user?.tenantId || req.tenantId;
+        if (!tenantIdStr) return res.status(400).json({ error: "tenant_missing" });
         const year = parseInt(req.query.year) || new Date().getFullYear();
         let emp = await resolveAuthenticatedEmployee(req, {
             select: '_id leavePolicy tenant joiningDate leaveBalanceYear employeeType role department departmentId grade gradeId designation jobType band'
@@ -300,6 +301,10 @@ exports.getMyBalances = async (req, res) => {
 
 exports.applyLeave = async (req, res) => {
     try {
+        const tenantIdStr = req.user?.tenantId || req.tenantId;
+        if (!tenantIdStr) return res.status(400).json({ error: "tenant_missing" });
+        req.tenantId = new mongoose.Types.ObjectId(tenantIdStr);
+
         const { LeaveRequest, LeaveBalance, Employee, LeavePolicy, Holiday } = getModels(req);
         const { leaveType, startDate, endDate, reason, isHalfDay, halfDayTarget, halfDaySession, employeeId: targetId } = req.body;
 
@@ -526,6 +531,10 @@ exports.applyLeave = async (req, res) => {
 
 exports.approveLeave = async (req, res) => {
     try {
+        const tenantIdStr = req.user?.tenantId || req.tenantId;
+        if (!tenantIdStr) return res.status(400).json({ error: "tenant_missing" });
+        req.tenantId = new mongoose.Types.ObjectId(tenantIdStr);
+
         const { LeaveRequest, LeaveBalance, Employee, Holiday, AttendanceSettings, Shift, LeavePolicy } = getModels(req);
         const { id } = req.params;
         const { remark, startDate, endDate, isHalfDay, halfDayTarget, halfDaySession } = req.body;
@@ -651,6 +660,10 @@ exports.approveLeave = async (req, res) => {
 
 exports.rejectLeave = async (req, res) => {
     try {
+        const tenantIdStr = req.user?.tenantId || req.tenantId;
+        if (!tenantIdStr) return res.status(400).json({ error: "tenant_missing" });
+        req.tenantId = new mongoose.Types.ObjectId(tenantIdStr);
+
         const { LeaveRequest, LeaveBalance, Employee } = getModels(req);
         const { id } = req.params;
         const { rejectionReason } = req.body;
@@ -736,6 +749,10 @@ exports.rejectLeave = async (req, res) => {
 
 exports.getTeamLeaves = async (req, res) => {
     try {
+        const tenantIdStr = req.user?.tenantId || req.tenantId;
+        if (!tenantIdStr) return res.status(400).json({ error: "tenant_missing" });
+        req.tenantId = new mongoose.Types.ObjectId(tenantIdStr);
+
         const { Employee, LeaveRequest } = getModels(req);
         const { page = 1, limit = 10 } = req.query;
         const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -1043,6 +1060,10 @@ exports.editLeave = async (req, res) => {
 
 exports.cancelLeave = async (req, res) => {
     try {
+        const tenantIdStr = req.user?.tenantId || req.tenantId;
+        if (!tenantIdStr) return res.status(400).json({ error: "tenant_missing" });
+        req.tenantId = new mongoose.Types.ObjectId(tenantIdStr);
+
         const { LeaveRequest, LeaveBalance } = getModels(req);
         const { id } = req.params;
         const currentEmployee = await resolveAuthenticatedEmployee(req, { select: '_id' });

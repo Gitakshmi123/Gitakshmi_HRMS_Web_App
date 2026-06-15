@@ -497,6 +497,24 @@ export default function HRSidebar({
     ensureSingleModule('Access', `${pathPrefix}/access`, 'access', 'accessControl', 'configuration.access');
     ensureSingleModule('Employee', `${pathPrefix}/employees`, 'employees', 'hr', 'people.employees');
     ensureSingleModule('Attendance', `${pathPrefix}/attendance`, 'attendance', 'attendance', 'attendance.dashboard');
+    
+    // Force Policy visibility
+    const policyExists = sections.some(s => s.moduleName === 'Policy');
+    if (!policyExists) {
+      sections.push({
+        id: 'manual-policy',
+        title: 'MANAGEMENT',
+        moduleName: 'Policy',
+        icon: 'leaveRequests',
+        items: [{ 
+          label: 'Policy', 
+          to: `${pathPrefix}/leave-approvals`, 
+          icon: ICONS.leaveRequests, 
+          children: [], 
+          matchPaths: [`${pathPrefix}/leave-approvals`, `${pathPrefix}/leave-policies`, `${pathPrefix}/organization-policies`] 
+        }]
+      });
+    }
 
     ensureSingleModule('Payroll', `${pathPrefix}/payroll/dashboard`, 'payrollDashboard', 'payroll', 'payroll.stats');
     ensureSingleModule(
@@ -631,7 +649,7 @@ export default function HRSidebar({
     return Object.fromEntries(
       Object.entries(orderedGroups).map(([title, mods]) => [
         title,
-        mods.filter(m => !hiddenModules.includes(m.moduleName))
+        mods.filter(m => m.moduleName === 'Policy' || !hiddenModules.includes(m.moduleName))
       ])
     );
   }, [dynamicModules, hasPermission, pathPrefix, isPrivilegedSidebarRole, hasCompanyModule, hasModuleAccess, resolveModuleCodeForNav, sidebarOrder, sectionOrder, hiddenModules]);

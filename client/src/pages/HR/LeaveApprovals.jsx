@@ -296,18 +296,24 @@ export default function LeaveApprovals({
                                             <div className="flex items-center gap-3">
                                                 <div className="w-10 h-10 rounded-xl bg-slate-50 text-blue-600 flex items-center justify-center text-xs font-black border border-slate-100 group-hover:bg-blue-50 transition-colors overflow-hidden">
                                                     {req.employee?.profilePic ? (
-                                                        <img 
-                                                            src={req.employee.profilePic.startsWith('http') ? req.employee.profilePic : `${HRMS_API_ROOT}/${req.employee.profilePic}`} 
-                                                            alt="" 
-                                                            className="w-full h-full object-cover"
-                                                            onError={(e) => {
-                                                                e.target.onerror = null;
-                                                                e.target.src = '';
-                                                                e.target.parentElement.innerHTML = `${req.employee?.firstName?.[0] || '?'}${req.employee?.lastName?.[0] || ''}`;
-                                                            }}
-                                                        />
+                                                        <>
+                                                            <img 
+                                                                src={req.employee.profilePic.startsWith('http') ? req.employee.profilePic : `${HRMS_API_ROOT}/${req.employee.profilePic}`} 
+                                                                alt="" 
+                                                                className="w-full h-full object-cover"
+                                                                onError={(e) => {
+                                                                    e.target.style.display = 'none';
+                                                                    if (e.target.nextElementSibling) {
+                                                                        e.target.nextElementSibling.style.display = 'flex';
+                                                                    }
+                                                                }}
+                                                            />
+                                                            <span style={{ display: 'none' }} className="w-full h-full items-center justify-center">
+                                                                {req.employee?.firstName?.[0] || '?'}{req.employee?.lastName?.[0] || ''}
+                                                            </span>
+                                                        </>
                                                     ) : (
-                                                        <span>{req.employee?.firstName?.[0]}{req.employee?.lastName?.[0]}</span>
+                                                        <span>{req.employee?.firstName?.[0] || '?'}{req.employee?.lastName?.[0] || ''}</span>
                                                     )}
                                                 </div>
                                                 <div>
