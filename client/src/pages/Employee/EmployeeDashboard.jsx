@@ -518,6 +518,23 @@ export default function EmployeeDashboard() {
     }
   };
 
+  const handleCancelLeave = (leaveId) => {
+    showConfirmToast(
+      'Cancel Leave Request?',
+      'Are you sure you want to cancel this leave request? This action cannot be undone.',
+      async () => {
+        try {
+          showToast('info', 'Cancelling...', 'Please wait');
+          await api.post(`/employee/leaves/cancel/${leaveId}`);
+          showToast('success', 'Cancelled', 'Leave cancelled successfully');
+          fetchDashboardData();
+        } catch (error) {
+          showToast('error', 'Failed', error?.response?.data?.error || 'Could not cancel leave');
+        }
+      }
+    );
+  };
+
   const handleFaceSuccess = async () => {
     try {
         setClocking(true);
@@ -613,6 +630,7 @@ export default function EmployeeDashboard() {
                   handleClockInOut={handleClockInOut}
                   clocking={clocking}
                   hasLeavePolicy={hasLeavePolicy}
+                  handleCancelLeave={handleCancelLeave}
                   editLeave={editLeave}
                   setEditLeave={setEditLeave}
                   fetchDashboardData={fetchDashboardData}

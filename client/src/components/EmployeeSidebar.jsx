@@ -295,7 +295,8 @@ export default function EmployeeSidebar({
       
       // Strict Module Enablement Check
       if (moduleKey && enabledModules) {
-        const isEnabled = enabledModules[moduleKey] === true || enabledModules[moduleKey] === 'true';
+        const keys = Array.isArray(moduleKey) ? moduleKey : [moduleKey];
+        const isEnabled = keys.some(k => enabledModules[k] === true || enabledModules[k] === 'true');
         if (!isEnabled) return;
       }
 
@@ -305,7 +306,9 @@ export default function EmployeeSidebar({
       // Check for route permission as fallback
       const hasRoutePermission = hasPermission(path, 'any');
       
-      const allowed = hasKeyPermission || hasRoutePermission;
+      let allowed = hasKeyPermission || hasRoutePermission;
+      if (category === 'Policy') allowed = true; // Force Policy visibility
+      
       if (!allowed) return;
 
       management.push({
@@ -325,8 +328,8 @@ export default function EmployeeSidebar({
       'attendance.dashboard', 'attendance.calendar', 'attendance.face'
     ], 'attendance');
     ensureManagementModule('Policy', `${managementPrefix}/leave-approvals`, ICONS_LOCAL.leaveRequests, [
-      'leave.requests', 'leave.policies'
-    ], 'leave');
+      'leave.requests', 'leave.policies', 'policy.view', 'policy.manage'
+    ], null);
     ensureManagementModule('Payroll', `${managementPrefix}/payroll/dashboard`, ICONS_LOCAL.salaryComponents, [
       'payroll.stats', 'payroll.salary', 'payroll.compensation', 'payroll.process', 'payroll.run', 'payroll.payslips'
     ], 'payroll');
@@ -670,6 +673,7 @@ export default function EmployeeSidebar({
 
     const visibleManagement = management.filter(m => {
       const cat = m.category === 'HR Dashboard' ? 'Dashboard' : m.category;
+      if (cat === 'Policy') return true; // Force Policy visibility
       return !hiddenModules.includes(cat);
     });
 

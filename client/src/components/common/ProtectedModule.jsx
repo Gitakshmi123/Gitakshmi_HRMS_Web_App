@@ -53,6 +53,8 @@ const ProtectedModule = ({ module, permissionKey = null, action = 'view', childr
     let targetModule = module;
     if (module === 'documentManagement' || module === 'documents') targetModule = 'documentManagement';
     else if (module === 'backgroundVerification' || module === 'bgv') targetModule = 'backgroundVerification';
+    else if (module === 'leave' && enabledModules?.['policy']) targetModule = 'policy';
+    else if (module === 'policy' && enabledModules?.['leave']) targetModule = 'leave';
 
     const normalizedModule = enabledModules?.[targetModule] || enabledModules?.[module];
     const isEnabled = enabledModules && (normalizedModule === true || normalizedModule === 'true');

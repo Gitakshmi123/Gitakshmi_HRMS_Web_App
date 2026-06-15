@@ -123,7 +123,9 @@ exports.createPolicy = async (req, res) => {
             designations: designations || [],
             applicableJobTypes: applicableJobTypes || [],
             applicableBands: applicableBands || [],
-            specificEmployeeIds: specificEmployeeId ? [specificEmployeeId] : [],
+            specificEmployeeIds: req.body.specificEmployeeIds?.length > 0 
+                ? req.body.specificEmployeeIds 
+                : (specificEmployeeId ? [specificEmployeeId] : []),
             rules: normalizedRules
         });
 
@@ -371,9 +373,11 @@ exports.getMyPolicies = async (req, res) => {
 
 exports.getPolicyById = async (req, res) => {
     try {
+        const tenantIdStr = req.user?.tenantId || req.tenantId;
+        if (!tenantIdStr) return res.status(400).json({ error: 'tenant_missing' });
         const { LeavePolicy } = getModels(req);
         const policyObjectId = new mongoose.Types.ObjectId(req.params.id);
-        const tenantObjectId = new mongoose.Types.ObjectId(req.tenantId);
+        const tenantObjectId = new mongoose.Types.ObjectId(tenantIdStr);
         const policy = await LeavePolicy.findOne({ _id: policyObjectId, tenant: tenantObjectId });
         if (!policy) return res.status(404).json({ error: 'Policy not found' });
         res.json(policy);
@@ -460,13 +464,15 @@ exports.updatePolicy = async (req, res) => {
 
 exports.togglePolicyStatus = async (req, res) => {
     try {
+        const tenantIdStr = req.user?.tenantId || req.tenantId;
+        if (!tenantIdStr) return res.status(400).json({ error: 'tenant_missing' });
         const { LeavePolicy } = getModels(req);
         const { id } = req.params;
         const requestedStatus = req.body.status
             ? String(req.body.status).toUpperCase()
             : (req.body.isActive ? 'ACTIVE' : 'INACTIVE');
         const policyObjectId = new mongoose.Types.ObjectId(id);
-        const tenantObjectId = new mongoose.Types.ObjectId(req.tenantId);
+        const tenantObjectId = new mongoose.Types.ObjectId(tenantIdStr);
 
         const policy = await LeavePolicy.findOneAndUpdate(
             { _id: policyObjectId, tenant: tenantObjectId },
@@ -495,31 +501,37 @@ exports.togglePolicyStatus = async (req, res) => {
 
 exports.deletePolicy = async (req, res) => {
     try {
+        const tenantIdStr = req.user?.tenantId || req.tenantId;
+        if (!tenantIdStr) {
+            return res.status(400).json({ error: "tenant_missing", message: "Tenant ID is required" });
+        }
+        const tenantId = new mongoose.Types.ObjectId(tenantIdStr);
+        const policyObjectId = new mongoose.Types.ObjectId(req.params.id);
+
         const { LeavePolicy, Employee, LeaveBalance } = getModels(req);
-        const policyId = req.params.id;
 
         // Find the policy first
-        const policy = await LeavePolicy.findOne({ _id: policyId, tenant: req.tenantId });
+        const policy = await LeavePolicy.findOne({ _id: policyObjectId, tenant: tenantId });
         if (!policy) {
             return res.status(404).json({ error: 'Policy not found' });
         }
 
         // 1. Remove policy reference from all employees
         const employeesUpdated = await Employee.updateMany(
-            { leavePolicy: policyId, tenant: req.tenantId },
+            { leavePolicy: policyObjectId, tenant: tenantId },
             { $unset: { leavePolicy: "" } }
         );
 
         // 2. Delete all leave balances associated with this policy
         const balancesDeleted = await LeaveBalance.deleteMany({
-            policy: policyId,
-            tenant: req.tenantId
+            policy: policyObjectId,
+            tenant: tenantId
         });
 
         // 3. Delete the policy itself
-        await LeavePolicy.findOneAndDelete({ _id: policyId, tenant: req.tenantId });
+        await LeavePolicy.findOneAndDelete({ _id: policyObjectId, tenant: tenantId });
 
-        const resyncResult = await syncAllActivePoliciesForTenant(req, req.tenantId);
+        const resyncResult = await syncAllActivePoliciesForTenant(req, tenantId);
 
         res.json({
             message: 'Policy deleted successfully',
@@ -536,13 +548,16 @@ exports.deletePolicy = async (req, res) => {
 // Admin: Force re-sync a policy to all applicable employees
 exports.syncPolicy = async (req, res) => {
     try {
+        const tenantIdStr = req.user?.tenantId || req.tenantId;
+        if (!tenantIdStr) return res.status(400).json({ error: 'tenant_missing' });
+        const reqTenantId = new mongoose.Types.ObjectId(tenantIdStr);
         const { LeavePolicy } = getModels(req);
         const policyId = req.params.id;
-        const policy = await LeavePolicy.findOne({ _id: policyId, tenant: req.tenantId });
+        const policy = await LeavePolicy.findOne({ _id: policyId, tenant: reqTenantId });
         if (!policy) return res.status(404).json({ error: 'Policy not found' });
 
         const result = await leaveManagementService.applyPolicyToExistingEmployees({
-            tenantId: req.tenantId,
+            tenantId: reqTenantId,
             tenantDB: req.tenantDB,
             policyId: policy._id,
             prorate: true
