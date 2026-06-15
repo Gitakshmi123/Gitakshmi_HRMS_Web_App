@@ -135,8 +135,12 @@ exports.registerFace = async (req, res) => {
 
     if (Array.isArray(faceEmbedding) && faceEmbedding.length === 128) {
       embedding = faceEmbedding;
+    } else if (faceEmbedding && typeof faceEmbedding === 'object' && Object.keys(faceEmbedding).length === 128) {
+      embedding = Object.values(faceEmbedding);
     } else {
-      const embeddingResult = await faceService.generateFaceEmbedding(faceImageData);
+      const base64Data = faceImageData.replace(/^data:image\/\w+;base64,/, "");
+      const imageBuffer = Buffer.from(base64Data, 'base64');
+      const embeddingResult = await faceService.generateFaceEmbedding(imageBuffer);
       if (!embeddingResult.success) {
         return res.status(400).json({
           success: false,
@@ -291,9 +295,20 @@ exports.verifyFaceAttendance = async (req, res) => {
     }
 
     let registeredEmbedding = decryptStoredEmbedding(registeredFaceData.faceEmbedding);
-    let liveEmbedding = Array.isArray(inputFaceData) && inputFaceData.length === 128 
-      ? inputFaceData 
-      : (await faceService.generateFaceEmbedding(inputFaceData)).embedding;
+    let liveEmbedding;
+    if (Array.isArray(inputFaceData) && inputFaceData.length === 128) {
+      liveEmbedding = inputFaceData;
+    } else {
+      let imageBuffer;
+      try {
+        const base64Str = typeof inputFaceData === 'string' ? inputFaceData : faceImageData;
+        const base64Data = base64Str.replace(/^data:image\/\w+;base64,/, "");
+        imageBuffer = Buffer.from(base64Data, 'base64');
+      } catch (e) {
+        imageBuffer = inputFaceData;
+      }
+      liveEmbedding = (await faceService.generateFaceEmbedding(imageBuffer)).embedding;
+    }
 
     if (!liveEmbedding) {
       return res.status(400).json({

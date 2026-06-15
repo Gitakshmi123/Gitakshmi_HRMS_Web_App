@@ -405,6 +405,8 @@ function normalizeClientLivenessProof(proof = null) {
 async function buildVerifiedEmbedding(faceEmbedding, faceImageData) {
   if (Array.isArray(faceEmbedding) && faceEmbedding.length === 128) {
     return faceEmbedding;
+  } else if (faceEmbedding && typeof faceEmbedding === 'object' && Object.keys(faceEmbedding).length === 128) {
+    return Object.values(faceEmbedding);
   }
 
   const imageBuffer = decodeBase64Image(faceImageData);
@@ -1669,7 +1671,8 @@ exports.matchFaceForAttendance = async (req, res) => {
     }
 
     const submittedImage = image || faceImageData || '';
-    if (!Array.isArray(faceEmbedding) && !normalizeBase64Image(submittedImage)) {
+    const isEmbeddingValid = (Array.isArray(faceEmbedding) && faceEmbedding.length === 128) || (faceEmbedding && typeof faceEmbedding === 'object' && Object.keys(faceEmbedding).length === 128);
+    if (!isEmbeddingValid && !normalizeBase64Image(submittedImage)) {
       return res.status(422).json({
         success: false,
         error: 'face_image_required',
@@ -1920,16 +1923,12 @@ exports.markAttendance = async (req, res) => {
       });
 
       if (!registeredFace) {
-        if (faceMandatory) {
-          return res.status(404).json({
-            success: false,
-            status: 'REJECTED',
-            error: 'no_registered_face',
-            message: 'No verified face registration found. Please register your face first.'
-          });
-        }
-
-        ({ matchResult, livenessResult } = buildUnregisteredFaceFallback());
+        return res.status(404).json({
+          success: false,
+          status: 'REJECTED',
+          error: 'no_registered_face',
+          message: 'No verified face registration found. Please register your face first.'
+        });
       } else {
         const registeredEmbedding = decryptStoredEmbedding(registeredFace.faceEmbedding);
         try {
@@ -1941,11 +1940,7 @@ exports.markAttendance = async (req, res) => {
             livenessProof
           }));
         } catch (faceError) {
-          if (faceMandatory || faceError.code !== 'face_mismatch') {
-            throw faceError;
-          }
-
-          ({ matchResult, livenessResult } = buildFaceMismatchFallback());
+          throw faceError;
         }
       }
     }
@@ -2749,7 +2744,7 @@ exports.updateLocation = async (req, res) => {
       attendanceRecord.flagReason = attendanceRecord.flagReasons[0] || '';
       attendanceRecord.verificationStatus = attendanceRecord.flagged ? 'FLAGGED' : 'VERIFIED';
 
-      await attendanceRecord.save();
+      await Attendance.updateOne({ _id: attendanceRecord._id }, { $set: { securityFlags: attendanceRecord.securityFlags, flagReasons: attendanceRecord.flagReasons, flagged: attendanceRecord.flagged, flagReason: attendanceRecord.flagReason, verificationStatus: attendanceRecord.verificationStatus } });
     }
 
     const sessionPayload = buildSessionPayload(

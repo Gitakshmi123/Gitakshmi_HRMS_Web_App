@@ -498,9 +498,10 @@ export default function HRSidebar({
     ensureSingleModule('Employee', `${pathPrefix}/employees`, 'employees', 'hr', 'people.employees');
     ensureSingleModule('Attendance', `${pathPrefix}/attendance`, 'attendance', 'attendance', 'attendance.dashboard');
     
-    // Force Policy visibility
+    // Force Policy visibility ONLY if they have permission
     const policyExists = sections.some(s => s.moduleName === 'Policy');
-    if (!policyExists) {
+    const canSeePolicy = hasPermission('leave.requests', 'any') || hasPermission('leave.policies', 'any') || hasPermission('policy.view', 'any') || hasPermission('policy.manage', 'any');
+    if (!policyExists && canSeePolicy) {
       sections.push({
         id: 'manual-policy',
         title: 'MANAGEMENT',
@@ -649,7 +650,7 @@ export default function HRSidebar({
     return Object.fromEntries(
       Object.entries(orderedGroups).map(([title, mods]) => [
         title,
-        mods.filter(m => m.moduleName === 'Policy' || !hiddenModules.includes(m.moduleName))
+        mods.filter(m => !hiddenModules.includes(m.moduleName))
       ])
     );
   }, [dynamicModules, hasPermission, pathPrefix, isPrivilegedSidebarRole, hasCompanyModule, hasModuleAccess, resolveModuleCodeForNav, sidebarOrder, sectionOrder, hiddenModules]);

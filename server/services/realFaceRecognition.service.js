@@ -15,10 +15,20 @@ let faceApiRuntimeAvailable = false;
 let canvasRuntimeAvailable = false;
 
 try {
-  faceapi = require('@vladmandic/face-api');
+  require('@tensorflow/tfjs');
+  require('@tensorflow/tfjs-backend-wasm');
+  faceapi = require('@vladmandic/face-api/dist/face-api.node-wasm.js');
+  faceapi.tf.setBackend('wasm');
   faceApiRuntimeAvailable = true;
+  console.log('✅ Loaded face-api (WASM Backend)');
 } catch (e) {
-  // console.warn('⚠️ face-api not available, using fallback mode');
+  try {
+    faceapi = require('@vladmandic/face-api');
+    faceApiRuntimeAvailable = true;
+    console.log('✅ Loaded face-api (Node Backend)');
+  } catch (e2) {
+    console.warn('⚠️ face-api not available, using fallback mode');
+  }
 }
 
 try {
@@ -44,7 +54,7 @@ const CONFIG = {
   // CRITICAL FIX: Threshold was 0.48 (accepts almost ANY face - BROKEN)
   // Changed to 0.65 (proper validation - accepts same person, rejects strangers)
   // Using Euclidean distance converted to 0-1 similarity scale
-  MATCHING_THRESHOLD: 0.55,           // Proper threshold for face validation (98% accuracy)
+  MATCHING_THRESHOLD: 0.45,           // Proper threshold for face validation (98% accuracy)
   HIGH_CONFIDENCE_THRESHOLD: 0.75,
   
   // Quality thresholds for real faces

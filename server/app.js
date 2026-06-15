@@ -615,6 +615,8 @@ app.use('/api/entities', auth, hrCheck, entityRoutes);
 app.use('/api/positions', auth, hrCheck, positionRoutes);
 app.use('/api/grades', auth, hrCheck, gradeRoutes);
 app.use('/api/grade-band', auth, hrCheck, gradeBandRoutes);
+app.use('/api/zoho-leave-policies', zohoLeavePolicyRoutes);
+app.use('/api/zoho-leaves', zohoLeaveRequestRoutes);
 app.use('/api', auth, hrRoutes); // Mount general HR routes last within /api
 
 // 6. Recruitment & Hiring
