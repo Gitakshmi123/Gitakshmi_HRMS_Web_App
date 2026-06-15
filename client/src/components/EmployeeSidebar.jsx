@@ -307,7 +307,6 @@ export default function EmployeeSidebar({
       const hasRoutePermission = hasPermission(path, 'any');
       
       let allowed = hasKeyPermission || hasRoutePermission;
-      if (category === 'Policy') allowed = true; // Force Policy visibility
       
       if (!allowed) return;
 
@@ -526,11 +525,13 @@ export default function EmployeeSidebar({
           moduleItems = [{ ...items[0], title: moduleDisplayName, children: [] }];
         }
 
-        management.push({
-          id: typeof mod._id === 'object' ? (mod._id.$oid || JSON.stringify(mod._id)) : String(mod._id || Math.random()),
-          category: moduleDisplayName,
-          items: moduleItems
-        });
+        if (moduleItems && moduleItems.length > 0) {
+          management.push({
+            id: typeof mod._id === 'object' ? (mod._id.$oid || JSON.stringify(mod._id)) : String(mod._id || Math.random()),
+            category: moduleDisplayName,
+            items: moduleItems
+          });
+        }
       });
     }
 
@@ -673,7 +674,6 @@ export default function EmployeeSidebar({
 
     const visibleManagement = management.filter(m => {
       const cat = m.category === 'HR Dashboard' ? 'Dashboard' : m.category;
-      if (cat === 'Policy') return true; // Force Policy visibility
       return !hiddenModules.includes(cat);
     });
 

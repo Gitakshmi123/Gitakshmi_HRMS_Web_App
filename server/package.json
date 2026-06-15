@@ -21,6 +21,8 @@
   "dependencies": {
     "@faker-js/faker": "^10.4.0",
     "@sheetjs/xlsx": "https://cdn.sheetjs.com/xlsx-0.20.2/xlsx-0.20.2.tgz",
+    "@tensorflow/tfjs": "^4.22.0",
+    "@tensorflow/tfjs-backend-wasm": "^4.22.0",
     "@tensorflow/tfjs-core": "^4.22.0",
     "@vladmandic/face-api": "^1.7.15",
     "axios": "^1.16.1",
