@@ -1,0 +1,18 @@
+{
+  "employee": {
+    "name": "Harsh Shah",
+    "leavePolicyId": "696dd420cab29ac7a1309837",
+    "tenant": "696b2e33265b093e28c2419b"
+  },
+  "settings": {
+    "leaveCycleStartMonth": 0
+  },
+  "calculatedYear": 2026,
+  "policy": {
+    "id": "696dd420cab29ac7a1309837",
+    "name": "tgrhtgtrgh",
+    "rulesCount": 0,
+    "rules": []
+  },
+  "balances": []
+}

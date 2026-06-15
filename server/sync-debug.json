@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-03-05T12:35:49.362Z",
+  "entries": [
+    {
+      "msg": "Connecting to MONGO_URI..."
+    },
+    {
+      "msg": "Connected."
+    },
+    {
+      "msg": "Processing Tenant: undefined (69970ece0441634957df8fb2)"
+    },
+    {
+      "msg": "Found 22 posts to sync."
+    },
+    {
+      "msg": "Test script failed",
+      "data": "Cannot find module '../../social/models/SocialAccount'\nRequire stack:\n- C:\\Users\\baldaniya nitesh\\Desktop\\GT_HRMS\\GT_HRMS\\backend\\modules\\social-media-enterprise\\services\\SocialPostService.js\n- C:\\Users\\baldaniya nitesh\\Desktop\\GT_HRMS\\GT_HRMS\\backend\\test-sync-advanced.js"
+    }
+  ]
+}

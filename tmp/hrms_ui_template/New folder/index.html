@@ -1,0 +1,44 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <div class="form-container">
+        <h1>Voter Eligibility Checker</h1>
+        <label for="name">name*</label> <input type="text" id="name" required placeholder="Enter your name"
+            title="manas suthar"><br>
+        <label for="mobile">mobile*</label> <input type="number" id="mobile" required
+            placeholder="Enter your mobile number" title="1234567890"><br>
+        <label for="age">Age*</label> <input type="number" id="age" required placeholder="Enter your age"
+            title="18"><br>
+        <label for="email">email*</label> <input type="email" id="email" required placeholder="Enter your email"
+            title="[EMAIL_ADDRESS]"><br>
+        <button onclick="checkEligibility()">submit</button>
+    </div>
+
+    <script>
+        function checkEligibility() {
+            var name = document.getElementById('name').value;
+            var age = document.getElementById('age').value;
+
+            if (age === '') {
+                alert('Please enter your age.');
+                return;
+            }
+
+            if (age < 18) {
+                alert('Dear ' + name + ', not eligible for vote.');
+            } else {
+                alert('Congrats ' + name + ', aap eligible ho! Aap apni age ki process https://voters.eci.gov.in/ yaha se kare.');
+                window.location.href = 'https://voters.eci.gov.in/';
+            }
+        }
+    </script>
+</body>
+
+</html>

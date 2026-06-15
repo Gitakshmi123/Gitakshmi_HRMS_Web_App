@@ -1,0 +1,11 @@
+User: test@test.com | TenantID: 69d626068560596a949a0010 | TenantCode: tes001
+  - hr: true
+  - payroll: true
+  - attendance: true
+  - leave: true
+  - recruitment: true
+  - backgroundVerification: true
+  - documentManagement: true
+  - socialMediaIntegration: true
+  - employeePortal: true
+  - reports: false

@@ -1,0 +1,2686 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Employees Directory | Global Tech</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #00b894;
+            --bg-color: #fcfcfc;
+            --card-bg: #ffffff;
+            --text-main: #2d3436;
+            --text-muted: #636e72;
+            --border-color: #f1f2f6;
+
+            --active-bg: #e8f8f5;
+            --active-text: #00b894;
+            --inactive-bg: #ffeef0;
+            --inactive-text: #ff7675;
+            --leave-bg: #eff3ff;
+            --leave-text: #74b9ff;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Sidebar Navigation (Reused) */
+        .sidebar {
+            width: 80px;
+            background-color: #ffffff;
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            height: 100vh;
+            left: 0;
+            top: 0;
+            z-index: 100;
+            overflow: hidden;
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
+        }
+
+        .sidebar:hover {
+            width: 260px;
+            box-shadow: 4px 0 15px rgba(0, 0, 0, 0.05);
+            overflow-y: auto;
+        }
+
+        .sidebar-brand {
+            padding: 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 260px;
+        }
+
+        .brand-icon {
+            width: 32px;
+            height: 32px;
+            background-color: #00b894;
+            color: white;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 16px;
+        }
+
+        .brand-text {
+            font-size: 16px;
+            font-weight: 700;
+            color: #2d3436;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .sidebar:hover .brand-text {
+            opacity: 1;
+        }
+
+        .sidebar-menu {
+            padding: 10px 16px;
+            flex: 1;
+            min-width: 260px;
+        }
+
+        .menu-section {
+            font-size: 11px;
+            font-weight: 600;
+            color: #b2bec3;
+            letter-spacing: 0.5px;
+            margin: 20px 0 10px 12px;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .sidebar:hover .menu-section {
+            opacity: 1;
+        }
+
+        .menu-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            color: #636e72;
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 4px;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .menu-item i {
+            font-size: 16px;
+            width: 20px;
+            text-align: center;
+            color: #a4b0be;
+        }
+
+        .menu-item span {
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .sidebar:hover .menu-item span {
+            opacity: 1;
+        }
+
+        .menu-item:hover {
+            background-color: #f8f9fa;
+        }
+
+        .menu-item.active {
+            background: linear-gradient(135deg, #00b894 0%, #00cec9 100%);
+            box-shadow: 0 4px 10px rgba(0, 184, 148, 0.2);
+            color: white;
+        }
+
+        .menu-item.active i {
+            color: white;
+        }
+
+        /* Layout */
+        .main-wrapper {
+            margin-left: 80px;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            transition: margin-left 0.3s ease;
+        }
+
+        /* Top Navigation */
+        .top-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 40px;
+            background-color: #ffffff;
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 90;
+        }
+
+        .nav-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .nav-left i {
+            color: #b2bec3;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .nav-left h1 {
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: 0;
+            color: #2d3436;
+            text-transform: uppercase;
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 25px;
+        }
+
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+        }
+
+        .user-profile .avatar {
+            width: 35px;
+            height: 35px;
+            background: linear-gradient(135deg, #00b894 0%, #00cec9 100%);
+            color: white;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .user-details h4 {
+            font-size: 13px;
+            font-weight: 700;
+            color: #2d3436;
+        }
+
+        .user-details p {
+            font-size: 11px;
+            color: #a4b0be;
+            margin-top: 2px;
+        }
+
+        .nav-actions-pill {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            background-color: #f8f9fa;
+            border-radius: 30px;
+            padding: 8px 18px;
+            border: 1px solid #f1f2f6;
+        }
+
+        .nav-actions-pill i {
+            color: #636e72;
+            cursor: pointer;
+            font-size: 15px;
+            transition: color 0.2s;
+        }
+
+        .nav-actions-pill i:hover {
+            color: #2d3436;
+        }
+
+        .nav-actions-pill .divider {
+            width: 1px;
+            height: 16px;
+            background-color: #dfe6e9;
+        }
+
+        .notification-icon {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .bell-badge {
+            position: absolute;
+            top: 0px;
+            right: -2px;
+            width: 6px;
+            height: 6px;
+            background-color: #ff7675;
+            border-radius: 50%;
+            border: 2px solid #f8f9fa;
+        }
+
+        .search-container {
+            position: relative;
+            width: 300px;
+        }
+
+        .search-container i {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #a4b0be;
+            font-size: 14px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 10px 15px 10px 40px;
+            border-radius: 20px;
+            border: 1px solid #dfe4ea;
+            background-color: #f8f9fa;
+            font-size: 13px;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        .search-input:focus {
+            border-color: var(--primary);
+            background-color: #fff;
+            box-shadow: 0 0 0 3px rgba(0, 184, 148, 0.1);
+        }
+
+        /* Employee Grid Container */
+        .page-content {
+            padding: 30px 40px;
+        }
+
+        /* Metrics Grid */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .metric-card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
+            border-color: var(--primary);
+        }
+
+        .metric-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        .metric-info h3 {
+            font-size: 12px;
+            color: var(--text-muted);
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .metric-info .value {
+            font-size: 24px;
+            font-weight: 800;
+            color: #2d3436;
+        }
+
+        /* Filter Pills */
+        .filter-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+        }
+
+        .filter-pill {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #636e72;
+            background: #f1f2f6;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+
+        .filter-pill:hover {
+            background: #e1e2e6;
+        }
+
+        .filter-pill.active {
+            background: #00b894;
+            color: white;
+        }
+
+        /* Employee Grid */
+        .employee-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .employee-card {
+            background: white;
+            border-radius: 16px;
+            padding: 25px;
+            border: 1px solid var(--border-color);
+            text-align: center;
+            position: relative;
+            transition: all 0.3s;
+        }
+
+        .employee-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
+            border-color: var(--primary);
+        }
+
+        /* View Toggle */
+        .view-controls {
+            display: flex;
+            align-items: center;
+            background: #f1f2f6;
+            padding: 4px;
+            border-radius: 12px;
+            gap: 4px;
+        }
+
+        .view-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            color: #636e72;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            transition: all 0.2s;
+        }
+
+        .view-btn.active {
+            background: white;
+            color: var(--primary);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+        }
+
+        .view-btn:hover:not(.active) {
+            color: #2d3436;
+        }
+
+        /* Employee Table View (List Mode) */
+        .employee-table-container {
+            background: white;
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            margin-bottom: 40px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.02);
+            display: none;
+            /* Hidden by default */
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        .data-table th {
+            padding: 16px 20px;
+            background: #f8fafc;
+            color: #636e72;
+            font-weight: 600;
+            font-size: 13px;
+            border-bottom: 1px solid var(--border-color);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .data-table td {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-color);
+            vertical-align: middle;
+            font-size: 14px;
+            color: #2d3436;
+            font-weight: 500;
+        }
+
+        .data-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .data-table tr:hover {
+            background: #fcfcfd;
+        }
+
+        .table-profile {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .table-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #e1f5fe;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--primary);
+            flex-shrink: 0;
+            background-size: cover;
+            background-position: center;
+        }
+
+        .table-name-sub {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 4px;
+            font-weight: 400;
+        }
+
+        .table-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .table-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background: #f1f2f6;
+            color: #636e72;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+        }
+
+        .table-btn:hover {
+            background: var(--primary);
+            color: white;
+        }
+
+        .table-btn.delete:hover {
+            background: #ff7675;
+            color: white;
+        }
+
+        .card-menu {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #b2bec3;
+            cursor: pointer;
+            border-radius: 50%;
+            transition: all 0.2s;
+            z-index: 10;
+        }
+
+        .card-menu:hover {
+            background: rgba(0, 0, 0, 0.05);
+            color: var(--primary);
+        }
+
+        .card-menu-dropdown {
+            position: absolute;
+            top: 40px;
+            right: 0;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            width: 180px;
+            padding: 8px;
+            display: none;
+            flex-direction: column;
+            gap: 4px;
+            z-index: 100;
+            border: 1px solid #edf2f7;
+            transform-origin: top right;
+            animation: menuFadeIn 0.2s ease;
+        }
+
+        @keyframes menuFadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.95) translateY(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        .card-menu-dropdown.active {
+            display: flex;
+        }
+
+        .menu-item {
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #2d3436;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: left;
+        }
+
+        .menu-item:hover {
+            background: #f8fafc;
+            color: var(--primary);
+        }
+
+        .menu-item i {
+            width: 16px;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .menu-item.delete {
+            color: #ff7675;
+        }
+
+        .menu-item.delete:hover {
+            background: #fff5f5;
+        }
+
+        .card-avatar-wrap {
+            position: relative;
+            width: 100px;
+            height: 100px;
+            margin: 0 auto 15px;
+        }
+
+        .card-avatar {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: #f1f2f6;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            font-weight: 700;
+            color: #2d3436;
+            border: 4px solid #fff;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+        }
+
+        .status-dot {
+            position: absolute;
+            bottom: 5px;
+            right: 5px;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            background: #00b894;
+        }
+
+        .employee-card h2 {
+            font-size: 18px;
+            font-weight: 700;
+            color: #2d3436;
+            margin-bottom: 5px;
+        }
+
+        .employee-card p.role {
+            font-size: 13px;
+            color: var(--text-muted);
+            font-weight: 500;
+            margin-bottom: 15px;
+        }
+
+        .contact-info {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .contact-item {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            background: #f8f9fa;
+            color: #636e72;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+
+        .contact-item:hover {
+            background: var(--primary);
+            color: white;
+        }
+
+        .card-actions {
+            display: block;
+            margin-top: 10px;
+        }
+
+        .btn-action {
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            text-decoration: none;
+            transition: all 0.2s;
+            text-transform: uppercase;
+        }
+
+        .btn-view {
+            background: #eff3ff;
+            color: #0984e3;
+        }
+
+        .btn-payroll {
+            background: #e8f8f5;
+            color: #00b894;
+        }
+
+        .btn-view:hover {
+            background: #0984e3;
+            color: white;
+        }
+
+        .btn-payroll:hover {
+            background: #00b894;
+            color: white;
+        }
+
+        /* Department Grid */
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .section-header h2 {
+            font-size: 18px;
+            font-weight: 800;
+            color: #2d3436;
+        }
+
+        .dept-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 20px;
+        }
+
+        .dept-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid var(--border-color);
+            border-left: 4px solid var(--primary);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .dept-info h4 {
+            font-size: 15px;
+            font-weight: 700;
+            color: #2d3436;
+            margin-bottom: 4px;
+        }
+
+        .dept-info p {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        /* Avatar Stack */
+        .avatar-stack {
+            display: flex;
+            align-items: center;
+            flex-direction: row-reverse;
+        }
+
+        .avatar-stack .stack-item {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            background: #f1f2f6;
+            margin-left: -12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: 700;
+            color: #4a5568;
+            position: relative;
+        }
+
+        .stack-more {
+            background: #dfe6e9 !important;
+            color: #636e72 !important;
+            z-index: 1;
+        }
+
+        /* System Active footer */
+        .sidebar-footer {
+            padding: 24px;
+            margin-top: auto;
+            min-width: 260px;
+        }
+
+        .system-status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #2d3436;
+        }
+
+        .system-status-indicator .dot {
+            width: 8px;
+            height: 8px;
+            background-color: #00b894;
+            border-radius: 50%;
+        }
+
+        .system-version {
+            font-size: 11px;
+            color: #b2bec3;
+            padding-left: 16px;
+            margin-top: 4px;
+        }
+
+        .sidebar:not(:hover) .brand-text,
+        .sidebar:not(:hover) .menu-item span,
+        .sidebar:not(:hover) .menu-section,
+        .sidebar:not(:hover) .system-status-indicator span,
+        .sidebar:not(:hover) .system-version {
+            display: none;
+        }
+
+        .btn-add-emp {
+            background: var(--primary);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+        }
+
+        .btn-add-emp:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 15px rgba(0, 184, 148, 0.3);
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .form-section {
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #edf2f7;
+        }
+
+        .form-section:last-child {
+            border-bottom: none;
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: 800;
+            color: var(--primary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-subtitle {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: -12px;
+            margin-bottom: 15px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .form-group label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #4a5568;
+        }
+
+        .form-group label span {
+            color: #ff7675;
+        }
+
+        .form-group input,
+        .form-group select {
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            font-size: 14px;
+            background: #f8fafc;
+            transition: all 0.2s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: white;
+            box-shadow: 0 0 0 3px rgba(0, 184, 148, 0.1);
+        }
+
+        .photo-upload-container {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            background: #f1f2f6;
+            padding: 15px;
+            border-radius: 12px;
+            border: 2px dashed #cbd5e0;
+        }
+
+        .upload-circle {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: #dfe6e9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: #b2bec3;
+        }
+
+        .add-modal-body {
+            padding: 0;
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+
+        .modal-content-padding {
+            padding: 24px;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(4px);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .profile-modal {
+            background: white;
+            width: 90%;
+            max-width: 500px;
+            border-radius: 24px;
+            overflow: hidden;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+            position: relative;
+            transform: translateY(20px);
+            transition: transform 0.3s ease;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-overlay.active .profile-modal {
+            transform: translateY(0);
+        }
+
+        .modal-header {
+            height: 120px;
+            background: linear-gradient(135deg, #00b894 0%, #00cec9 100%);
+            position: relative;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: white;
+            background: rgba(255, 255, 255, 0.2);
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            z-index: 10;
+        }
+
+        .modal-close:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: rotate(90deg);
+        }
+
+        .modal-avatar-wrap {
+            position: absolute;
+            bottom: -40px;
+            left: 30px;
+        }
+
+        .modal-avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 20px;
+            background: white;
+            border: 4px solid white;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            font-weight: 800;
+            color: #00b894;
+        }
+
+        .modal-body {
+            padding: 60px 30px 30px;
+        }
+
+        .modal-name-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 25px;
+        }
+
+        .modal-name-row h2 {
+            font-size: 24px;
+            font-weight: 800;
+            color: #2d3436;
+        }
+
+        .modal-name-row .modal-status {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .status-active {
+            background: #e8f8f5;
+            color: #00b894;
+        }
+
+        .status-on-leave {
+            background: #eff3ff;
+            color: #0984e3;
+        }
+
+        .status-inactive {
+            background: #ffeef0;
+            color: #ff7675;
+        }
+
+        .modal-info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .info-group label {
+            display: block;
+            font-size: 11px;
+            font-weight: 700;
+            color: #a4b0be;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+
+        .info-group p {
+            font-size: 14px;
+            font-weight: 600;
+            color: #2d3436;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .modal-btn {
+            flex: 1;
+            padding: 12px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 700;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+
+        .btn-secondary {
+            background: #f1f2f6;
+            color: #636e72;
+        }
+
+        .btn-primary {
+            background: #00b894;
+            color: white;
+            box-shadow: 0 4px 12px rgba(0, 184, 148, 0.2);
+        }
+
+        .modal-btn:hover {
+            opacity: 0.9;
+            transform: translateY(-2px);
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        /* Integrated Payroll View Styles */
+        #employeeListView {
+            display: block;
+            transition: all 0.3s ease;
+        }
+
+        #payrollDetailView {
+            display: none;
+            animation: fadeIn 0.4s ease;
+        }
+
+        .payroll-header-card {
+            background: white;
+            border-radius: 20px;
+            padding: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            box-shadow: var(--card-shadow);
+            border-left: 5px solid var(--primary);
+        }
+
+        .employee-hero {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .hero-avatar {
+            width: 70px;
+            height: 70px;
+            border-radius: 15px;
+            background: var(--primary-light);
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            font-weight: 800;
+        }
+
+        .hero-info h2 {
+            font-size: 20px;
+            font-weight: 800;
+            margin-bottom: 2px;
+        }
+
+        .month-badge {
+            background: var(--primary-light);
+            color: var(--primary);
+            padding: 6px 14px;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 13px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: var(--card-shadow);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .stat-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .stat-value {
+            font-size: 18px;
+            font-weight: 800;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .salary-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .salary-box {
+            background: white;
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: var(--card-shadow);
+        }
+
+        .salary-box h3 {
+            font-size: 15px;
+            font-weight: 800;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .salary-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px dashed var(--bg-body);
+            font-size: 14px;
+        }
+
+        .val-earn {
+            color: var(--primary);
+            font-weight: 700;
+        }
+
+        .val-deduct {
+            color: #ff7675;
+            font-weight: 700;
+        }
+
+        .net-payable-summary {
+            background: var(--primary);
+            border-radius: 20px;
+            padding: 24px;
+            color: white;
+            text-align: center;
+            margin-bottom: 24px;
+            box-shadow: 0 10px 25px rgba(0, 184, 148, 0.2);
+        }
+
+        .net-payable-summary .amount {
+            font-size: 36px;
+            font-weight: 800;
+            margin: 5px 0;
+        }
+
+        .payroll-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+
+        .btn-p {
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            border: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+            font-size: 14px;
+        }
+
+        .btn-p-main {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-p-sec {
+            background: white;
+            color: var(--text-main);
+            box-shadow: var(--card-shadow);
+        }
+
+        .btn-p:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Payroll Modal Specific Styles */
+        .payroll-modal {
+            max-width: 600px;
+        }
+
+        .payroll-header {
+            background: linear-gradient(135deg, #00b894 0%, #00cec9 100%);
+        }
+
+        .salary-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+
+        .salary-section {
+            background: #f8f9fa;
+            border-radius: 16px;
+            padding: 18px;
+            border: 1px solid #f1f2f6;
+        }
+
+        .salary-section h5 {
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .earnings-title {
+            color: #00b894;
+        }
+
+        .deductions-title {
+            color: #ff7675;
+        }
+
+        .salary-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px dashed #dfe6e9;
+            font-size: 13px;
+        }
+
+        .salary-row:last-child {
+            border-bottom: none;
+        }
+
+        .salary-row span:first-child {
+            color: #636e72;
+            font-weight: 500;
+        }
+
+        .salary-row span:last-child {
+            color: #2d3436;
+            font-weight: 700;
+        }
+
+        .earnings-row span:last-child {
+            color: #00b894;
+        }
+
+        .deductions-row span:last-child {
+            color: #ff7675;
+        }
+
+        .net-payable-box {
+            background: #00b894;
+            padding: 20px;
+            border-radius: 16px;
+            color: white;
+            text-align: center;
+            margin-bottom: 25px;
+            box-shadow: 0 10px 20px rgba(0, 184, 148, 0.2);
+        }
+
+        .net-payable-box label {
+            display: block;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            opacity: 0.9;
+            margin-bottom: 5px;
+        }
+
+        .net-payable-box .amount {
+            font-size: 32px;
+            font-weight: 800;
+        }
+
+        .payslip-option {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 25px;
+            padding: 0 10px;
+            cursor: pointer;
+        }
+
+        .payslip-option input {
+            width: 18px;
+            height: 18px;
+            accent-color: #00b894;
+            cursor: pointer;
+        }
+
+        .payslip-option span {
+            font-size: 13px;
+            font-weight: 600;
+            color: #2d3436;
+        }
+
+        .payment-method {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 15px;
+            background: #f8f9fa;
+            border: 1px dashed #00b894;
+            border-radius: 12px;
+            margin-bottom: 25px;
+        }
+
+        .payment-method i {
+            color: #00b894;
+            font-size: 20px;
+        }
+
+        .payment-method i {
+            color: #00b894;
+            font-size: 20px;
+        }
+
+        .btn-export {
+            background: #fff;
+            color: #2d3436;
+            padding: 12px 20px;
+            border-radius: 12px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-export:hover {
+            background: #f8fafc;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-brand">
+            <div class="brand-icon">H</div>
+            <div class="brand-text">Global Tech</div>
+        </div>
+
+        <div class="sidebar-menu">
+            <div class="menu-section">OVERVIEW</div>
+            <a href="dashboard.html" class="menu-item">
+                <i class="fas fa-layer-group"></i>
+                <span>Dashboard</span>
+            </a>
+            <a href="reports.html" class="menu-item">
+                <i class="fas fa-chart-pie"></i>
+                <span>Reports</span>
+            </a>
+
+            <div class="menu-section">PEOPLE</div>
+            <a href="employees.html" class="menu-item active">
+                <i class="fas fa-users"></i>
+                <span>Employees</span>
+            </a>
+            <a href="departments.html" class="menu-item">
+                <i class="fas fa-building"></i>
+                <span>Departments</span>
+            </a>
+            <a href="org-structure.html" class="menu-item">
+                <i class="fas fa-sitemap"></i>
+                <span>Org Structure</span>
+            </a>
+            <a href="users.html" class="menu-item">
+                <i class="fas fa-user-circle"></i>
+                <span>Users</span>
+            </a>
+
+            <div class="menu-section">ATTENDANCE</div>
+            <a href="attendance.html" class="menu-item">
+                <i class="fas fa-tachometer-alt"></i>
+                <span>Dashboard</span>
+            </a>
+            <a href="calendar.html" class="menu-item">
+                <i class="far fa-calendar-alt"></i>
+                <span>Calendar</span>
+            </a>
+            <a href="face-updates.html" class="menu-item">
+                <i class="fas fa-user-clock"></i>
+                <span>Face Updates</span>
+            </a>
+
+            <div class="menu-section" style="margin-top: 24px;">LEAVE</div>
+            <a href="leave-requests.html" class="menu-item">
+                <i class="fas fa-plane-departure"></i>
+                <span>Leave Requests</span>
+            </a>
+            <a href="policies.html" class="menu-item">
+                <i class="fas fa-shield-alt"></i>
+                <span>Policies</span>
+            </a>
+        </div>
+
+        <div class="sidebar-footer">
+            <div class="system-status-indicator">
+                <div class="dot"></div>
+                <span>SYSTEM ACTIVE</span>
+            </div>
+            <div class="system-version">v2.5.0 Stable Release</div>
+        </div>
+    </div>
+
+    <!-- Main Wrapper -->
+    <div class="main-wrapper">
+        <!-- Top Nav -->
+        <nav class="top-nav">
+            <div class="nav-left">
+                <i class="fas fa-arrow-left"></i>
+                <h1>EMPLOYEES DIRECTORY</h1>
+            </div>
+            <div class="nav-right">
+                <div class="user-profile">
+                    <div class="avatar">T</div>
+                    <div class="user-details">
+                        <h4>Test</h4>
+                        <p>tes001</p>
+                    </div>
+                    <i class="fas fa-chevron-down" style="font-size: 10px; color: #a4b0be; margin-left: 10px;"></i>
+                </div>
+
+                <div class="nav-actions-pill">
+                    <i class="far fa-moon"></i>
+                    <div class="divider"></div>
+                    <div class="notification-icon">
+                        <i class="far fa-bell"></i>
+                        <span class="bell-badge"></span>
+                    </div>
+                    <div class="divider"></div>
+                    <i class="fas fa-sign-out-alt"></i>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Page Content -->
+        <div class="page-content">
+            <div id="employeeListView">
+                <!-- Search & Add Bar -->
+                <div
+                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; gap: 20px;">
+                    <div class="search-container" style="width: 100%; max-width: 600px; margin-bottom: 0;">
+                        <i class="fas fa-search"></i>
+                        <input type="text" class="search-input" placeholder="Search employees, ID, department..."
+                            style="padding: 12px 12px 12px 45px; font-size: 14px; border-radius: 12px; background: white; border: 1px solid var(--border-color); box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
+                    </div>
+                    <div class="view-controls">
+                        <button class="view-btn active" id="btnGridView" onclick="switchViewMode('grid')"
+                            title="Grid View">
+                            <i class="fas fa-th-large"></i>
+                        </button>
+                        <button class="view-btn" id="btnListView" onclick="switchViewMode('list')" title="List View">
+                            <i class="fas fa-list"></i>
+                        </button>
+                    </div>
+                    <div style="display: flex; gap: 12px;">
+                        <button class="btn-export" onclick="exportToCSV()">
+                            <i class="fas fa-file-export"></i> Export CSV
+                        </button>
+                        <button class="btn-add-emp" onclick="openAddEmployeeModal()">
+                            <i class="fas fa-plus"></i> Add New Employee
+                        </button>
+                    </div>
+                </div>
+                <!-- Metrics Grid -->
+                <div class="metrics-grid">
+                    <div class="metric-card"
+                        onclick="filterEmployees('all', document.querySelector('.filter-pill[onclick*=\'all\']'))">
+                        <div class="metric-icon" style="background: #e8f9f5; color: #00b894;">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="metric-info">
+                            <h3>Total Employees</h3>
+                            <div class="value">1,248</div>
+                        </div>
+                    </div>
+                    <div class="metric-card"
+                        onclick="filterEmployees('Active', document.querySelector('.filter-pill[onclick*=\'Active\']'))">
+                        <div class="metric-icon" style="background: #e1f5fe; color: #03a9f4;">
+                            <i class="fas fa-user-check"></i>
+                        </div>
+                        <div class="metric-info">
+                            <h3>Active Now</h3>
+                            <div class="value">842</div>
+                        </div>
+                    </div>
+                    <div class="metric-card" onclick="scrollToSection('departmentsSection')">
+                        <div class="metric-icon" style="background: #fff8e1; color: #ffc107;">
+                            <i class="fas fa-building"></i>
+                        </div>
+                        <div class="metric-info">
+                            <h3>Departments</h3>
+                            <div class="value">12</div>
+                        </div>
+                    </div>
+                    <div class="metric-card" onclick="alert('Showing New Joiners from the last 30 days...')">
+                        <div class="metric-icon" style="background: #f3e5f5; color: #9c27b0;">
+                            <i class="fas fa-user-plus"></i>
+                        </div>
+                        <div class="metric-info">
+                            <h3>New Joiners</h3>
+                            <div class="value">15</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filters -->
+                <div class="filter-container">
+                    <div class="filter-pill active" onclick="filterEmployees('all', this)">All Employees</div>
+                    <div class="filter-pill" onclick="filterEmployees('Active', this)">Active</div>
+                    <div class="filter-pill" onclick="filterEmployees('On Leave', this)">On Leave</div>
+                    <div class="filter-pill" onclick="filterEmployees('Inactive', this)">Inactive</div>
+                </div>
+
+                <!-- Employee Grid View -->
+                <div class="employee-grid" id="employeeGrid">
+                    <!-- Dynamic Content via JS -->
+                </div>
+
+                <!-- Employee List View (Table) -->
+                <div class="employee-table-container" id="employeeTableView">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Employee</th>
+                                <th>ID</th>
+                                <th>Department</th>
+                                <th>Role</th>
+                                <th>Contact</th>
+                                <th>Status</th>
+                                <th style="text-align: right;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="employeeTableBody">
+                            <!-- Dynamic Table Rows via JS -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Departments Section -->
+                <div class="section-header" id="departmentsSection">
+                    <h2>Departments Overview</h2>
+                    <a href="#"
+                        style="font-size: 13px; color: var(--primary); font-weight: 600; text-decoration: none;">View
+                        All</a>
+                </div>
+                <div class="dept-grid" id="deptGrid">
+                    <!-- Dynamic Content via JS -->
+                </div>
+            </div>
+
+            <div id="payrollDetailView">
+                <!-- Header Card -->
+                <div class="payroll-header-card">
+                    <div class="employee-hero">
+                        <div class="hero-avatar" id="p_empAvatar">??</div>
+                        <div class="hero-info">
+                            <h2 id="p_empName">Loading...</h2>
+                            <p id="p_empRole">Employee ID: ---</p>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="month-badge">
+                            <i class="far fa-calendar-alt"></i>
+                            February 2026 Salary Summary
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stats Grid -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: #e8f9f5; color: var(--primary);"><i
+                                class="fas fa-calendar-alt"></i></div>
+                        <div>
+                            <div class="stat-label">Work Days</div>
+                            <div class="stat-value" id="p_workDays">24</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: #e1f5fe; color: #03a9f4;"><i
+                                class="fas fa-user-check"></i></div>
+                        <div>
+                            <div class="stat-label">Present</div>
+                            <div class="stat-value" id="p_presentDays">22</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: #fff8e1; color: #ffc107;"><i class="fas fa-clock"></i>
+                        </div>
+                        <div>
+                            <div class="stat-label">Late Marks</div>
+                            <div class="stat-value">2</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: #ffeef0; color: #ff7675;"><i
+                                class="fas fa-user-times"></i></div>
+                        <div>
+                            <div class="stat-label">LWP Days</div>
+                            <div class="stat-value" id="p_lwpDays">1</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Salary Breakdown -->
+                <div class="salary-layout">
+                    <div class="salary-box">
+                        <h3><i class="fas fa-plus-circle" style="color: var(--primary);"></i> EARNINGS</h3>
+                        <div class="salary-row">
+                            <span class="item-label">Basic Salary</span>
+                            <span class="val-earn" id="p_basic">â‚¹ 0</span>
+                        </div>
+                        <div class="salary-row">
+                            <span class="item-label">HRA Allowance</span>
+                            <span class="val-earn" id="p_hra">â‚¹ 0</span>
+                        </div>
+                        <div class="salary-row">
+                            <span class="item-label">Performance Bonus</span>
+                            <span class="val-earn">â‚¹ 5,000</span>
+                        </div>
+                    </div>
+                    <div class="salary-box">
+                        <h3><i class="fas fa-minus-circle" style="color: #ff7675;"></i> DEDUCTIONS</h3>
+                        <div class="salary-row">
+                            <span class="item-label">Prof. Tax</span>
+                            <span class="val-deduct">â‚¹ 200</span>
+                        </div>
+                        <div class="salary-row">
+                            <span class="item-label">EPF (8%)</span>
+                            <span class="val-deduct" id="p_epf">â‚¹ 0</span>
+                        </div>
+                        <div class="salary-row">
+                            <span class="item-label">LWP Deduction</span>
+                            <span class="val-deduct" id="p_lwp_deduct">â‚¹ 0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="net-payable-summary">
+                    <label>Net Payable Amount</label>
+                    <div class="amount" id="p_net">â‚¹ 0</div>
+                    <p style="font-size: 12px; opacity: 0.8;">HDFC Bank **** 4829 (Bank Transfer)</p>
+                </div>
+
+                <div class="payroll-actions">
+                    <button class="btn-p btn-p-sec" onclick="showEmployeeList()"><i class="fas fa-arrow-left"></i> Back
+                        to
+                        Directory</button>
+                    <button class="btn-p btn-p-sec" onclick="downloadPayrollDraft(event)"><i
+                            class="fas fa-download"></i> Download Draft</button>
+                    <button class="btn-p btn-p-main" onclick="processIntegratedPayroll(event)">Approve & Process
+                        Payment</button>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            const employees = [
+                { id: "EMP001", name: "Rahul Sharma", role: "Software Engineer", dept: "Engineering", status: "Active", phone: "+91 98765 43210", email: "rahul@globaltech.com" },
+                { id: "EMP002", name: "Priya Singh", role: "Product Manager", dept: "Product", status: "Active", phone: "+91 98765 43211", email: "priya@globaltech.com" },
+                { id: "EMP003", name: "Amit Kumar", role: "UI/UX Designer", dept: "Design", status: "Inactive", phone: "+91 98765 43212", email: "amit@globaltech.com" },
+                { id: "EMP004", name: "Neha Gupta", role: "HR Executive", dept: "HR", status: "Active", phone: "+91 98765 43213", email: "neha@globaltech.com" },
+                { id: "EMP005", name: "Vikram Patel", role: "Frontend Dev", dept: "Engineering", status: "Active", phone: "+91 98765 43214", email: "vikram@globaltech.com" },
+                { id: "EMP006", name: "Anjali Verma", role: "Marketing Lead", dept: "Marketing", status: "On Leave", phone: "+91 98765 43215", email: "anjali@globaltech.com" }
+            ];
+
+            const departments = [
+                { name: "Engineering", members: 45, color: "#00b894", leads: ["RS", "VP", "SM"] },
+                { name: "Product Management", members: 12, color: "#0984e3", leads: ["PS", "AK"] },
+                { name: "Design", members: 8, color: "#6c5ce7", leads: ["AK", "NT"] },
+                { name: "Human Resources", members: 15, color: "#fd79a8", leads: ["NG", "SP"] }
+            ];
+
+            function getInitials(name) {
+                return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+            }
+
+            function scrollToSection(id) {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.scrollIntoView({ behavior: 'smooth' });
+                }
+            }
+
+            let currentViewMode = 'grid'; // 'grid' or 'list'
+
+            function switchViewMode(mode) {
+                currentViewMode = mode;
+
+                // Update button styles
+                document.getElementById('btnGridView').classList.toggle('active', mode === 'grid');
+                document.getElementById('btnListView').classList.toggle('active', mode === 'list');
+
+                // Toggle container visibility
+                document.getElementById('employeeGrid').style.display = mode === 'grid' ? 'grid' : 'none';
+                document.getElementById('employeeTableView').style.display = mode === 'list' ? 'block' : 'none';
+
+                // Re-render currently filtered data
+                renderEmployees(
+                    document.querySelector('.filter-pill.active').innerText === 'All Employees' ? 'all' : document.querySelector('.filter-pill.active').innerText
+                );
+            }
+
+            function renderEmployees(filter = 'all', departmentFilter = null) {
+                const grid = document.getElementById('employeeGrid');
+                const tBody = document.getElementById('employeeTableBody');
+                const searchTerm = document.querySelector('.search-input').value.toLowerCase();
+
+                const filteredEmployees = employees.filter(emp => {
+                    const matchesStatus = filter === 'all' || emp.status === filter;
+                    const matchesDept = !departmentFilter || emp.dept === departmentFilter;
+                    const matchesSearch = emp.name.toLowerCase().includes(searchTerm) ||
+                        emp.id.toLowerCase().includes(searchTerm) ||
+                        emp.role.toLowerCase().includes(searchTerm) ||
+                        emp.dept.toLowerCase().includes(searchTerm);
+
+                    return matchesStatus && matchesSearch && matchesDept;
+                });
+
+                if (filteredEmployees.length === 0) {
+                    const emptyHtml = `<div style="grid-column: 1/-1; padding: 40px; text-align: center; color: var(--text-muted);">No employees found matching this criteria.</div>`;
+                    grid.innerHTML = emptyHtml;
+                    tBody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 40px; color: var(--text-muted);">No employees found matching this criteria.</td></tr>`;
+                    return;
+                }
+
+                if (currentViewMode === 'grid') {
+                    grid.innerHTML = filteredEmployees.map(emp => `
+                    <div class="employee-card" onclick="openProfileModal('${emp.id}')">
+                        <div class="card-menu" onclick="toggleCardMenu(event, '${emp.id}')">
+                            <i class="fas fa-ellipsis-v"></i>
+                            <div class="card-menu-dropdown" id="dropdown-${emp.id}">
+                                <div class="menu-item" onclick="openProfileModal('${emp.id}')">
+                                    <i class="far fa-user"></i> View Profile
+                                </div>
+                                <div class="menu-item" onclick="openEditEmployeeModal('${emp.id}')">
+                                    <i class="far fa-edit"></i> Edit Profile
+                                </div>
+                                <div class="menu-item" onclick="showPayroll('${emp.id}')">
+                                    <i class="fas fa-indian-rupee-sign"></i> View Payroll
+                                </div>
+                                <div class="menu-item delete" onclick="handleDeleteEmployee('${emp.id}')">
+                                    <i class="far fa-trash-alt"></i> Delete Employee
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-avatar-wrap">
+                            <div class="card-avatar" style="${emp.photo ? `background: url(${emp.photo}) center/cover;` : ''}">
+                                ${emp.photo ? '' : getInitials(emp.name)}
+                            </div>
+                            <div class="status-dot" style="background: ${emp.status === 'Active' ? '#00b894' : (emp.status === 'On Leave' ? '#0984e3' : '#ff7675')}"></div>
+                        </div>
+                        <h2>${emp.name}</h2>
+                        <p class="role">${emp.role} &bull; ${emp.id}</p>
+                        <div class="contact-info">
+                            <a href="tel:${emp.phone}" class="contact-item" title="${emp.phone}" onclick="event.stopPropagation()"><i class="fas fa-phone-alt"></i></a>
+                            <a href="mailto:${emp.email}" class="contact-item" title="${emp.email}" onclick="event.stopPropagation()"><i class="fas fa-envelope"></i></a>
+                        </div>
+                        <div class="card-actions">
+                            <a href="javascript:void(0)" class="btn-action btn-payroll" style="display: flex; align-items: center; justify-content: center; gap: 8px;" onclick="event.stopPropagation(); showPayroll('${emp.id}')">
+                                <i class="fas fa-indian-rupee-sign"></i> View Payroll
+                            </a>
+                        </div>
+                    </div>
+                `).join('');
+                } else {
+                    tBody.innerHTML = filteredEmployees.map(emp => `
+                    <tr style="cursor: pointer;" onclick="openProfileModal('${emp.id}')">
+                        <td>
+                            <div class="table-profile">
+                                <div class="table-avatar" style="${emp.photo ? `background-image: url(${emp.photo});` : ''}">
+                                    ${emp.photo ? '' : getInitials(emp.name)}
+                                </div>
+                                <div>
+                                    <div style="font-weight: 600;">${emp.name}</div>
+                                    <div class="table-name-sub">${emp.email}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td style="font-weight: 600; color: #636e72;">${emp.id}</td>
+                        <td>${emp.dept}</td>
+                        <td>${emp.role}</td>
+                        <td>${emp.phone}</td>
+                        <td>
+                            <span style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; background: ${emp.status === 'Active' ? '#e8f9f5' : (emp.status === 'On Leave' ? '#e1f5fe' : '#ffeaea')}; color: ${emp.status === 'Active' ? '#00b894' : (emp.status === 'On Leave' ? '#03a9f4' : '#ff7675')};">
+                                <span style="width: 6px; height: 6px; border-radius: 50%; background: currentColor;"></span>
+                                ${emp.status}
+                            </span>
+                        </td>
+                        <td style="text-align: right;" onclick="event.stopPropagation()">
+                            <div class="table-actions" style="justify-content: flex-end;">
+                                <button class="table-btn" title="Edit" onclick="openEditEmployeeModal('${emp.id}')"><i class="far fa-edit"></i></button>
+                                <button class="table-btn" title="Payroll" onclick="showPayroll('${emp.id}')"><i class="fas fa-indian-rupee-sign"></i></button>
+                                <button class="table-btn delete" title="Delete" onclick="handleDeleteEmployee('${emp.id}')"><i class="far fa-trash-alt"></i></button>
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+                }
+            }
+
+            function filterByDepartment(deptName) {
+                renderEmployees('all', deptName);
+                scrollToSection('employeeGrid');
+            }
+
+            function filterEmployees(status, pill) {
+                pill.classList.add('active');
+
+                // Render with filter
+                renderEmployees(status);
+            }
+
+            function exportToCSV() {
+                if (employees.length === 0) return;
+
+                // Define headers
+                const headers = ["ID", "Name", "Department", "Role", "Email", "Phone", "Status", "Joined"];
+
+                // Map employees to CSV rows
+                const rows = employees.map(emp => [
+                    emp.id,
+                    emp.name,
+                    emp.dept,
+                    emp.role,
+                    emp.email,
+                    emp.phone,
+                    emp.status,
+                    emp.joiningDate || "--"
+                ]);
+
+                // Combine headers and rows
+                let csvContent = "data:text/csv;charset=utf-8,"
+                    + headers.join(",") + "\n"
+                    + rows.map(r => r.join(",")).join("\n");
+
+                // Create download link
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", `Employee_Directory_Export_${new Date().toISOString().split('T')[0]}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+
+            let currentProfileId = null;
+
+            function openProfileModal(id) {
+                currentProfileId = id;
+                const emp = employees.find(e => e.id === id);
+                if (!emp) return;
+
+                if (emp.photo) {
+                    document.getElementById('modalAvatar').innerHTML = `<img src="${emp.photo}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 16px;">`;
+                } else {
+                    document.getElementById('modalAvatar').innerText = getInitials(emp.name);
+                    document.getElementById('modalAvatar').innerHTML = getInitials(emp.name);
+                }
+
+                document.getElementById('modalName').innerText = emp.name;
+                document.getElementById('modalRole').innerText = `${emp.role} â€¢ ${emp.id}`;
+                document.getElementById('modalStatusBadge').innerText = emp.status;
+                document.getElementById('modalStatusBadge').className = 'modal-status ' + (emp.status === 'Active' ? 'status-active' : (emp.status === 'On Leave' ? 'status-on-leave' : 'status-inactive'));
+
+                // Populating all 19 fields
+                document.getElementById('p_firstName').innerText = emp.firstName || emp.name.split(' ')[0] || '--';
+                document.getElementById('p_middleName').innerText = emp.middleName || '--';
+                document.getElementById('p_lastName').innerText = emp.lastName || emp.name.split(' ')[1] || '--';
+                document.getElementById('p_gender').innerText = emp.gender || '--';
+                document.getElementById('p_dob').innerText = emp.dob || '--';
+                document.getElementById('p_id').innerText = emp.id || '--';
+
+                document.getElementById('p_dept').innerText = emp.dept || '--';
+                document.getElementById('p_manager').innerText = emp.manager || '--';
+                document.getElementById('p_leavePolicy').innerText = emp.leavePolicy || '--';
+                document.getElementById('p_joiningDate').innerText = emp.joiningDate || '--';
+                document.getElementById('p_role').innerText = emp.role || '--';
+                document.getElementById('p_jobType').innerText = emp.jobType || '--';
+
+                document.getElementById('p_maritalStatus').innerText = emp.maritalStatus || '--';
+                document.getElementById('p_bloodGroup').innerText = emp.bloodGroup || '--';
+                document.getElementById('p_nationality').innerText = emp.nationality || '--';
+                document.getElementById('p_fatherName').innerText = emp.fatherName || '--';
+                document.getElementById('p_motherName').innerText = emp.motherName || '--';
+
+                document.getElementById('p_phone').innerText = emp.phone || '--';
+                document.getElementById('p_email').innerText = emp.email || '--';
+                document.getElementById('p_emergencyName').innerText = emp.emergencyName || '--';
+                document.getElementById('p_emergencyPhone').innerText = emp.emergencyPhone || '--';
+
+                document.getElementById('profileModal').classList.add('active');
+            }
+
+            function closeProfileModal() {
+                document.getElementById('profileModal').classList.remove('active');
+            }
+
+            function renderDepartments() {
+                const grid = document.getElementById('deptGrid');
+                grid.innerHTML = departments.map(dept => `
+                <div class="dept-card" style="border-left-color: ${dept.color}; cursor: pointer;" onclick="filterByDepartment('${dept.name}')">
+                    <div class="dept-info">
+                        <h4>${dept.name}</h4>
+                        <p>${dept.members} Team Members</p>
+                    </div>
+                    <div class="avatar-stack">
+                        <div class="stack-item stack-more">+${Math.max(0, dept.members - dept.leads.length)}</div>
+                        ${dept.leads.map(initial => `<div class="stack-item">${initial}</div>`).join('')}
+                    </div>
+                </div>
+            `).join('');
+            }
+
+            function showPayroll(id) {
+                const emp = employees.find(e => e.id === id);
+                if (!emp) return;
+
+                document.getElementById('employeeListView').style.display = 'none';
+                document.getElementById('payrollDetailView').style.display = 'block';
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+
+                const pAvatar = document.getElementById('p_empAvatar');
+                if (emp.photo) {
+                    pAvatar.innerHTML = `<img src="${emp.photo}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
+                } else {
+                    pAvatar.innerText = getInitials(emp.name);
+                }
+
+                document.getElementById('p_empName').innerText = emp.name;
+                document.getElementById('p_empRole').innerText = `${emp.role} â€¢ ${emp.id}`;
+
+                const baseSal = 40000 + (parseInt(emp.id.replace('EMP', '')) * 3500);
+                const hra = Math.floor(baseSal * 0.25);
+                const epf = Math.floor(baseSal * 0.08);
+
+                const totalDays = 24;
+                const lwp = emp.status === 'On Leave' ? 5 : (emp.status === 'Inactive' ? 24 : 1);
+                const present = totalDays - lwp;
+                const lwpDeduction = Math.floor((baseSal / totalDays) * lwp);
+
+                const totalEarnings = baseSal + hra + 5000 + 3500;
+                const totalDeductions = 200 + epf + lwpDeduction;
+                const net = totalEarnings - totalDeductions;
+
+                document.getElementById('p_workDays').innerText = totalDays;
+                document.getElementById('p_presentDays').innerText = present;
+                document.getElementById('p_lwpDays').innerText = lwp;
+                document.getElementById('p_basic').innerText = `â‚¹ ${baseSal.toLocaleString()}`;
+                document.getElementById('p_hra').innerText = `â‚¹ ${hra.toLocaleString()}`;
+                document.getElementById('p_epf').innerText = `â‚¹ ${epf.toLocaleString()}`;
+                document.getElementById('p_lwp_deduct').innerText = `â‚¹ ${lwpDeduction.toLocaleString()}`;
+                document.getElementById('p_net').innerText = `â‚¹ ${net.toLocaleString()}`;
+            }
+
+            function showEmployeeList() {
+                document.getElementById('employeeListView').style.display = 'block';
+                document.getElementById('payrollDetailView').style.display = 'none';
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+
+            function downloadPayrollDraft(e) {
+                const btn = e.currentTarget;
+                const empName = document.getElementById('p_empName').innerText;
+                const originalText = btn.innerHTML;
+
+                btn.innerHTML = "<i class='fas fa-spinner fa-spin'></i> Generating...";
+                btn.style.pointerEvents = "none";
+
+                setTimeout(() => {
+                    const fileName = `Payslip_Feb2026_${empName.replace(/\s+/g, '_')}.pdf`;
+                    alert("PREVIEW: " + fileName + " has been generated.\nIn a live system, this would trigger a PDF download.");
+                    btn.innerHTML = "<i class='fas fa-check-circle'></i> Downloaded";
+                    btn.style.background = "#2ed573";
+                    btn.style.color = "white";
+
+                    setTimeout(() => {
+                        btn.innerHTML = originalText;
+                        btn.style.pointerEvents = "auto";
+                        btn.style.background = "";
+                        btn.style.color = "";
+                    }, 2000);
+                }, 1500);
+            }
+
+            function processIntegratedPayroll(e) {
+                const btn = e.currentTarget;
+                const originalText = btn.innerHTML;
+                btn.innerHTML = "<i class='fas fa-spinner fa-spin'></i> Processing...";
+                btn.style.pointerEvents = "none";
+                btn.style.opacity = "0.7";
+
+                setTimeout(() => {
+                    alert("SUCCESS: Payroll for February 2026 has been processed!\nTransaction ID: GT-PAY-" + Math.floor(Math.random() * 900000 + 100000));
+                    btn.innerHTML = "<i class='fas fa-check-circle'></i> Payment Completed";
+                    btn.style.background = "#2ed573";
+
+                    setTimeout(() => {
+                        btn.innerHTML = originalText;
+                        btn.style.pointerEvents = "auto";
+                        btn.style.opacity = "1";
+                        btn.style.background = "";
+                        showEmployeeList();
+                    }, 2000);
+                }, 2000);
+            }
+
+            let editingEmployeeId = null;
+
+            function openAddEmployeeModal() {
+                editingEmployeeId = null;
+                document.getElementById('addEmployeeModal').classList.add('active');
+                document.getElementById('addModalTitle').innerText = "Add New Employee";
+                document.getElementById('addModalSubtitle').innerText = "Fill in the details to create a new profile";
+            }
+
+            function openEditEmployeeModal(id) {
+                editingEmployeeId = id;
+                const emp = employees.find(e => e.id === id);
+                if (!emp) return;
+
+                // Pre-fill the form
+                const form = document.getElementById('addEmpForm');
+
+                // Set values for all fields (handling names carefully)
+                if (emp.firstName) form.firstName.value = emp.firstName;
+                else {
+                    const names = emp.name.split(' ');
+                    form.firstName.value = names[0];
+                    if (names.length > 2) form.middleName.value = names[1];
+                    form.lastName.value = names[names.length - 1];
+                }
+
+                if (emp.middleName) form.middleName.value = emp.middleName;
+                if (emp.lastName) form.lastName.value = emp.lastName;
+
+                form.id.value = emp.id;
+                form.id.readOnly = true; // Emp ID shouldn't be changed during edit
+
+                if (emp.gender) form.gender.value = emp.gender;
+                if (emp.dob) form.dob.value = emp.dob;
+                if (emp.dept) form.dept.value = emp.dept;
+                if (emp.manager) form.manager.value = emp.manager;
+                if (emp.leavePolicy) form.leavePolicy.value = emp.leavePolicy;
+                if (emp.joiningDate) form.joiningDate.value = emp.joiningDate;
+                if (emp.role) form.role.value = emp.role;
+                if (emp.jobType) form.jobType.value = emp.jobType;
+                if (emp.maritalStatus) form.maritalStatus.value = emp.maritalStatus;
+                if (emp.bloodGroup) form.bloodGroup.value = emp.bloodGroup;
+                if (emp.nationality) form.nationality.value = emp.nationality;
+                if (emp.fatherName) form.fatherName.value = emp.fatherName;
+                if (emp.motherName) form.motherName.value = emp.motherName;
+                if (emp.phone) form.phone.value = emp.phone;
+                if (emp.email) form.email.value = emp.email;
+                if (emp.emergencyName) form.emergencyName.value = emp.emergencyName;
+                if (emp.emergencyPhone) form.emergencyPhone.value = emp.emergencyPhone;
+
+                document.getElementById('addModalTitle').innerText = "Edit Employee Profile";
+                document.getElementById('addModalSubtitle').innerText = "Update details for " + emp.name;
+
+                closeProfileModal(); // Close profile modal if open
+                document.getElementById('addEmployeeModal').classList.add('active');
+            }
+
+            let currentPhotoData = null;
+
+            function handlePhotoUpload(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = function (event) {
+                    currentPhotoData = event.target.result;
+                    const previewCircle = document.querySelector('.photo-upload-container .upload-circle');
+                    previewCircle.innerHTML = `<img src="${currentPhotoData}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
+                    previewCircle.style.border = "2px solid var(--primary)";
+                };
+                reader.readAsDataURL(file);
+            }
+
+            function closeAddEmployeeModal() {
+                document.getElementById('addEmployeeModal').classList.remove('active');
+                document.getElementById('addEmpForm').reset();
+                document.getElementById('addEmpForm').id.readOnly = false;
+                currentPhotoData = null;
+                document.querySelector('.photo-upload-container .upload-circle').innerHTML = '<i class="fas fa-user"></i>';
+                document.querySelector('.photo-upload-container .upload-circle').style.border = "none";
+            }
+
+            function saveEmployee(e) {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+
+                // Constructing the full employee object from 19 fields
+                const newEmp = {
+                    id: formData.get('id'),
+                    firstName: formData.get('firstName'),
+                    middleName: formData.get('middleName'),
+                    lastName: formData.get('lastName'),
+                    name: `${formData.get('firstName')} ${formData.get('lastName')}`,
+                    photo: currentPhotoData,
+                    gender: formData.get('gender'),
+                    dob: formData.get('dob'),
+                    dept: formData.get('dept'),
+                    manager: formData.get('manager'),
+                    leavePolicy: formData.get('leavePolicy'),
+                    joiningDate: formData.get('joiningDate'),
+                    role: formData.get('role'),
+                    jobType: formData.get('jobType'),
+                    maritalStatus: formData.get('maritalStatus'),
+                    bloodGroup: formData.get('bloodGroup'),
+                    nationality: formData.get('nationality'),
+                    fatherName: formData.get('fatherName'),
+                    motherName: formData.get('motherName'),
+                    phone: formData.get('phone'),
+                    email: formData.get('email'),
+                    emergencyName: formData.get('emergencyName'),
+                    emergencyPhone: formData.get('emergencyPhone'),
+                    status: "Active" // Default to active for new joiners
+                };
+
+                if (editingEmployeeId) {
+                    const index = employees.findIndex(e => e.id === editingEmployeeId);
+                    if (index !== -1) {
+                        employees[index] = { ...employees[index], ...newEmp };
+                        alert(`SUCCESS: Profile for ${newEmp.name} has been updated!`);
+                    }
+                } else {
+                    employees.unshift(newEmp);
+                    alert(`SUCCESS: ${newEmp.name} (${newEmp.id}) has been successfully onboarded!`);
+                }
+
+                renderEmployees();
+                closeAddEmployeeModal();
+            }
+
+            function toggleCardMenu(event, id) {
+                event.stopPropagation();
+
+                // Hide other open menus
+                document.querySelectorAll('.card-menu-dropdown').forEach(menu => {
+                    if (menu.id !== `dropdown-${id}`) {
+                        menu.classList.remove('active');
+                    }
+                });
+
+                const dropdown = document.getElementById(`dropdown-${id}`);
+                dropdown.classList.toggle('active');
+            }
+
+            function handleDeleteEmployee(id) {
+                const emp = employees.find(e => e.id === id);
+                if (confirm(`Are you sure you want to remove ${emp.name} (${id}) from the system? This action cannot be undone.`)) {
+                    const index = employees.findIndex(e => e.id === id);
+                    if (index !== -1) {
+                        employees.splice(index, 1);
+                        renderEmployees();
+                        alert(`REMOVED: ${emp.name} has been deleted from the directory.`);
+                    }
+                }
+            }
+
+            // Close dropdowns on document click
+            document.addEventListener('click', () => {
+                document.querySelectorAll('.card-menu-dropdown').forEach(menu => {
+                    menu.classList.remove('active');
+                });
+            });
+
+            document.addEventListener('DOMContentLoaded', () => {
+                renderEmployees();
+                renderDepartments();
+
+                document.getElementById('empPhoto').addEventListener('change', handlePhotoUpload);
+            });
+        </script>
+        <div class="modal-overlay" id="profileModal">
+            <div class="profile-modal" style="max-width: 700px;">
+                <div class="modal-header">
+                    <div class="modal-close" onclick="closeProfileModal()"><i class="fas fa-times"></i></div>
+                    <div class="modal-avatar-wrap">
+                        <div class="modal-avatar" id="modalAvatar">RS</div>
+                    </div>
+                </div>
+                <div class="add-modal-body" style="padding: 60px 24px 24px;">
+                    <div class="modal-name-row" style="margin-bottom: 25px;">
+                        <div>
+                            <h2 id="modalName" style="margin: 0;">Rahul Sharma</h2>
+                            <p id="modalRole"
+                                style="color: #636e72; font-size: 14px; font-weight: 500; margin: 5px 0 0;">Software
+                                Engineer &bull; EMP001</p>
+                        </div>
+                        <div class="modal-status status-active" id="modalStatusBadge">Active</div>
+                    </div>
+
+                    <!-- Section: Identity Details -->
+                    <div class="form-section">
+                        <div class="section-title"><i class="fas fa-id-card"></i> Identity Details</div>
+                        <div class="modal-info-grid">
+                            <div class="info-group"><label>First Name</label>
+                                <p id="p_firstName">--</p>
+                            </div>
+                            <div class="info-group"><label>Middle Name</label>
+                                <p id="p_middleName">--</p>
+                            </div>
+                            <div class="info-group"><label>Last Name</label>
+                                <p id="p_lastName">--</p>
+                            </div>
+                            <div class="info-group"><label>Gender</label>
+                                <p id="p_gender">--</p>
+                            </div>
+                            <div class="info-group"><label>Date of Birth</label>
+                                <p id="p_dob">--</p>
+                            </div>
+                            <div class="info-group"><label>Employee ID</label>
+                                <p id="p_id">--</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section: Official Records -->
+                    <div class="form-section">
+                        <div class="section-title"><i class="fas fa-briefcase"></i> Official Records</div>
+                        <div class="modal-info-grid">
+                            <div class="info-group"><label>Department</label>
+                                <p id="p_dept">--</p>
+                            </div>
+                            <div class="info-group"><label>Manager</label>
+                                <p id="p_manager">--</p>
+                            </div>
+                            <div class="info-group"><label>Leave Policy</label>
+                                <p id="p_leavePolicy">--</p>
+                            </div>
+                            <div class="info-group"><label>Joining Date</label>
+                                <p id="p_joiningDate">--</p>
+                            </div>
+                            <div class="info-group"><label>Designation</label>
+                                <p id="p_role">--</p>
+                            </div>
+                            <div class="info-group"><label>Job Type</label>
+                                <p id="p_jobType">--</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section: Personal Profile -->
+                    <div class="form-section">
+                        <div class="section-title"><i class="fas fa-user-tag"></i> Personal Profile</div>
+                        <div class="modal-info-grid">
+                            <div class="info-group"><label>Marital Status</label>
+                                <p id="p_maritalStatus">--</p>
+                            </div>
+                            <div class="info-group"><label>Blood Group</label>
+                                <p id="p_bloodGroup">--</p>
+                            </div>
+                            <div class="info-group"><label>Nationality</label>
+                                <p id="p_nationality">--</p>
+                            </div>
+                            <div class="info-group"><label>Father's Name</label>
+                                <p id="p_fatherName">--</p>
+                            </div>
+                            <div class="info-group"><label>Mother's Name</label>
+                                <p id="p_motherName">--</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section: Communication -->
+                    <div class="form-section">
+                        <div class="section-title"><i class="fas fa-phone-alt"></i> Communication</div>
+                        <div class="modal-info-grid">
+                            <div class="info-group"><label>Primary Phone</label>
+                                <p id="p_phone">--</p>
+                            </div>
+                            <div class="info-group"><label>Email Address</label>
+                                <p id="p_email">--</p>
+                            </div>
+                            <div class="info-group"><label>Emergency Contact</label>
+                                <p id="p_emergencyName">--</p>
+                            </div>
+                            <div class="info-group"><label>Emergency Phone</label>
+                                <p id="p_emergencyPhone">--</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-overlay" id="addEmployeeModal">
+            <div class="profile-modal" style="max-width: 600px;">
+                <div class="modal-header">
+                    <div class="modal-close" onclick="closeAddEmployeeModal()"><i class="fas fa-times"></i></div>
+                    <div style="color: white; padding: 20px;">
+                        <h2 style="margin: 0;" id="addModalTitle">Add New Employee</h2>
+                        <p style="margin: 0; opacity: 0.9; font-size: 14px;" id="addModalSubtitle">Fill in the details
+                            to create a new profile
+                        </p>
+                    </div>
+                </div>
+                <div class="add-modal-body">
+                    <form id="addEmpForm" onsubmit="saveEmployee(event)" class="modal-content-padding">
+                        <!-- Section 1: Visual Identity -->
+                        <div class="form-section">
+                            <div class="section-title"><i class="fas fa-camera"></i> Visual Identity</div>
+                            <div class="photo-upload-container">
+                                <div class="upload-circle"><i class="fas fa-user"></i></div>
+                                <div>
+                                    <p style="margin: 0; font-weight: 600; font-size: 13px;">Profile Photo</p>
+                                    <p style="margin: 5px 0 10px; font-size: 11px; color: #718096;">Upload a clear
+                                        professional photo. JPG, PNG up to 2MB.</p>
+                                    <input type="file" id="empPhoto" accept="image/*"
+                                        style="font-size: 12px; border: none; background: transparent; padding: 0;">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Section 2: Identity Details -->
+                        <div class="form-section">
+                            <div class="section-title"><i class="fas fa-id-card"></i> Identity Details</div>
+                            <p class="section-subtitle">Core personnel information</p>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label>First Name <span>*</span></label>
+                                    <input type="text" name="firstName" placeholder="John" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Middle Name</label>
+                                    <input type="text" name="middleName" placeholder="Ex: D.">
+                                </div>
+                                <div class="form-group">
+                                    <label>Last Name <span>*</span></label>
+                                    <input type="text" name="lastName" placeholder="Doe" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Gender <span>*</span></label>
+                                    <select name="gender" required>
+                                        <option value="">Select Gender</option>
+                                        <option value="Male">Male</option>
+                                        <option value="Female">Female</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Date of Birth <span>*</span></label>
+                                    <input type="date" name="dob" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Employee ID <span>*</span></label>
+                                    <input type="text" name="id" placeholder="e.g. EMP123" required>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Section 3: Official Records -->
+                        <div class="form-section">
+                            <div class="section-title"><i class="fas fa-briefcase"></i> Official Records</div>
+                            <p class="section-subtitle">Employment & Role placement</p>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label>Department <span>*</span></label>
+                                    <select name="dept" required>
+                                        <option value="">Select Department</option>
+                                        <option value="Engineering">Engineering</option>
+                                        <option value="Product">Product</option>
+                                        <option value="Design">Design</option>
+                                        <option value="HR">HR</option>
+                                        <option value="Marketing">Marketing</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Manager</label>
+                                    <select name="manager">
+                                        <option value="Top Level">No Manager (Top Level)</option>
+                                        <option value="Rahul Sharma">Rahul Sharma</option>
+                                        <option value="Aditi Verma">Aditi Verma</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Leave Policy</label>
+                                    <select name="leavePolicy">
+                                        <option value="">Select Policy</option>
+                                        <option value="Standard">Standard Paid Leave</option>
+                                        <option value="Flexible">Flexible / Unlimited</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Joining Date <span>*</span></label>
+                                    <input type="date" name="joiningDate" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Designation / Role <span>*</span></label>
+                                    <input type="text" name="role" placeholder="Employee" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Job Type <span>*</span></label>
+                                    <select name="jobType" required>
+                                        <option value="Full-Time">Full-Time</option>
+                                        <option value="Part-Time">Part-Time</option>
+                                        <option value="Contract">Contract</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Section 4: Personal Profile -->
+                        <div class="form-section">
+                            <div class="section-title"><i class="fas fa-user-tag"></i> Personal Profile</div>
+                            <p class="section-subtitle">Personal & Family metadata</p>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label>Marital Status</label>
+                                    <select name="maritalStatus">
+                                        <option value="">Select</option>
+                                        <option value="Single">Single</option>
+                                        <option value="Married">Married</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Blood Group</label>
+                                    <select name="bloodGroup">
+                                        <option value="">Select</option>
+                                        <option value="A+">A+</option>
+                                        <option value="B+">B+</option>
+                                        <option value="O+">O+</option>
+                                        <option value="AB+">AB+</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Nationality</label>
+                                    <select name="nationality">
+                                        <option value="Indian">Indian</option>
+                                        <option value="Other">Other Country</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Father's Name</label>
+                                    <input type="text" name="fatherName" placeholder="Ex: Robert Smith">
+                                </div>
+                                <div class="form-group">
+                                    <label>Mother's Name</label>
+                                    <input type="text" name="motherName" placeholder="Ex: Mary Smith">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Section 5: Communication -->
+                        <div class="form-section">
+                            <div class="section-title"><i class="fas fa-phone-alt"></i> Communication</div>
+                            <p class="section-subtitle">Verified connection methods</p>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label>Primary Phone <span>*</span></label>
+                                    <input type="text" name="phone" placeholder="10-digit mobile" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Email Address <span>*</span></label>
+                                    <input type="email" name="email" placeholder="john@globaltech.com" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Emergency Name <span>*</span></label>
+                                    <input type="text" name="emergencyName" placeholder="Contact name" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Emergency Ph. <span>*</span></label>
+                                    <input type="text" name="emergencyPhone" placeholder="10-digit mobile" required>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="modal-actions"
+                            style="margin-top: 30px; position: sticky; bottom: 0; background: white; padding-top: 15px; border-top: 1px solid #eee;">
+                            <button type="button" class="modal-btn btn-secondary"
+                                onclick="closeAddEmployeeModal()">Cancel</button>
+                            <button type="submit" class="modal-btn btn-primary">Save Employee</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+</body>
+
+</html>

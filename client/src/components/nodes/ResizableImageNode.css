@@ -1,0 +1,56 @@
+.image-container {
+    transition: outline 0.1s;
+    position: relative;
+    display: inline-block;
+}
+
+.image-container.is-selected {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+    z-index: 10;
+}
+
+.image-container.is-dragging {
+    opacity: 0.8;
+    cursor: move !important;
+    z-index: 100;
+}
+
+.resize-handle {
+    position: absolute;
+    right: -8px;
+    bottom: -8px;
+    width: 14px;
+    height: 14px;
+    cursor: se-resize;
+    background-color: #3b82f6;
+    border: 2px solid white;
+    border-radius: 50%;
+    z-index: 50;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.resize-handle:hover {
+    transform: scale(1.2);
+    background-color: #2563eb;
+}
+
+.move-handle {
+    position: absolute;
+    top: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 24px;
+    height: 6px;
+    cursor: move;
+    background-color: #3b82f6;
+    border: 2px solid white;
+    border-radius: 3px;
+    z-index: 50;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.move-handle:hover {
+    background-color: #2563eb;
+    transform: translateX(-50%) scale(1.1);
+}

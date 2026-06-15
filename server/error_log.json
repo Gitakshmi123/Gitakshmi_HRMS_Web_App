@@ -1,0 +1,5 @@
+{
+  "message": "user is not defined",
+  "stack": "ReferenceError: user is not defined\n    at C:\\Users\\baldaniya nitesh\\Desktop\\GT_HRMS\\GT_HRMS\\backend\\scripts\\trigger_save_draft.js:35:17\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)",
+  "name": "ReferenceError"
+}

@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leave Requests | Global Tech</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #00b894;
+            --bg-color: #fcfcfc;
+            --text-main: #2d3436;
+            --text-muted: #636e72;
+            --border-color: #f1f2f6;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+        }
+
+        /* Custom Scrollbar */
+        .custom-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .custom-scroll::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+
+        /* Sidebar Navigation */
+        .sidebar {
+            width: 80px;
+            background-color: #ffffff;
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            height: 100vh;
+            left: 0;
+            top: 0;
+            z-index: 100;
+            overflow: hidden;
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
+        }
+
+        .sidebar:hover {
+            width: 260px;
+            box-shadow: 4px 0 15px rgba(0, 0, 0, 0.05);
+            overflow-y: auto;
+        }
+
+        .sidebar-brand {
+            padding: 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 260px;
+        }
+
+        .brand-icon {
+            width: 32px;
+            height: 32px;
+            background-color: #00b894;
+            color: white;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 16px;
+        }
+
+        .brand-text {
+            font-size: 16px;
+            font-weight: 700;
+            color: #2d3436;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .sidebar:hover .brand-text {
+            opacity: 1;
+        }
+
+        .sidebar-menu {
+            padding: 10px 16px;
+            flex: 1;
+            min-width: 260px;
+        }
+
+        .menu-section {
+            font-size: 11px;
+            font-weight: 600;
+            color: #b2bec3;
+            letter-spacing: 0.5px;
+            margin: 20px 0 10px 12px;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .sidebar:hover .menu-section {
+            opacity: 1;
+        }
+
+        .menu-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            color: #636e72;
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 4px;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .menu-item i {
+            font-size: 16px;
+            width: 20px;
+            text-align: center;
+            color: #a4b0be;
+        }
+
+        .menu-item span {
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .sidebar:hover .menu-item span {
+            opacity: 1;
+        }
+
+        .menu-item:hover {
+            background-color: #f8f9fa;
+        }
+
+        .menu-item.active {
+            background: linear-gradient(135deg, #00b894 0%, #00cec9 100%);
+            box-shadow: 0 4px 10px rgba(0, 184, 148, 0.2);
+            color: white;
+        }
+
+        .menu-item.active i {
+            color: white;
+        }
+
+        .sidebar-footer {
+            padding: 24px;
+            margin-top: auto;
+            min-width: 260px;
+        }
+
+        .system-status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #2d3436;
+        }
+
+        .system-status-indicator .dot {
+            width: 8px;
+            height: 8px;
+            background-color: #00b894;
+            border-radius: 50%;
+        }
+
+        .system-version {
+            font-size: 11px;
+            color: #b2bec3;
+            padding-left: 16px;
+            margin-top: 4px;
+        }
+
+        /* Layout */
+        .main-wrapper {
+            margin-left: 80px;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            transition: all 0.3s ease;
+            background-color: #f8fafc;
+        }
+
+        .sidebar:hover~.main-wrapper {
+            margin-left: 260px;
+        }
+
+        /* Top Navigation */
+        .top-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 40px;
+            background-color: #ffffff;
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 90;
+        }
+
+        .nav-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .nav-left i {
+            color: #b2bec3;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .nav-left h1 {
+            font-size: 16px;
+            font-weight: 700;
+            color: #2d3436;
+            text-transform: uppercase;
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 25px;
+        }
+
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+        }
+
+        .user-profile .avatar {
+            width: 35px;
+            height: 35px;
+            background: linear-gradient(135deg, #00b894 0%, #00cec9 100%);
+            color: white;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .user-details h4 {
+            font-size: 13px;
+            font-weight: 700;
+            color: #2d3436;
+        }
+
+        .user-details p {
+            font-size: 11px;
+            color: #a4b0be;
+            margin-top: 2px;
+        }
+
+        .nav-actions-pill {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            background-color: #f8f9fa;
+            border-radius: 30px;
+            padding: 8px 18px;
+            border: 1px solid #f1f2f6;
+        }
+
+        .nav-actions-pill i {
+            color: #636e72;
+            cursor: pointer;
+            font-size: 15px;
+            transition: color 0.2s;
+        }
+
+        .nav-actions-pill i:hover {
+            color: #2d3436;
+        }
+
+        .nav-actions-pill .divider {
+            width: 1px;
+            height: 16px;
+            background-color: #dfe6e9;
+        }
+
+        .notification-icon {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .bell-badge {
+            position: absolute;
+            top: 0px;
+            right: -2px;
+            width: 6px;
+            height: 6px;
+            background-color: #ff7675;
+            border-radius: 50%;
+            border: 2px solid #f8f9fa;
+        }
+
+        /* Toolbar & Branding */
+        .white-toolbar {
+            background-color: #ffffff;
+            padding: 24px 40px;
+            border-bottom: 1px solid var(--border-color);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
+            position: sticky;
+            top: 66px;
+            z-index: 80;
+        }
+
+        .toolbar-title h2 {
+            font-size: 24px;
+            font-weight: 800;
+            color: #0f172a;
+            margin-bottom: 4px;
+        }
+
+        .toolbar-title p {
+            font-size: 11px;
+            font-weight: 700;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+            margin-top: 24px;
+        }
+
+        .stat-card {
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.02);
+            border: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.05);
+        }
+
+        .stat-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        /* Modal & UI Elements */
+        .badge-type {
+            padding: 5px 10px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .type-sick {
+            background: #fef2f2;
+            color: #ef4444;
+        }
+
+        .type-casual {
+            background: #eff6ff;
+            color: #2563eb;
+        }
+
+        .type-work {
+            background: #f0fdf4;
+            color: #10b981;
+        }
+
+        .status-pill {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-pending {
+            background: #fffbeb;
+            color: #f59e0b;
+        }
+
+        .status-approved {
+            background: #ecfdf5;
+            color: #10b981;
+        }
+
+        .status-rejected {
+            background: #fef2f2;
+            color: #ef4444;
+        }
+
+        .dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+        }
+
+        /* Bulk Bar */
+        #bulkActionsBar {
+            display: none;
+            background: #0f172a;
+            color: white;
+            padding: 12px 32px;
+            border-radius: 12px;
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            align-items: center;
+            gap: 24px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            animation: slideUp 0.3s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translate(-50%, 100px);
+            }
+
+            to {
+                transform: translate(-50%, 0);
+            }
+        }
+
+        /* Scrollable Modal from Face Updates */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(15, 23, 42, 0.4);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 20px;
+            width: 95%;
+            max-width: 650px;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+
+        .modal-header {
+            padding: 20px 32px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-body {
+            padding: 32px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .modal-footer {
+            padding: 20px 32px;
+            border-top: 1px solid var(--border-color);
+            background: #fafafa;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .balance-card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+
+        .doc-viewer {
+            background: #f1f5f9;
+            border-radius: 12px;
+            width: 100%;
+            height: 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px dashed #cbd5e1;
+        }
+
+        /* Shared Buttons */
+        .btn-refresh {
+            padding: 10px 18px;
+            border-radius: 10px;
+            border: 1px solid #e2e8f0;
+            background: white;
+            color: #475569;
+            font-weight: 700;
+            font-size: 11px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+
+        .btn-refresh:hover {
+            background: #f8fafc;
+            border-color: #cbd5e1;
+        }
+
+        .search-box input {
+            padding: 10px 14px 10px 36px;
+            border-radius: 10px;
+            border: 1px solid #e2e8f0;
+            font-size: 12px;
+            font-weight: 600;
+            width: 180px;
+            outline: none;
+        }
+
+        .status-dropdown {
+            padding: 10px 14px;
+            border-radius: 10px;
+            border: 1px solid #e2e8f0;
+            font-size: 12px;
+            font-weight: 600;
+            color: #475569;
+            outline: none;
+            cursor: pointer;
+            background: white;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-brand">
+            <div class="brand-icon">H</div>
+            <div class="brand-text">Global Tech</div>
+        </div>
+
+        <div class="sidebar-menu">
+            <div class="menu-section">OVERVIEW</div>
+            <a href="dashboard.html" class="menu-item">
+                <i class="fas fa-layer-group"></i>
+                <span>Dashboard</span>
+            </a>
+            <a href="reports.html" class="menu-item">
+                <i class="fas fa-chart-pie"></i>
+                <span>Reports</span>
+            </a>
+
+            <div class="menu-section">PEOPLE</div>
+            <a href="employees.html" class="menu-item">
+                <i class="fas fa-users"></i>
+                <span>Employees</span>
+            </a>
+            <a href="departments.html" class="menu-item">
+                <i class="fas fa-building"></i>
+                <span>Departments</span>
+            </a>
+            <a href="org-structure.html" class="menu-item">
+                <i class="fas fa-sitemap"></i>
+                <span>Org Structure</span>
+            </a>
+            <a href="users.html" class="menu-item">
+                <i class="fas fa-user-circle"></i>
+                <span>Users</span>
+            </a>
+
+            <div class="menu-section">ATTENDANCE</div>
+            <a href="attendance.html" class="menu-item">
+                <i class="fas fa-tachometer-alt"></i>
+                <span>Dashboard</span>
+            </a>
+            <a href="calendar.html" class="menu-item">
+                <i class="far fa-calendar-alt"></i>
+                <span>Calendar</span>
+            </a>
+            <a href="face-updates.html" class="menu-item">
+                <i class="fas fa-user-clock"></i>
+                <span>Face Updates</span>
+            </a>
+
+            <div class="menu-section" style="margin-top: 24px;">LEAVE</div>
+            <a href="leave-requests.html" class="menu-item active">
+                <i class="fas fa-plane-departure"></i>
+                <span>Leave Requests</span>
+            </a>
+            <a href="policies.html" class="menu-item">
+                <i class="fas fa-shield-alt"></i>
+                <span>Policies</span>
+            </a>
+        </div>
+
+        <div class="sidebar-footer">
+            <div class="system-status-indicator">
+                <div class="dot"></div>
+                <span>SYSTEM ACTIVE</span>
+            </div>
+            <div class="system-version">v2.5.0 Stable Release</div>
+        </div>
+    </div>
+
+    <div class="main-wrapper">
+        <nav class="top-nav">
+            <div class="nav-left">
+                <i class="fas fa-arrow-left" onclick="window.history.back()"></i>
+                <h1>LEAVE MANAGEMENT</h1>
+            </div>
+            <div class="nav-right">
+                <div class="user-profile">
+                    <div class="avatar">T</div>
+                    <div class="user-details">
+                        <h4>Test</h4>
+                        <p>tes001</p>
+                    </div>
+                    <i class="fas fa-chevron-down" style="font-size: 10px; color: #a4b0be; margin-left: 10px;"></i>
+                </div>
+
+                <div class="nav-actions-pill">
+                    <i class="far fa-moon"></i>
+                    <div class="divider"></div>
+                    <div class="notification-icon">
+                        <i class="far fa-bell"></i>
+                        <span class="bell-badge"></span>
+                    </div>
+                    <div class="divider"></div>
+                    <i class="fas fa-sign-out-alt"></i>
+                </div>
+            </div>
+        </nav>
+
+        <div class="white-toolbar">
+            <div
+                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 16px;">
+                <div class="toolbar-title">
+                    <h2>Leave Requests</h2>
+                    <p>Review and approve team leave applications</p>
+                </div>
+
+                <div style="display: flex; gap: 12px; align-items: center;">
+                    <button class="btn-refresh" onclick="refreshTable()"><i class="fas fa-sync-alt"
+                            id="refreshIcon"></i> REFRESH</button>
+                    <div style="position: relative;">
+                        <i class="fas fa-search"
+                            style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #94a3b8; font-size: 12px;"></i>
+                        <input type="text" id="empSearch" onkeyup="filterTable()" placeholder="Search Employee..."
+                            style="padding: 10px 14px 10px 36px; border-radius: 10px; border: 1px solid #e2e8f0; font-size: 12px; font-weight: 600; width: 180px; outline: none;">
+                    </div>
+                    <select id="statusFilter" class="status-dropdown" onchange="filterTable()">
+                        <option value="all">All Status</option>
+                        <option value="pending">Pending</option>
+                        <option value="approved">Approved</option>
+                        <option value="rejected">Rejected</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: #fffbeb; color: #f59e0b;">
+                        <i class="fas fa-hourglass-half"></i>
+                    </div>
+                    <div class="stat-details">
+                        <h3 id="statPending">0</h3>
+                        <p>Pending Approvals <span style="font-size: 10px; color: #f59e0b;">- Needs action</span></p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: #ecfdf5; color: #10b981;">
+                        <i class="fas fa-calendar-check"></i>
+                    </div>
+                    <div class="stat-details">
+                        <h3 id="statApproved">0</h3>
+                        <p>Approved <span style="font-size: 10px; color: #94a3b8;">- This month</span></p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: #eff6ff; color: #2563eb;">
+                        <i class="fas fa-file-alt"></i>
+                    </div>
+                    <div class="stat-details">
+                        <h3 id="statTotal">142</h3>
+                        <p>Total Leaves <span style="font-size: 10px; color: #94a3b8;">- This year</span></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="page-content" style="padding: 24px 40px;">
+            <div
+                style="background: white; border-radius: 12px; border: 1px solid #f1f2f6; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse; min-width: 900px;">
+                    <thead>
+                        <tr style="background: #fafafa; border-bottom: 1px solid #f1f2f6;">
+                            <th style="padding: 16px 24px; width: 50px;"><input type="checkbox" id="selectAll"
+                                    onclick="toggleAll()"></th>
+                            <th
+                                style="padding: 16px 24px; text-align: left; font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase;">
+                                Employee</th>
+                            <th
+                                style="padding: 16px 24px; text-align: left; font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase;">
+                                Leave Type</th>
+                            <th
+                                style="padding: 16px 24px; text-align: left; font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase;">
+                                Dates & Duration</th>
+                            <th
+                                style="padding: 16px 24px; text-align: center; font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase;">
+                                Doc</th>
+                            <th
+                                style="padding: 16px 24px; text-align: left; font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase;">
+                                Status</th>
+                            <th
+                                style="padding: 16px 24px; text-align: right; font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase;">
+                                Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leaveTableBody">
+                        <!-- Rows -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Actions -->
+    <div id="bulkActionsBar">
+        <span style="font-size: 13px; font-weight: 600;"><span id="selectedCount">0</span> Applications Selected</span>
+        <button onclick="bulkApprove()"
+            style="background: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 700; font-size: 12px; cursor: pointer;">Approve
+            Selected</button>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal-overlay" id="previewModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h3 id="modalName" style="font-size: 20px; font-weight: 700; color: #1e293b;">Request Details</h3>
+                    <p style="font-size: 12px; color: #64748b;">Review employee's leave balance and documents.</p>
+                </div>
+                <i class="fas fa-times" style="cursor: pointer; color: #64748b;" onclick="closeModal()"></i>
+            </div>
+            <div class="modal-body">
+                <div class="balance-card">
+                    <div
+                        style="font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; margin-bottom: 12px;">
+                        Leave Balance</div>
+                    <div id="balanceText" style="font-size: 14px; font-weight: 600; color: #0f172a;">-</div>
+                </div>
+                <div
+                    style="font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; margin-bottom: 12px;">
+                    Document Attachment</div>
+                <div class="doc-viewer" id="docViewer">No attachment</div>
+                <div style="margin-top: 24px;">
+                    <div
+                        style="font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; margin-bottom: 8px;">
+                        Employee Note:</div>
+                    <div id="employeeNote"
+                        style="font-size: 13px; color: #475569; font-style: italic; background: #f8fafc; padding: 12px; border-radius: 8px;">
+                        -</div>
+                </div>
+
+                <!-- Rejection Reason Section (hidden by default) -->
+                <div id="rejectionSection" style="display: none; margin-top: 20px; animation: slideDown 0.3s ease-out;">
+                    <div
+                        style="font-size: 11px; color: #ef4444; font-weight: 800; text-transform: uppercase; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                        <i class="fas fa-exclamation-circle"></i> Rejection Reason *
+                    </div>
+                    <textarea id="rejectionReason" placeholder="Please explain why this request is being rejected..."
+                        style="width: 100%; height: 90px; padding: 12px; border-radius: 12px; border: 2px solid #fee2e2; background: #fef2f2; font-size: 13px; font-weight: 500; color: #991b1b; outline: none; resize: none; transition: border-color 0.2s; font-family: 'Inter', sans-serif;"></textarea>
+                    <div id="rejectionError"
+                        style="display: none; color: #ef4444; font-size: 12px; font-weight: 600; margin-top: 6px;"><i
+                            class="fas fa-info-circle"></i> Rejection reason is required. Please provide a valid reason
+                        before proceeding.</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btnReject" onclick="handleRejectClick()"
+                    style="border: 1px solid #ef4444; background: white; color: #ef4444; padding: 10px 24px; border-radius: 10px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.2s;">
+                    <i class="fas fa-times"></i> Reject
+                </button>
+                <button onclick="handleDecision('approved')"
+                    style="background: #10b981; color: white; padding: 10px 24px; border: none; border-radius: 10px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-check"></i> Approve Leave
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Document Preview Lightbox -->
+    <div id="docLightbox"
+        style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15,23,42,0.6); backdrop-filter: blur(6px); z-index: 2000; align-items: center; justify-content: center;">
+        <div
+            style="background: white; border-radius: 20px; width: 95%; max-width: 520px; overflow: hidden; box-shadow: 0 25px 50px rgba(0,0,0,0.2); animation: modalIn 0.3s cubic-bezier(0.4,0,0.2,1);">
+            <!-- Header -->
+            <div
+                style="padding: 20px 28px; border-bottom: 1px solid #f1f2f6; display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div
+                        style="width: 40px; height: 40px; background: #eff6ff; border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                        <i class="fas fa-file-medical" style="color: #2563eb; font-size: 18px;"></i>
+                    </div>
+                    <div>
+                        <div id="docLightboxTitle" style="font-size: 15px; font-weight: 700; color: #1e293b;">Document
+                        </div>
+                        <div style="font-size: 11px; color: #94a3b8; font-weight: 600;">Attached by employee</div>
+                    </div>
+                </div>
+                <div onclick="closeDocViewer()"
+                    style="width: 32px; height: 32px; border-radius: 8px; background: #f1f5f9; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+                    <i class="fas fa-times" style="color: #64748b; font-size: 14px;"></i>
+                </div>
+            </div>
+            <!-- Document Preview Area -->
+            <div style="padding: 28px;">
+                <div id="docLightboxPreview"
+                    style="background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 16px; min-height: 280px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;">
+                    <!-- content injected by JS -->
+                </div>
+                <div style="margin-top: 16px; display: flex; gap: 10px; justify-content: flex-end;">
+                    <button onclick="closeDocViewer()"
+                        style="padding: 10px 20px; border-radius: 10px; border: 1px solid #e2e8f0; background: white; color: #475569; font-weight: 700; cursor: pointer;">Close</button>
+                    <button
+                        style="padding: 10px 20px; border-radius: 10px; border: none; background: #2563eb; color: white; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-download"></i> Download
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        @keyframes modalIn {
+            from {
+                transform: scale(0.95);
+                opacity: 0;
+            }
+
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        #docLightbox.active {
+            display: flex;
+        }
+    </style>
+
+    <script>
+        let leaveRequests = [
+            { id: 1, name: 'Rahul Verma', empId: 'EMP-042', seed: 'Rahul', type: 'Sick Leave', start: '12 Oct', end: '14 Oct', duration: '3 Days', status: 'pending', attachment: 'medical.jpg', note: 'Suffering from viral fever, doctor advised bed rest.', balances: 'Rahul has 2 Sick Leaves remaining.' },
+            { id: 2, name: 'Priya Singh', empId: 'EMP-089', seed: 'Priya', type: 'Casual Leave', start: '15 Oct', end: '15 Oct', duration: '1 Day', status: 'approved', attachment: null, note: 'Personal work at home.', balances: 'Priya has 5 Casual Leaves remaining.' },
+            { id: 3, name: 'Amit Kumar', empId: 'EMP-055', seed: 'Amit', type: 'Sick Leave', start: '18 Oct', end: '19 Oct', duration: '2 Days', status: 'pending', attachment: 'medical.jpg', note: 'Severe headache and migrain.', balances: 'Amit has 4 Sick Leaves remaining.' },
+            { id: 4, name: 'Sanjay Dutt', empId: 'EMP-012', seed: 'Sanjay', type: 'Worked From Home', start: '12 Oct', end: '12 Oct', duration: '1 Day', status: 'rejected', attachment: null, note: 'Need to visit bank.', balances: 'Sanjay has 12 Work From Home days remaining.' },
+            { id: 5, name: 'Anjali Sharma', empId: 'EMP-091', seed: 'Anjali', type: 'Casual Leave', start: '20 Oct', end: '22 Oct', duration: '3 Days', status: 'pending', attachment: null, note: 'Attending relative marriage.', balances: 'Anjali has 3 Casual Leaves remaining.' },
+            { id: 6, name: 'Vikram Sethi', empId: 'EMP-033', seed: 'Vikram', type: 'Casual Leave', start: '05 Oct', end: '05 Oct', duration: '1 Day', status: 'approved', attachment: null, note: 'Family event.', balances: 'Vikram has 7 Casual Leaves remaining.' },
+            { id: 7, name: 'Neha Gupta', empId: 'EMP-077', seed: 'Neha', type: 'Sick Leave', start: '02 Oct', end: '03 Oct', duration: '2 Days', status: 'approved', attachment: 'report.pdf', note: 'Food poisoning.', balances: 'Neha has 6 Sick Leaves remaining.' },
+            { id: 8, name: 'Rohit Jaiswal', empId: 'EMP-015', seed: 'Rohit', type: 'Casual Leave', start: '10 Oct', end: '10 Oct', duration: '1 Day', status: 'approved', attachment: null, note: 'Bank work.', balances: 'Rohit has 4 Casual Leaves remaining.' },
+            { id: 9, name: 'Kavita Devi', empId: 'EMP-110', seed: 'Kavita', type: 'Worked From Home', start: '08 Oct', end: '08 Oct', duration: '1 Day', status: 'approved', attachment: null, note: 'Home repairs.', balances: 'Kavita has 8 Work From Home days remaining.' },
+            { id: 10, name: 'Manoj Tiwari', empId: 'EMP-005', seed: 'Manoj', type: 'Sick Leave', start: '01 Oct', end: '01 Oct', duration: '1 Day', status: 'approved', attachment: 'med.jpg', note: 'Dental appointment.', balances: 'Manoj has 5 Sick Leaves remaining.' }
+        ];
+
+        function renderTable(data = leaveRequests) {
+            const body = document.getElementById('leaveTableBody');
+            body.innerHTML = '';
+            data.forEach(req => {
+                const row = document.createElement('tr');
+                row.style.borderBottom = '1px solid #f1f2f6';
+                row.innerHTML = `
+                    <td style="padding: 16px 24px;"><input type="checkbox" class="row-check" value="${req.id}" onclick="updateSelected()"></td>
+                    <td style="padding: 16px 24px;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=${req.seed}" style="width: 36px; height: 36px; border-radius: 10px;">
+                            <div>
+                                <div style="font-size: 14px; font-weight: 700; color: #1e293b;">${req.name}</div>
+                                <div style="font-size: 12px; color: #64748b;">${req.empId}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td style="padding: 16px 24px;"><span class="badge-type ${req.type.toLowerCase().includes('sick') ? 'type-sick' : (req.type.toLowerCase().includes('casual') ? 'type-casual' : 'type-work')}">${req.type}</span></td>
+                    <td style="padding: 16px 24px;"><div style="font-size: 13px; font-weight: 600;">${req.start} - ${req.end}</div><div style="font-size: 11px; color: #94a3b8;">(${req.duration})</div></td>
+                    <td style="padding: 16px 24px; text-align: center;">${req.attachment ? `<span onclick="openDocViewer(${req.id})" style="cursor: pointer; display: inline-flex; align-items: center; gap: 5px; background: #eff6ff; color: #2563eb; padding: 5px 10px; border-radius: 8px; font-size: 11px; font-weight: 700; transition: all 0.2s;" onmouseover="this.style.background='#dbeafe'" onmouseout="this.style.background='#eff6ff'"><i class='fas fa-paperclip'></i> View</span>` : '<span style="color: #cbd5e1; font-size: 13px;">—</span>'}</td>
+                    <td style="padding: 16px 24px;"><span class="status-pill status-${req.status}"><div class="dot" style="background: ${req.status === 'pending' ? '#f59e0b' : (req.status === 'approved' ? '#10b981' : '#ef4444')}"></div>${req.status.charAt(0).toUpperCase() + req.status.slice(1)}</span></td>
+                    <td style="padding: 16px 24px; text-align: right;"><button onclick="openModal(${req.id})" style="padding: 8px 14px; border-radius: 8px; border: 1px solid #e2e8f0; background: white; font-weight: 700; font-size: 11px; cursor: pointer;">Review</button></td>
+                `;
+                body.appendChild(row);
+            });
+            updateStats();
+        }
+
+        function updateStats() {
+            const pending = leaveRequests.filter(r => r.status === 'pending').length;
+            const approved = leaveRequests.filter(r => r.status === 'approved').length;
+            const total = leaveRequests.length;
+
+            document.getElementById('statPending').textContent = pending;
+            document.getElementById('statApproved').textContent = approved;
+            document.getElementById('statTotal').textContent = total;
+        }
+
+        function filterTable() {
+            const search = document.getElementById('empSearch').value.toLowerCase();
+            const status = document.getElementById('statusFilter').value;
+            const filtered = leaveRequests.filter(r => (r.name.toLowerCase().includes(search) || r.empId.toLowerCase().includes(search)) && (status === 'all' || r.status === status));
+            renderTable(filtered);
+        }
+
+        function refreshTable() {
+            const icon = document.getElementById('refreshIcon');
+            icon.classList.add('fa-spin');
+            setTimeout(() => { icon.classList.remove('fa-spin'); renderTable(); }, 600);
+        }
+
+        function openDocViewer(id) {
+            const req = leaveRequests.find(r => r.id === id);
+            if (!req || !req.attachment) return;
+
+            const ext = req.attachment.split('.').pop().toLowerCase();
+            const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
+            const isPdf = ext === 'pdf';
+
+            document.getElementById('docLightboxTitle').textContent = req.attachment;
+
+            const preview = document.getElementById('docLightboxPreview');
+            if (isImage) {
+                preview.innerHTML = `
+                    <div style="width: 80px; height: 80px; background: #dbeafe; border-radius: 20px; display: flex; align-items: center; justify-content: center;">
+                        <i class="fas fa-image" style="font-size: 36px; color: #2563eb;"></i>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size: 14px; font-weight: 700; color: #1e293b;">${req.attachment}</div>
+                        <div style="font-size: 12px; color: #64748b; margin-top: 4px;">Medical image attached by ${req.name}</div>
+                    </div>
+                    <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 10px 20px; font-size: 12px; font-weight: 600; color: #2563eb;">
+                        <i class="fas fa-shield-alt"></i> Document verified — Submitted via HR portal
+                    </div>`;
+            } else if (isPdf) {
+                preview.innerHTML = `
+                    <div style="width: 80px; height: 80px; background: #fee2e2; border-radius: 20px; display: flex; align-items: center; justify-content: center;">
+                        <i class="fas fa-file-pdf" style="font-size: 36px; color: #ef4444;"></i>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size: 14px; font-weight: 700; color: #1e293b;">${req.attachment}</div>
+                        <div style="font-size: 12px; color: #64748b; margin-top: 4px;">PDF document attached by ${req.name}</div>
+                    </div>
+                    <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 10px 20px; font-size: 12px; font-weight: 600; color: #ef4444;">
+                        <i class="fas fa-file-contract"></i> PDF report — Submitted via HR portal
+                    </div>`;
+            } else {
+                preview.innerHTML = `
+                    <div style="width: 80px; height: 80px; background: #f1f5f9; border-radius: 20px; display: flex; align-items: center; justify-content: center;">
+                        <i class="fas fa-file-alt" style="font-size: 36px; color: #64748b;"></i>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size: 14px; font-weight: 700; color: #1e293b;">${req.attachment}</div>
+                        <div style="font-size: 12px; color: #64748b; margin-top: 4px;">Document attached by ${req.name}</div>
+                    </div>`;
+            }
+
+            document.getElementById('docLightbox').classList.add('active');
+        }
+
+        function closeDocViewer() {
+            document.getElementById('docLightbox').classList.remove('active');
+        }
+
+        let currentReviewId = null;
+        function openModal(id) {
+            const req = leaveRequests.find(r => r.id === id);
+            currentReviewId = id;
+            document.getElementById('modalName').textContent = req.name + "'s Request";
+            document.getElementById('balanceText').textContent = req.balances;
+            document.getElementById('employeeNote').textContent = req.note;
+            document.getElementById('docViewer').innerHTML = req.attachment ? `<div style="text-align: center;"><i class="fas fa-file-medical" style="font-size: 32px; color: #94a3b8; margin-bottom: 8px;"></i><div style="font-size: 12px; font-weight: 700;">${req.attachment}</div></div>` : "No attachment";
+            document.getElementById('previewModal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('previewModal').classList.remove('active');
+            // Reset rejection section on close
+            document.getElementById('rejectionSection').style.display = 'none';
+            document.getElementById('rejectionReason').value = '';
+            document.getElementById('rejectionError').style.display = 'none';
+            document.getElementById('btnReject').innerHTML = '<i class="fas fa-times"></i> Reject';
+            document.getElementById('btnReject').style.background = 'white';
+        }
+
+        function handleRejectClick() {
+            const section = document.getElementById('rejectionSection');
+            const btn = document.getElementById('btnReject');
+
+            if (section.style.display === 'none') {
+                // Step 1: Show the reason textarea
+                section.style.display = 'block';
+                btn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Confirm Rejection';
+                btn.style.background = '#ef4444';
+                btn.style.color = 'white';
+                btn.style.border = 'none';
+                document.getElementById('rejectionReason').focus();
+            } else {
+                // Step 2: Validate and confirm
+                const reason = document.getElementById('rejectionReason').value.trim();
+                if (!reason) {
+                    document.getElementById('rejectionError').style.display = 'block';
+                    document.getElementById('rejectionReason').style.borderColor = '#ef4444';
+                    return;
+                }
+                document.getElementById('rejectionError').style.display = 'none';
+                handleDecision('rejected', reason);
+            }
+        }
+
+        function handleDecision(status, reason = '') {
+            if (currentReviewId) {
+                const req = leaveRequests.find(r => r.id === currentReviewId);
+                req.status = status;
+                if (reason) req.rejectionReason = reason;
+                renderTable();
+                closeModal();
+            }
+        }
+
+        function toggleAll() {
+            const checked = document.getElementById('selectAll').checked;
+            document.querySelectorAll('.row-check').forEach(c => c.checked = checked);
+            updateSelected();
+        }
+
+        function updateSelected() {
+            const count = document.querySelectorAll('.row-check:checked').length;
+            document.getElementById('selectedCount').textContent = count;
+            document.getElementById('bulkActionsBar').style.display = count > 0 ? 'flex' : 'none';
+        }
+
+        function bulkApprove() {
+            document.querySelectorAll('.row-check:checked').forEach(c => {
+                const req = leaveRequests.find(r => r.id == c.value);
+                if (req.status === 'pending') req.status = 'approved';
+            });
+            document.getElementById('selectAll').checked = false;
+            updateSelected();
+            renderTable();
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            renderTable();
+        });
+    </script>
+</body>
+
+</html>

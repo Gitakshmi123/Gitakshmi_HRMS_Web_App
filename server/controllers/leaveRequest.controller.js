@@ -1,0 +1,1216 @@
+const mongoose = require('mongoose');
+const notificationController = require('../controllers/notification.controller');
+const leaveManagementService = require('../services/leaveManagement.service');
+const workflowEngine = require('../services/workflowEngine.service');
+const ShiftSchema = require('../models/Shift');
+const { isWeeklyOffByShift } = require('../services/shiftPolicyEngine');
+const { resolveAuthenticatedEmployee } = require('../utils/employeeAuthResolver');
+
+const getModels = (req) => {
+    if (!req.tenantDB) {
+        throw new Error('Tenant database not initialized. Please ensure tenant middleware is running.');
+    }
+    try {
+        return {
+            LeaveRequest: req.tenantDB.model('LeaveRequest'),
+            LeaveBalance: req.tenantDB.model('LeaveBalance'),
+            Employee: req.tenantDB.model('Employee'),
+            LeavePolicy: req.tenantDB.model('LeavePolicy'),
+            Notification: req.tenantDB.model('Notification'),
+            Holiday: req.tenantDB.model('Holiday'),
+            Attendance: req.tenantDB.model('Attendance'),
+            AttendanceSettings: req.tenantDB.model('AttendanceSettings'),
+            Shift: req.tenantDB.model('Shift', ShiftSchema),
+        };
+    } catch (err) {
+        console.error('Error in getModels (leaveRequest):', err);
+        throw new Error('Failed to get models from tenant database');
+    }
+};
+
+const EMPTY_BALANCE_RESPONSE = {
+    balances: [],
+    hasLeavePolicy: false,
+    leavePolicy: null
+};
+
+async function restorePolicyFromExistingBalance({ employee, LeaveBalance, LeavePolicy, tenantId, year }) {
+    if (!employee || employee.leavePolicy || !LeaveBalance || !LeavePolicy) {
+        return null;
+    }
+
+    const balanceWithPolicy = await LeaveBalance.findOne({
+        tenant: tenantId,
+        employee: employee._id,
+        year,
+        policy: { $exists: true, $ne: null }
+    }).sort({ updatedAt: -1, createdAt: -1 }).lean();
+
+    if (!balanceWithPolicy?.policy) {
+        return null;
+    }
+
+    const policy = await LeavePolicy.findById(balanceWithPolicy.policy);
+    if (!leaveManagementService.isPolicyEnabled(policy) || !Array.isArray(policy.rules) || policy.rules.length === 0) {
+        return null;
+    }
+
+    employee.leavePolicy = policy._id;
+    await employee.save();
+    return policy;
+}
+
+// Helper to calculate days (Sandwich Rule Active: Counts ALL days including weekends/holidays)
+const calculateNetDays = async (req, startDate, endDate, employeeId = null) => {
+    const { Employee, Holiday, AttendanceSettings, Shift } = getModels(req);
+    const start = new Date(startDate);
+    const end = new Date(endDate || startDate);
+    start.setHours(0, 0, 0, 0);
+    end.setHours(0, 0, 0, 0);
+
+    let settings = await AttendanceSettings.findOne({ tenant: req.tenantId }).lean().catch(() => null);
+    if (!settings) settings = { weeklyOffDays: [0], sandwichLeave: false };
+
+    let shiftConfig = null;
+    if (employeeId) {
+        const employee = await Employee.findOne({ 
+            _id: employeeId, 
+            $or: [{ mainCompanyId: req.tenantId }, { tenant: req.tenantId }] 
+        }).select('shiftId').lean();
+        if (employee?.shiftId) {
+            shiftConfig = await Shift.findOne({ _id: employee.shiftId, tenant: req.tenantId, isDeleted: false, isActive: true }).lean();
+        }
+    }
+
+    const sandwichEnabled = !!(shiftConfig?.absentCfg?.sandwichLeaveEnabled ?? settings?.sandwichLeave);
+    const includeWeekends = !!(shiftConfig?.absentCfg?.sandwichWeekendFill ?? sandwichEnabled);
+    const includeHolidays = !!(shiftConfig?.absentCfg?.sandwichHolidayFill ?? sandwichEnabled);
+
+    if (sandwichEnabled && includeWeekends && includeHolidays) {
+        const diffTime = Math.abs(end - start);
+        return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    }
+
+    const holidays = await Holiday.find({
+        tenant: req.tenantId,
+        date: { $gte: start, $lte: end }
+    }).lean();
+    const holidaySet = new Set(holidays.map(h => new Date(h.date).toISOString().slice(0, 10)));
+
+    let count = 0;
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const current = new Date(d);
+        current.setHours(0, 0, 0, 0);
+        const dateStr = current.toISOString().slice(0, 10);
+        const isHoliday = holidaySet.has(dateStr);
+        const isWeeklyOff = shiftConfig
+            ? isWeeklyOffByShift(current, shiftConfig).isWeeklyOff
+            : (settings.weeklyOffDays || [0]).includes(current.getDay());
+
+        if (isHoliday && !includeHolidays) continue;
+        if (isWeeklyOff && !includeWeekends) continue;
+        count++;
+    }
+
+    return count;
+};
+
+// Helper: Sync Leave to Attendance
+const syncLeaveToAttendance = async (req, leaveRequest) => {
+    const { Attendance, LeavePolicy, Employee } = getModels(req);
+    const start = new Date(leaveRequest.startDate);
+    const end = new Date(leaveRequest.endDate);
+
+    // Get Color from Policy
+    let color = '#3b82f6'; // Default
+    try {
+        const emp = await Employee.findById(leaveRequest.employee).select('leavePolicy');
+        if (emp && emp.leavePolicy) {
+            const policy = await LeavePolicy.findById(emp.leavePolicy);
+            const rule = policy?.rules?.find(r => r.leaveType === leaveRequest.leaveType);
+            if (rule?.color) color = rule.color;
+        }
+    } catch (e) {
+        console.error("Color sync err:", e);
+    }
+
+    const curr = new Date(start);
+    const halfDayTargetDate = leaveRequest.halfDayTarget === 'End' ? new Date(end) : new Date(start);
+    halfDayTargetDate.setHours(0, 0, 0, 0);
+
+    while (curr <= end) {
+        const date = new Date(curr);
+        date.setHours(0, 0, 0, 0);
+
+        const isHalf = leaveRequest.isHalfDay && date.getTime() === halfDayTargetDate.getTime();
+
+        await Attendance.findOneAndUpdate(
+            { tenant: req.tenantId, employee: leaveRequest.employee, date },
+            {
+                status: isHalf ? 'half_day' : 'leave',
+                leaveType: leaveRequest.leaveType,
+                leaveColor: color,
+            },
+            { upsert: true, new: true }
+        );
+        curr.setDate(curr.getDate() + 1);
+    }
+};
+
+// Helper: Calculate days between two dates (inclusive)
+const calculateDays = (start, end) => {
+    const s = new Date(start);
+    const e = new Date(end);
+    const diffTime = Math.abs(e - s);
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+};
+
+async function refreshEmployeeLeaveSnapshot(req, employeeId, year) {
+    const { Employee, LeaveBalance } = getModels(req);
+    const employee = await Employee.findById(employeeId);
+    if (!employee) {
+        return;
+    }
+
+    await leaveManagementService.syncEmployeeLeaveSnapshotFromDocuments({
+        employee,
+        tenantId: req.tenantId,
+        LeaveBalance,
+        year
+    });
+}
+
+exports.getMyBalances = async (req, res) => {
+    try {
+        if (!req.user || !req.user.id) {
+            return res.status(401).json({ error: "User not authenticated" });
+        }
+
+        const { LeaveBalance, LeavePolicy } = getModels(req);
+        const tenantIdStr = req.tenantId;
+        const year = parseInt(req.query.year) || new Date().getFullYear();
+        let emp = await resolveAuthenticatedEmployee(req, {
+            select: '_id leavePolicy tenant joiningDate leaveBalanceYear employeeType role department departmentId grade gradeId designation jobType band'
+        });
+
+        if (!emp) {
+            console.warn(`[DEBUG_LEAVE_BALANCES] Employee could not be resolved from auth payload. Returning empty balances.`);
+            return res.json(EMPTY_BALANCE_RESPONSE);
+        }
+
+        // Force cast to ObjectId to ensure query reliability
+        const tenantId = new mongoose.Types.ObjectId(tenantIdStr);
+        const employeeObjectId = new mongoose.Types.ObjectId(emp._id);
+
+        // CAST IDs to ensure consistency in multi-tenant mode
+        const tenantObjectId = new mongoose.Types.ObjectId(tenantIdStr);
+
+        if (!emp) {
+            console.warn(`[DEBUG_LEAVE_BALANCES] Employee completely missing from DB: ${employeeObjectId}. Returning empty balances.`);
+            return res.json(EMPTY_BALANCE_RESPONSE);
+        }
+
+        const { ensureLeavePolicy } = require('../config/dbManager');
+        emp = await ensureLeavePolicy(emp, req.tenantDB, req.tenantId);
+        const effectiveTenantId = new mongoose.Types.ObjectId(emp.tenant || tenantObjectId);
+        if (!emp?.leavePolicy) {
+            const restoredPolicy = await restorePolicyFromExistingBalance({
+                employee: emp,
+                LeaveBalance,
+                LeavePolicy,
+                tenantId: effectiveTenantId,
+                year
+            });
+
+            if (!restoredPolicy) {
+                console.warn(`[DEBUG_LEAVE_BALANCES] No policy assigned for employee: ${employeeObjectId}. Returning empty balances.`);
+                return res.json(EMPTY_BALANCE_RESPONSE);
+            }
+        }
+
+        // ALWAYS cast tenantId to ObjectId for query consistency
+        const activePolicy = await leaveManagementService.resolveLeavePolicyForEmployee({
+            LeavePolicy,
+            tenantId: effectiveTenantId,
+            employee: emp
+        }) || (emp.leavePolicy?.rules
+            ? emp.leavePolicy
+            : await LeavePolicy.findById(emp.leavePolicy));
+
+        if (!activePolicy) {
+            return res.status(400).json({
+                error: "LEAVE_POLICY_NOT_FOUND",
+                message: "Assigned leave policy could not be found."
+            });
+        }
+
+        await leaveManagementService.ensureEmployeeLeaveBalanceForYear({
+            employee: emp,
+            tenantId: effectiveTenantId,
+            tenantDB: req.tenantDB,
+            year: year,
+            policy: activePolicy
+        });
+
+        await leaveManagementService.repairZeroLeaveBalancesFromPolicy({
+            employee: emp,
+            policy: activePolicy,
+            tenantId: effectiveTenantId,
+            models: {
+                LeaveBalance,
+                Grade: req.tenantDB.model('Grade')
+            },
+            year,
+            prorate: true
+        });
+
+        let balances = await LeaveBalance.find({
+            employee: employeeObjectId,
+            tenant: effectiveTenantId,
+            year: year
+        });
+
+        const currentPolicy = activePolicy;
+
+        // Match colors from policy rules and ensure consistent formatting
+        if (currentPolicy && currentPolicy.rules && Array.isArray(currentPolicy.rules)) {
+            balances = balances.map(b => {
+                const rule = currentPolicy.rules.find(r => r && r.leaveType === b.leaveType);
+                const bObj = b.toObject ? b.toObject() : b;
+                bObj.color = rule?.color || '#3b82f6';
+                return bObj;
+            });
+        }
+
+        // RETURN STRUCTURED OBJECT (Crucial for frontend detection)
+        res.json({
+            balances,
+            hasLeavePolicy: !!emp.leavePolicy,
+            leavePolicy: currentPolicy ? {
+                id: currentPolicy._id,
+                name: currentPolicy.name,
+                rules: currentPolicy.rules
+            } : null
+        });
+    } catch (error) {
+        console.error("getMyBalances Error:", error);
+        res.status(500).json({ error: "Failed to fetch balances" });
+    }
+};
+
+exports.applyLeave = async (req, res) => {
+    try {
+        const { LeaveRequest, LeaveBalance, Employee, LeavePolicy, Holiday } = getModels(req);
+        const { leaveType, startDate, endDate, reason, isHalfDay, halfDayTarget, halfDaySession, employeeId: targetId } = req.body;
+
+        // If HR or PSA, they can apply on behalf
+        const isHR = ['hr', 'admin', 'psa'].includes(req.user.role);
+        let actorEmployee = await resolveAuthenticatedEmployee(req, {
+            select: '_id role leavePolicy tenant joiningDate leaveBalanceYear employeeType department departmentId manager grade gradeId designation jobType band'
+        });
+        const actorEmployeeId = actorEmployee?._id || req.user.id;
+        const employeeId = (isHR && targetId) ? targetId : actorEmployee?._id;
+
+        if (!isHR && !employeeId) {
+            return res.status(404).json({ error: 'Employee not found' });
+        }
+
+        // ENFORCE: Employee must have a leave policy before applying for leave.
+        // HR/admin users can apply on behalf of employees even if the employee has no policy assigned.
+        if (!isHR) {
+            let applicant = actorEmployee;
+
+            // Attempt to auto-assign a default policy if missing
+            try {
+                const { ensureLeavePolicy } = require('../config/dbManager');
+                applicant = await ensureLeavePolicy(applicant, req.tenantDB, req.tenantId);
+                actorEmployee = applicant || actorEmployee;
+            } catch (e) {
+                console.error('[APPLY_LEAVE] ensureLeavePolicy error:', e);
+            }
+
+            if (!applicant || !applicant.leavePolicy) {
+                return res.status(403).json({ message: "NO_LEAVE_POLICY_ASSIGNED" });
+            }
+        }
+
+        const start = new Date(startDate);
+        const end = new Date(endDate || startDate);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // 1. Date Validations (Skip some for HR if needed, but usually keep standard)
+        if (!isHR && start < today) return res.status(400).json({ error: "Past dates are not allowed." });
+        if (end < start) return res.status(400).json({ error: "End date precedes start date." });
+        if (start.getDay() === 0 || end.getDay() === 0) return res.status(400).json({ error: "Leave cannot start/end on Sunday." });
+
+        const holidayCheck = await Holiday.findOne({ tenant: req.tenantId, date: { $in: [start, end] } });
+        if (holidayCheck) return res.status(400).json({ error: `Selected date is a public holiday: ${holidayCheck.name}` });
+
+        // 2. Overlap Check
+        const overlap = await LeaveRequest.findOne({
+            tenant: req.tenantId, employee: employeeId, status: { $in: ['Pending', 'Approved'] },
+            $or: [{ startDate: { $lte: end }, endDate: { $gte: start } }]
+        });
+        if (overlap) return res.status(400).json({ error: "Overlap detected with existing request." });
+
+        // 3. Balance Validation & Paid/Unpaid Logic (Auto-Split)
+        const daysCount = await calculateNetDays(req, startDate, endDate || startDate, employeeId);
+        const days = isHalfDay ? (daysCount - 0.5) : daysCount;
+
+        if (days <= 0) return res.status(400).json({ error: "Selected period contains no working days." });
+
+        // Get Attendance Settings to check Leave Cycle
+        const employeeDoc = isHR
+            ? await Employee.findById(employeeId).select('leavePolicy leaveBalanceYear joiningDate tenant employeeType role department departmentId grade gradeId')
+            : actorEmployee;
+        if (!employeeDoc?.leavePolicy && !['LOP', 'Loss of Pay', 'Leave without Pay', 'Personal Leave'].includes(leaveType)) {
+            return res.status(400).json({ error: 'NO_ACTIVE_LEAVE_POLICY', message: 'No active leave policy assigned.' });
+        }
+
+        const effectivePolicy = employeeDoc?.leavePolicy ? await LeavePolicy.findById(employeeDoc.leavePolicy) : null;
+        const year = new Date(start).getFullYear();
+
+        if (employeeDoc && effectivePolicy) {
+            await leaveManagementService.ensureEmployeeLeaveBalanceForYear({
+                employee: employeeDoc,
+                tenantId: req.tenantId,
+                tenantDB: req.tenantDB,
+                year,
+                policy: effectivePolicy
+            });
+        }
+
+        let paidDays = 0;
+        let unpaidDays = 0;
+        let balance = null;
+
+        if (['LOP', 'Loss of Pay', 'Leave without Pay', 'Personal Leave'].includes(leaveType)) {
+            // Explicit LOP
+            paidDays = 0;
+            unpaidDays = days;
+        } else {
+            balance = await LeaveBalance.findOne({ tenant: req.tenantId, employee: employeeId, leaveType, year });
+
+            if (!balance) {
+                // No balance found -> Treated as 100% Unpaid personal leave
+                paidDays = 0;
+                unpaidDays = days;
+            } else {
+                // Consume Available Balance
+                paidDays = Math.min(balance.available, days);
+                unpaidDays = days - paidDays;
+            }
+        }
+
+        // 4. Create Request & Block Balance
+        const leaveRequest = new LeaveRequest({
+            tenant: req.tenantId,
+            employee: employeeId,
+            leaveType,
+            startDate: start,
+            endDate: end,
+            reason,
+            daysCount: days,
+            paidLeaveDays: paidDays,
+            unpaidLeaveDays: unpaidDays,
+            status: isHR ? 'Approved' : 'Pending', // HR applications are auto-approved? Or just Pending?
+            // Prompt: "Follow same rules". Usually HR applications skip manager approval or are special.
+            // I'll make it 'Approved' if HR applies, following "same rules" but as admin override.
+            appliedBy: isHR ? 'HR' : 'Employee',
+            hrComment: isHR ? (reason || 'Applied by HR') : undefined,
+            isHalfDay: !!isHalfDay,
+            halfDayTarget: isHalfDay ? (halfDayTarget || (endDate ? 'End' : 'Start')) : undefined,
+            halfDaySession: isHalfDay ? halfDaySession : undefined,
+            approvedBy: isHR ? actorEmployeeId : undefined,
+            approvedAt: isHR ? new Date() : undefined
+        });
+
+        // Update Balance
+        if (balance && paidDays > 0) {
+            if (leaveRequest.status === 'Approved') {
+                balance.used += paidDays;
+            } else {
+                balance.pending += paidDays;
+            }
+            await balance.save();
+            await refreshEmployeeLeaveSnapshot(req, employeeId, year);
+        }
+
+        await leaveRequest.save();
+        let workflowStartResult = null;
+
+        if (!isHR) {
+            try {
+                workflowStartResult = await workflowEngine.startWorkflow({
+                    req,
+                    tenantDB: req.tenantDB,
+                    tenantId: req.tenantId,
+                    moduleKey: 'leave',
+                    entityType: 'LeaveRequest',
+                    entityId: leaveRequest._id,
+                    requesterEmployeeId: employeeId,
+                    requesterUserId: req.user.id,
+                    contextSnapshot: {
+                        employeeId,
+                        leaveType,
+                        startDate: start,
+                        endDate: end,
+                        leaveDays: days,
+                        daysCount: days,
+                        paidLeaveDays: paidDays,
+                        unpaidLeaveDays: unpaidDays,
+                        departmentId: employeeDoc?.departmentId,
+                        branchId: employeeDoc?.branchId,
+                        divisionId: employeeDoc?.divisionId,
+                        designationId: employeeDoc?.designationId,
+                        gradeId: employeeDoc?.gradeId,
+                        employeeType: employeeDoc?.employeeType,
+                    },
+                });
+
+                leaveRequest.meta = {
+                    ...(leaveRequest.meta || {}),
+                    workflowInstanceId: workflowStartResult?.instance?._id,
+                    workflowStartStatus: workflowStartResult?.started ? 'STARTED' : workflowStartResult?.reason,
+                };
+                await leaveRequest.save();
+            } catch (workflowError) {
+                workflowStartResult = { started: false, reason: 'start_error' };
+                leaveRequest.meta = {
+                    ...(leaveRequest.meta || {}),
+                    workflowStartStatus: 'FAILED',
+                    workflowStartError: workflowError.message,
+                };
+                await leaveRequest.save();
+                console.error('[LEAVE_WORKFLOW_START_FAILED]', workflowError.message);
+            }
+        }
+
+        // 5. Notifications
+        const emp = await Employee.findById(employeeId);
+        const empName = emp ? `${emp.firstName} ${emp.lastName}` : "Employee";
+        const typeLabel = unpaidDays > 0 ? `${leaveType} (Partial LOP)` : leaveType;
+
+        if (isHR) {
+            // Notify employee that HR applied leave
+            await notificationController.createNotification(req, {
+                receiverId: employeeId, receiverRole: 'employee', entityType: 'LeaveRequest', entityId: leaveRequest._id,
+                title: 'Leave Applied by HR', message: `HR has applied and approved ${typeLabel} for you (${days} days)`
+            });
+        } else if (!workflowStartResult?.started) {
+            // Standard notification to HR/Manager
+            await notificationController.createNotification(req, {
+                receiverId: req.tenantId, receiverRole: 'hr', entityType: 'LeaveRequest', entityId: leaveRequest._id,
+                title: `New Leave Request: ${empName}`, message: `${empName} applied for ${typeLabel} (${days} days)`
+            });
+
+            if (emp && emp.manager) {
+                await notificationController.createNotification(req, {
+                    receiverId: emp.manager, receiverRole: 'manager', entityType: 'LeaveRequest', entityId: leaveRequest._id,
+                    title: `Team Leave Request: ${empName}`, message: `${empName} applied for ${typeLabel} (${days} days)`
+                });
+            }
+        }
+
+        if (leaveRequest.status === 'Approved') {
+            await syncLeaveToAttendance(req, leaveRequest);
+        }
+
+        res.status(201).json(leaveRequest);
+    } catch (error) {
+        console.error("Apply Leave Error:", error);
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.approveLeave = async (req, res) => {
+    try {
+        const { LeaveRequest, LeaveBalance, Employee, Holiday, AttendanceSettings, Shift, LeavePolicy } = getModels(req);
+        const { id } = req.params;
+        const { remark, startDate, endDate, isHalfDay, halfDayTarget, halfDaySession } = req.body;
+        const actorEmployee = await resolveAuthenticatedEmployee(req, { select: '_id role' });
+        const actorEmployeeId = actorEmployee?._id || req.user.id;
+
+        const request = await LeaveRequest.findOne({ _id: id, tenant: req.tenantId });
+        if (!request) return res.status(404).json({ error: "Request not found" });
+        if (request.status !== 'Pending') return res.status(400).json({ error: `Cannot approve request with status: ${request.status}` });
+
+        if (request.meta?.workflowInstanceId && request.meta?.workflowStartStatus === 'STARTED') {
+            try {
+                const instance = await workflowEngine.processWorkflowAction({
+                    tenantDB: req.tenantDB,
+                    tenantId: req.tenantId,
+                    instanceId: request.meta.workflowInstanceId,
+                    req,
+                    action: 'APPROVED',
+                    comment: remark || 'Approved',
+                });
+                return res.json({ success: true, message: "Workflow approval processed", data: instance });
+            } catch (workflowError) {
+                return res.status(workflowError.statusCode || 400).json({ error: workflowError.message });
+            }
+        }
+
+        // 1. AUTHORIZATION CHECK
+        const targetEmp = await Employee.findOne({ 
+            _id: request.employee, 
+            $or: [{ mainCompanyId: req.tenantId }, { tenant: req.tenantId }] 
+        });
+
+        let userRole = (req.user.role || '').toLowerCase();
+        let isAuthorized = ['hr', 'admin', 'psa', 'company_admin', 'user'].includes(userRole);
+
+        if (!isAuthorized && userRole === 'employee') {
+            const dbRole = (actorEmployee?.role || '').toLowerCase();
+            if (['hr', 'admin', 'company_admin', 'user'].includes(dbRole)) {
+                isAuthorized = true;
+                userRole = dbRole;
+            }
+        }
+
+        const isManager = targetEmp && targetEmp.manager && actorEmployee?._id && targetEmp.manager.toString() === actorEmployee._id.toString();
+
+        if (!isAuthorized && !isManager) {
+            return res.status(403).json({ error: "Unauthorized: Only HR or direct manager can approve leaves." });
+        }
+
+        // 2. PROCESS LEAVE
+        // If HR provides new dates/settings, recalculate everything
+        const finalStartDate = startDate ? new Date(startDate) : request.startDate;
+        const finalEndDate = endDate ? new Date(endDate) : request.endDate;
+        const finalIsHalfDay = isHalfDay !== undefined ? !!isHalfDay : request.isHalfDay;
+        const finalHalfDayTarget = halfDayTarget || request.halfDayTarget;
+        const finalHalfDaySession = halfDaySession || request.halfDaySession;
+
+        const leaveYear = new Date(finalStartDate).getFullYear();
+        const balance = await LeaveBalance.findOne({
+            employee: request.employee,
+            tenant: req.tenantId,
+            leaveType: request.leaveType,
+            year: leaveYear
+        });
+
+        // Release OLD pending balance first (based on original request)
+        if (balance) {
+            const oldPaid = request.paidLeaveDays || 0;
+            balance.pending = Math.max(0, (balance.pending || 0) - oldPaid);
+        }
+
+        // Calculate NEW days count
+        const newNetDays = await calculateNetDays(req, finalStartDate, finalEndDate, request.employee);
+        const newDaysCount = finalIsHalfDay ? (newNetDays - 0.5) : newNetDays;
+        
+        let newPaid = 0;
+        let newUnpaid = 0;
+
+        if (['LOP', 'Loss of Pay', 'Leave without Pay', 'Personal Leave'].includes(request.leaveType)) {
+            newUnpaid = newDaysCount;
+        } else if (balance) {
+            newPaid = Math.min(balance.available + (request.paidLeaveDays || 0), newDaysCount); // available already has pending subtracted, so add back old paid to get true available
+            newUnpaid = newDaysCount - newPaid;
+        } else {
+            newUnpaid = newDaysCount;
+        }
+
+        // Update balance with NEW used portion
+        if (balance) {
+            balance.used = (balance.used || 0) + newPaid;
+            // Defensive: ensure available is recalculated correctly
+            balance.available = Math.max(0, (balance.total || 0) - (balance.used || 0) - (balance.pending || 0));
+            await balance.save();
+            await refreshEmployeeLeaveSnapshot(req, request.employee, leaveYear);
+        }
+
+        // Update request with final approved values
+        request.startDate = finalStartDate;
+        request.endDate = finalEndDate;
+        request.isHalfDay = finalIsHalfDay;
+        request.halfDayTarget = finalHalfDayTarget;
+        request.halfDaySession = finalHalfDaySession;
+        request.daysCount = newDaysCount;
+        request.paidLeaveDays = newPaid;
+        request.unpaidLeaveDays = newUnpaid;
+        
+        request.status = 'Approved';
+        request.approvedAt = new Date();
+        request.actionBy = actorEmployeeId;
+        request.adminRemark = remark || 'Approved';
+        await request.save();
+
+        // Re-sync to attendance with new dates
+        await syncLeaveToAttendance(req, request);
+
+        res.json({ success: true, message: "Leave approved successfully", data: request });
+
+    } catch (err) {
+        console.error("[APPROVE_LEAVE] Error:", err);
+        res.status(500).json({ error: "Internal server error during leave approval" });
+    }
+};
+
+exports.rejectLeave = async (req, res) => {
+    try {
+        const { LeaveRequest, LeaveBalance, Employee } = getModels(req);
+        const { id } = req.params;
+        const { rejectionReason } = req.body;
+        const actorEmployee = await resolveAuthenticatedEmployee(req, { select: '_id role' });
+        const actorEmployeeId = actorEmployee?._id || req.user.id;
+
+        const request = await LeaveRequest.findOne({ _id: id, tenant: req.tenantId });
+        if (!request) return res.status(404).json({ error: "Request not found" });
+        if (request.status !== 'Pending') return res.status(400).json({ error: "Request is not pending" });
+
+        if (request.meta?.workflowInstanceId && request.meta?.workflowStartStatus === 'STARTED') {
+            try {
+                const instance = await workflowEngine.processWorkflowAction({
+                    tenantDB: req.tenantDB,
+                    tenantId: req.tenantId,
+                    instanceId: request.meta.workflowInstanceId,
+                    req,
+                    action: 'REJECTED',
+                    comment: rejectionReason || 'Rejected',
+                });
+                return res.json({ success: true, message: "Workflow rejection processed", data: instance });
+            } catch (workflowError) {
+                return res.status(workflowError.statusCode || 400).json({ error: workflowError.message });
+            }
+        }
+
+        // 1. AUTHORIZATION CHECK
+        const targetEmp = await Employee.findOne({ 
+            _id: request.employee, 
+            $or: [{ mainCompanyId: req.tenantId }, { tenant: req.tenantId }] 
+        });
+
+        let userRole = (req.user.role || '').toLowerCase();
+        let isAuthorized = ['hr', 'admin', 'psa', 'company_admin', 'user'].includes(userRole);
+
+        if (!isAuthorized && userRole === 'employee') {
+            const dbRole = (actorEmployee?.role || '').toLowerCase();
+            if (['hr', 'admin', 'company_admin', 'user'].includes(dbRole)) {
+                isAuthorized = true;
+            }
+        }
+
+        const isManager = targetEmp && targetEmp.manager && actorEmployee?._id && targetEmp.manager.toString() === actorEmployee._id.toString();
+
+        if (!isAuthorized && !isManager) {
+            return res.status(403).json({ error: "Unauthorized: Only HR or direct manager can reject leaves." });
+        }
+
+        // 2. PROCESS REJECTION
+        const leaveYear = new Date(request.startDate).getFullYear();
+        const balance = await LeaveBalance.findOne({
+            employee: request.employee,
+            tenant: req.tenantId,
+            leaveType: request.leaveType,
+            year: leaveYear
+        });
+
+        if (balance) {
+            const paid = request.paidLeaveDays || 0;
+            // Release pending allocation for the paid portion
+            balance.pending = Math.max(0, (balance.pending || 0) - paid);
+            // Recompute available defensively
+            if (typeof balance.available === 'number') {
+                balance.available = Math.max(0, (balance.total || 0) - (balance.used || 0) - (balance.pending || 0));
+            }
+            await balance.save();
+            await refreshEmployeeLeaveSnapshot(req, request.employee, leaveYear);
+        }
+
+        request.status = 'Rejected';
+        request.rejectedAt = new Date();
+        request.actionBy = actorEmployeeId;
+        request.rejectionReason = rejectionReason || 'Rejected';
+        await request.save();
+
+        res.json({ success: true, message: "Leave rejected successfully", data: request });
+
+    } catch (err) {
+        console.error("[REJECT_LEAVE] Error:", err);
+        res.status(500).json({ error: "Internal server error during leave rejection" });
+    }
+};
+
+exports.getTeamLeaves = async (req, res) => {
+    try {
+        const { Employee, LeaveRequest } = getModels(req);
+        const { page = 1, limit = 10 } = req.query;
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        const managerEmployee = await resolveAuthenticatedEmployee(req, { select: '_id' });
+
+        if (!managerEmployee?._id) {
+            return res.json({
+                data: [],
+                meta: { total: 0, page: parseInt(page), limit: parseInt(limit), totalPages: 0 }
+            });
+        }
+
+        // Find employees who report to this user
+        const tenantObjectId = new mongoose.Types.ObjectId(req.tenantId);
+        const managerObjectId = new mongoose.Types.ObjectId(managerEmployee._id);
+
+        const reports = await Employee.find({
+            manager: managerObjectId,
+            tenant: tenantObjectId
+        }).select('_id');
+        const reportIds = reports.map(r => r._id);
+
+        if (reportIds.length === 0) {
+            return res.json({
+                data: [],
+                meta: { total: 0, page: parseInt(page), limit: parseInt(limit), totalPages: 0 }
+            });
+        }
+
+        const total = await LeaveRequest.countDocuments({
+            employee: { $in: reportIds }
+        });
+
+        const requests = await LeaveRequest.find({
+            employee: { $in: reportIds }
+        })
+            .populate('employee')
+            .populate('actionBy', 'firstName lastName profilePic')
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(parseInt(limit));
+
+        // Map to include a single actionDateTime field for the frontend table
+        const mappedRequests = requests.map(r => {
+            const rObj = r.toObject();
+            rObj.actionDateTime = r.approvedAt || r.rejectedAt || r.cancelledAt || null;
+            return rObj;
+        });
+
+        res.json({
+            data: mappedRequests,
+            meta: { total, page: parseInt(page), limit: parseInt(limit), totalPages: Math.ceil(total / limit) }
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+
+exports.getAllLeaves = async (req, res) => {
+    try {
+        // Validate tenant context
+        if (!req.user || !req.user.tenantId) {
+            console.error("getAllLeaves ERROR: Missing user or tenantId in request");
+            return res.status(401).json({ error: "unauthorized", message: "User context or tenant not found" });
+        }
+
+        const tenantId = req.user.tenantId || req.tenantId;
+        if (!tenantId || !mongoose.Types.ObjectId.isValid(String(tenantId))) {
+            console.error("getAllLeaves ERROR: tenantId is missing or invalid:", tenantId);
+            return res.status(400).json({ error: "tenant_invalid", message: "Valid Tenant ID is required" });
+        }
+
+        // CAST tenantId for consistent matching
+        const tenantObjectId = new mongoose.Types.ObjectId(String(tenantId));
+
+        // Ensure tenantDB is available
+        if (!req.tenantDB) {
+            console.warn("[getAllLeaves] WARNING: req.tenantDB missing. Attempting lazy load...");
+            if (req.user && (req.user.tenantId || req.user.tenant)) {
+                try {
+                    const tid = req.user.tenantId || req.user.tenant;
+                    const getTenantDB = require('../utils/tenantDB');
+                    req.tenantDB = await getTenantDB(tid);
+                    req.tenantId = tid; // Sync
+                    // console.log(`[getAllLeaves] Lazy loaded tenantDB for ${tid}`);
+                } catch (e) {
+                    console.error("[getAllLeaves] Lazy load failed:", e);
+                    return res.status(500).json({
+                        success: false,
+                        error: "lazy_load_failed",
+                        message: `Lazy load of tenant DB failed: ${e.message}`,
+                        stack: e.stack
+                    });
+                }
+            }
+            if (!req.tenantDB) {
+                console.error("getAllLeaves ERROR: Tenant database connection not available");
+                return res.status(500).json({
+                    success: false,
+                    error: "tenant_db_unavailable",
+                    message: "Tenant database connection not available despite lazy load attempt.",
+                    details: {
+                        userTenant: req.user?.tenantId,
+                        reqTenant: req.tenantId
+                    }
+                });
+            }
+        }
+
+        const { LeaveRequest } = getModels(req);
+
+        // Extract pagination params
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        const total = await LeaveRequest.countDocuments({});
+
+        const leaves = await LeaveRequest.find({})
+            .populate('employee')
+            .populate('actionBy', 'firstName lastName profilePic')
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit);
+
+        // Map to include a single actionDateTime field for the frontend table
+        const mappedLeaves = leaves.map(l => {
+            const lObj = l.toObject();
+            lObj.actionDateTime = l.approvedAt || l.rejectedAt || l.cancelledAt || null;
+            return lObj;
+        });
+
+        res.json({
+            data: mappedLeaves,
+            meta: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit)
+            }
+        });
+    } catch (error) {
+        console.error("getAllLeaves ERROR:", error);
+        console.error("Error stack:", error.stack);
+        res.status(500).json({ error: error.message || "Failed to fetch leave requests" });
+    }
+};
+
+exports.getApprovedDates = async (req, res) => {
+    try {
+        const { LeaveRequest } = getModels(req);
+        const currentEmployee = await resolveAuthenticatedEmployee(req, { select: '_id' });
+        if (!currentEmployee?._id) {
+            return res.json([]);
+        }
+        const employeeId = new mongoose.Types.ObjectId(currentEmployee._id);
+        const tenantId = new mongoose.Types.ObjectId(req.tenantId);
+
+        const approvedLeaves = await LeaveRequest.find({
+            employee: employeeId,
+            tenant: tenantId,
+            status: 'Approved'
+        }).select('startDate endDate');
+
+        // Normalize format: [{ startDate, endDate }]
+        const ranges = approvedLeaves.map(l => ({
+            startDate: l.startDate,
+            endDate: l.endDate
+        }));
+
+        res.json(ranges);
+    } catch (error) {
+        console.error("[getApprovedDates] Error:", error);
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.getMyLeaves = async (req, res) => {
+    try {
+        const { LeaveRequest } = getModels(req);
+        const currentEmployee = await resolveAuthenticatedEmployee(req, { select: '_id' });
+        if (!currentEmployee?._id) {
+            return res.json([]);
+        }
+        const employeeId = currentEmployee._id;
+        const employeeObjectId = new mongoose.Types.ObjectId(employeeId);
+
+        const leaves = await LeaveRequest.find({
+            employee: employeeObjectId
+        })
+            .populate('actionBy', 'firstName lastName profilePic')
+            .sort({ createdAt: -1 });
+
+        const mappedLeaves = leaves.map(l => {
+            const lObj = l.toObject();
+            lObj.actionDateTime = l.approvedAt || l.rejectedAt || l.cancelledAt || null;
+            return lObj;
+        });
+
+        res.json(mappedLeaves);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.editLeave = async (req, res) => {
+    try {
+        const { LeaveRequest, LeaveBalance } = getModels(req);
+        const { id } = req.params;
+        const { leaveType, startDate, endDate, reason, isHalfDay, halfDayTarget, halfDaySession } = req.body;
+        const currentEmployee = await resolveAuthenticatedEmployee(req, { select: '_id' });
+        if (!currentEmployee?._id) {
+            return res.status(404).json({ error: "Employee not found" });
+        }
+        const employeeId = currentEmployee._id;
+
+        const request = await LeaveRequest.findOne({ _id: id, employee: employeeId, tenant: req.tenantId });
+        if (!request) return res.status(404).json({ error: "Request not found" });
+
+        if (request.status !== 'Pending') {
+            return res.status(400).json({ error: `Cannot edit leave in ${request.status} status. Only Pending requests can be edited.` });
+        }
+
+        const start = new Date(startDate);
+        const end = new Date(endDate || startDate);
+        const oldDays = request.daysCount;
+        const oldPaid = request.paidLeaveDays || 0;
+        const oldType = request.leaveType;
+
+        // Settings for Cycle
+        const Settings = req.tenantDB.model('AttendanceSettings');
+        const year = start.getFullYear();
+
+        // 1. Validations & Overlap (excluding self)
+        if (start.getDay() === 0 || end.getDay() === 0) return res.status(400).json({ error: "Leave cannot start/end on Sunday." });
+        const overlap = await LeaveRequest.findOne({
+            _id: { $ne: id }, tenant: req.tenantId, employee: employeeId, status: { $in: ['Pending', 'Approved'] },
+            $or: [{ startDate: { $lte: end }, endDate: { $gte: start } }]
+        });
+        if (overlap) return res.status(400).json({ error: "Overlap detected with existing request." });
+
+        const newDaysCount = await calculateNetDays(req, startDate, endDate || startDate, employeeId);
+        const newDays = isHalfDay ? (newDaysCount - 0.5) : newDaysCount;
+
+        if (newDays <= 0) return res.status(400).json({ error: "Selected period contains no working days." });
+
+        // 2. Balance Logic
+        if (oldType === leaveType) {
+            const balance = await LeaveBalance.findOne({ tenant: req.tenantId, employee: employeeId, leaveType, year });
+            if (!balance) return res.status(400).json({ error: "Balance not found." });
+            if (balance.available + oldDays < newDays) {
+                return res.status(400).json({ error: `Insufficient balance. Available: ${balance.available + oldDays}` });
+            }
+            balance.pending = balance.pending - oldDays + newDays;
+            await balance.save();
+            await refreshEmployeeLeaveSnapshot(req, employeeId, year);
+        } else {
+            const oldBalance = await LeaveBalance.findOne({ tenant: req.tenantId, employee: employeeId, leaveType: oldType, year });
+            const newBalance = await LeaveBalance.findOne({ tenant: req.tenantId, employee: employeeId, leaveType, year });
+            if (!newBalance) return res.status(400).json({ error: `Balance not found for ${leaveType}.` });
+            if (newBalance.available < newDays) {
+                return res.status(400).json({ error: `Insufficient balance in ${leaveType}. Available: ${newBalance.available}` });
+            }
+            if (oldBalance) {
+                oldBalance.pending -= oldDays;
+                await oldBalance.save();
+            }
+            newBalance.pending += newDays;
+            await newBalance.save();
+            await refreshEmployeeLeaveSnapshot(req, employeeId, year);
+        }
+
+        const { paidDays: newPaidDays, unpaidDays: newUnpaidDays } = await (async () => {
+            let p = 0, u = 0;
+            if (['LOP', 'Loss of Pay', 'Leave without Pay', 'Personal Leave'].includes(leaveType)) {
+                u = newDays;
+            } else {
+                const b = await LeaveBalance.findOne({ tenant: req.tenantId, employee: employeeId, leaveType, year });
+                const available = b ? (b.available + (oldType === leaveType ? oldPaid : 0)) : 0;
+                p = Math.min(available, newDays);
+                u = newDays - p;
+            }
+            return { paidDays: p, unpaidDays: u };
+        })();
+
+        // 3. Update Request
+        request.leaveType = leaveType;
+        request.startDate = start;
+        request.endDate = end;
+        request.reason = reason;
+        request.daysCount = newDays;
+        request.paidLeaveDays = newPaidDays;
+        request.unpaidLeaveDays = newUnpaidDays;
+        request.isHalfDay = !!isHalfDay;
+        request.halfDayTarget = isHalfDay ? (halfDayTarget || (endDate ? 'End' : 'Start')) : undefined;
+        request.halfDaySession = isHalfDay ? halfDaySession : undefined;
+        await request.save();
+
+        res.json({ message: "Leave request updated", data: request });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.cancelLeave = async (req, res) => {
+    try {
+        const { LeaveRequest, LeaveBalance } = getModels(req);
+        const { id } = req.params;
+        const currentEmployee = await resolveAuthenticatedEmployee(req, { select: '_id' });
+        if (!currentEmployee?._id) {
+            return res.status(404).json({ error: "Employee not found" });
+        }
+        const employeeId = currentEmployee._id;
+        const actorEmployeeId = currentEmployee._id;
+
+        const request = await LeaveRequest.findOne({ _id: id, employee: employeeId, tenant: req.tenantId });
+        if (!request) return res.status(404).json({ error: "Request not found" });
+
+        // Enterprise Rule: Direct cancellation not allowed for Approved leaves
+        if (request.status === 'Approved') {
+            return res.status(400).json({ error: "Approved leaves cannot be cancelled directly. Please use Attendance Regularization if you were present." });
+        }
+
+        if (['Rejected', 'Cancelled'].includes(request.status)) {
+            return res.status(400).json({ error: `Request already ${request.status}` });
+        }
+
+        const balance = await LeaveBalance.findOne({
+            employee: employeeId, tenant: req.tenantId, leaveType: request.leaveType, year: new Date(request.startDate).getFullYear()
+        });
+
+        if (balance) {
+            if (request.status === 'Pending') {
+                const paid = request.paidLeaveDays || 0;
+                balance.pending = Math.max(0, (balance.pending || 0) - paid);
+                if (typeof balance.available === 'number') {
+                    balance.available = Math.max(0, (balance.total || 0) - (balance.used || 0) - (balance.pending || 0));
+                }
+            }
+            await balance.save();
+            await refreshEmployeeLeaveSnapshot(req, employeeId, new Date(request.startDate).getFullYear());
+        }
+
+        request.status = 'Cancelled';
+        request.cancelledAt = new Date();
+        request.actionBy = actorEmployeeId;
+        await request.save();
+
+        res.json({ message: "Leave request cancelled", data: request });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.earlyReturn = async (req, res) => {
+    try {
+        const { LeaveRequest, LeaveBalance, Attendance } = getModels(req);
+        const { id } = req.params;
+        const { newEndDate } = req.body;
+        
+        const currentEmployee = await resolveAuthenticatedEmployee(req, { select: '_id' });
+        if (!currentEmployee?._id) {
+            return res.status(404).json({ error: "Employee not found" });
+        }
+        const employeeId = currentEmployee._id;
+        const actorEmployeeId = currentEmployee._id;
+
+        const request = await LeaveRequest.findOne({ _id: id, employee: employeeId, tenant: req.tenantId });
+        if (!request) return res.status(404).json({ error: "Request not found" });
+
+        if (request.status !== 'Approved') {
+            return res.status(400).json({ error: "Only Approved leaves can be partially cancelled/returned early." });
+        }
+
+        const start = new Date(request.startDate);
+        const originalEnd = new Date(request.endDate);
+        const newEnd = new Date(newEndDate);
+        
+        start.setHours(0,0,0,0);
+        originalEnd.setHours(0,0,0,0);
+        newEnd.setHours(0,0,0,0);
+
+        if (newEnd >= originalEnd) {
+            return res.status(400).json({ error: "New end date must be earlier than the original end date." });
+        }
+        
+        if (newEnd < start) {
+            // Full cancellation
+            // Restore used balance
+            const balance = await LeaveBalance.findOne({ employee: employeeId, tenant: req.tenantId, leaveType: request.leaveType, year: start.getFullYear() });
+            if (balance) {
+                const paidToRefund = request.paidLeaveDays || 0;
+                balance.used = Math.max(0, (balance.used || 0) - paidToRefund);
+                if (typeof balance.available === 'number') {
+                    balance.available = Math.max(0, (balance.total || 0) - (balance.used || 0) - (balance.pending || 0));
+                }
+                await balance.save();
+                await refreshEmployeeLeaveSnapshot(req, employeeId, start.getFullYear());
+            }
+
+            // Remove attendance
+            await Attendance.deleteMany({
+                tenant: req.tenantId,
+                employee: employeeId,
+                date: { $gte: start, $lte: originalEnd },
+                status: { $in: ['leave', 'half_day'] }
+            });
+
+            request.status = 'Cancelled';
+            request.cancelledAt = new Date();
+            request.actionBy = actorEmployeeId;
+            request.meta = { ...request.meta, earlyReturn: true, originalEndDate: originalEnd };
+            await request.save();
+
+            return res.json({ message: "Leave fully cancelled due to early return.", data: request });
+        }
+
+        // Partial Cancellation
+        const oldPaid = request.paidLeaveDays || 0;
+        const oldDays = request.daysCount;
+        
+        // Calculate new days
+        const newDaysCount = await calculateNetDays(req, start.toISOString(), newEnd.toISOString(), employeeId);
+        const newDays = request.isHalfDay ? (newDaysCount - 0.5) : newDaysCount;
+        
+        if (newDays <= 0) return res.status(400).json({ error: "Selected period contains no working days." });
+
+        let p = 0, u = 0;
+        if (['LOP', 'Loss of Pay', 'Leave without Pay', 'Personal Leave'].includes(request.leaveType)) {
+            u = newDays;
+        } else {
+            const b = await LeaveBalance.findOne({ tenant: req.tenantId, employee: employeeId, leaveType: request.leaveType, year: start.getFullYear() });
+            const available = b ? (b.available + oldPaid) : 0;
+            p = Math.min(available, newDays);
+            u = newDays - p;
+        }
+        const newPaid = p;
+        const newUnpaid = u;
+
+        // Refund balance
+        const refundPaid = oldPaid - newPaid;
+        if (refundPaid > 0) {
+            const balance = await LeaveBalance.findOne({ employee: employeeId, tenant: req.tenantId, leaveType: request.leaveType, year: start.getFullYear() });
+            if (balance) {
+                balance.used = Math.max(0, (balance.used || 0) - refundPaid);
+                if (typeof balance.available === 'number') {
+                    balance.available = Math.max(0, (balance.total || 0) - (balance.used || 0) - (balance.pending || 0));
+                }
+                await balance.save();
+                await refreshEmployeeLeaveSnapshot(req, employeeId, start.getFullYear());
+            }
+        }
+
+        // Update Request
+        request.endDate = newEnd;
+        request.daysCount = newDays;
+        request.paidLeaveDays = newPaid;
+        request.unpaidLeaveDays = newUnpaid;
+        request.meta = { ...request.meta, earlyReturn: true, originalEndDate: originalEnd };
+        await request.save();
+
+        // Clear Attendance from newEnd + 1 up to originalEnd
+        const clearStart = new Date(newEnd);
+        clearStart.setDate(clearStart.getDate() + 1);
+        
+        await Attendance.deleteMany({
+            tenant: req.tenantId,
+            employee: employeeId,
+            date: { $gte: clearStart, $lte: originalEnd },
+            status: { $in: ['leave', 'half_day'] }
+        });
+
+        res.json({ message: "Leave partially cancelled", data: request });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};

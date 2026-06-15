@@ -1,0 +1,469 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Queue</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #0984e3;
+            --secondary: #74b9ff;
+            --bg-color: #f5f6fa;
+            --text-main: #2d3436;
+            --text-muted: #636e72;
+            --card-bg: #ffffff;
+            --border-color: #e2e8f0;
+            --present-bg: #e3f2fd;
+            --present-text: #1976d2;
+            --multi-bg: #fff3e0;
+            --multi-text: #f57c00;
+            --absent-bg: #ffebee;
+            --absent-text: #d32f2f;
+            --leave-bg: #f3e5f5;
+            --leave-text: #7b1fa2;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar Placeholder for context */
+        .sidebar {
+            width: 80px;
+            background-color: #1e272e;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 30px;
+        }
+
+        .sidebar i {
+            color: #bdc3c7;
+            font-size: 20px;
+            margin-bottom: 30px;
+            cursor: pointer;
+            transition: color 0.3s;
+        }
+
+        .sidebar i:hover,
+        .sidebar i.active {
+            color: #fff;
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            padding: 30px 40px;
+            overflow-y: auto;
+        }
+
+        /* Header */
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            background-color: var(--card-bg);
+            padding: 20px 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.02);
+            border: 1px solid var(--border-color);
+        }
+
+        .header-title h1 {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text-main);
+            margin-bottom: 5px;
+        }
+
+        .header-title p {
+            font-size: 14px;
+            color: var(--text-muted);
+        }
+
+        .back-btn {
+            background-color: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+
+        .back-btn:hover {
+            background-color: #f8f9fa;
+        }
+
+        /* Queue List Container */
+        .queue-container {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.02);
+            border: 1px solid var(--border-color);
+            padding: 30px;
+        }
+
+        .queue-header {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-main);
+            margin-bottom: 25px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .queue-header i {
+            color: var(--primary);
+        }
+
+        .queue-item {
+            background-color: #f8f9fa;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .queue-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+
+        .queue-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .req-personnel {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .req-avatar {
+            width: 48px;
+            height: 48px;
+            background-color: var(--primary);
+            color: white;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 16px;
+        }
+
+        .req-info h4 {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-main);
+            margin-bottom: 4px;
+        }
+
+        .req-info p {
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .req-details {
+            display: flex;
+            gap: 30px;
+            margin-right: auto;
+            margin-left: 50px;
+        }
+
+        .detail-block {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .detail-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            font-weight: 700;
+            color: var(--text-muted);
+        }
+
+        .detail-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .detail-value.type {
+            color: var(--primary);
+        }
+
+        .action-btns {
+            display: flex;
+            gap: 10px;
+        }
+
+        .action-btn {
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .btn-approve {
+            background-color: #e6f4ea;
+            color: #1e8e3e;
+        }
+
+        .btn-approve:hover {
+            background-color: #ceead6;
+        }
+
+        .btn-reject {
+            background-color: #fce8e6;
+            color: #d93025;
+        }
+
+        .btn-reject:hover {
+            background-color: #fad2cf;
+        }
+
+        .btn-view {
+            background-color: #eff3ff;
+            color: var(--primary);
+        }
+
+        .btn-view:hover {
+            background-color: #dbe4ff;
+        }
+
+        /* Tooltip */
+        .action-btn[data-tooltip]:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 120%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #333;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            white-space: nowrap;
+            z-index: 10;
+        }
+
+        .action-btn.is-loading i {
+            opacity: 0;
+        }
+
+        .spinner {
+            display: none;
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            border-top-color: currentColor;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .action-btn.is-loading .spinner {
+            display: block;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .empty-state i {
+            font-size: 48px;
+            color: #a0aec0;
+        }
+
+        .empty-state h4 {
+            font-size: 20px;
+            color: var(--text-main);
+        }
+
+        .empty-state p {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Sidebar Placeholder -->
+    <div class="sidebar">
+        <i class="fas fa-layer-group active"></i>
+        <i class="fas fa-chart-pie"></i>
+        <i class="fas fa-users"></i>
+        <i class="fas fa-cog"></i>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Page Header -->
+        <div class="page-header">
+            <div class="header-title">
+                <h1>Manage Requests Queue</h1>
+                <p>Bulk manage all pending leave and attendance requests</p>
+            </div>
+            <a href="dashboard.html" class="back-btn">
+                <i class="fas fa-arrow-left"></i> Back to Dashboard
+            </a>
+        </div>
+
+        <!-- Queue List -->
+        <div class="queue-container">
+            <div class="queue-header">
+                <i class="fas fa-inbox"></i> Pending Items (<span id="pendingCount">0</span>)
+            </div>
+
+            <div id="queueList">
+                <!-- Data will be injected here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Shared Mock Data (Usually this comes from a database/API)
+        let requestData = [
+            { id: "REQ-001", empId: "EMP019", name: "Karan Johar", type: "Sick Leave", period: "15 Oct - 16 Oct", status: "Pending", reason: "Feeling unwell, advised rest by doctor for 2 days." },
+            { id: "REQ-002", empId: "EMP022", name: "Aarav Sharma", type: "Casual Leave", period: "20 Oct", status: "Approved", reason: "Need to attend a family function out of town." },
+            { id: "REQ-003", empId: "EMP031", name: "Simran Kaur", type: "Work from Home", period: "22 Oct - 25 Oct", status: "Rejected", reason: "Internet outage in my locality. Requesting WFH." },
+            { id: "REQ-004", empId: "EMP007", name: "Dhruv Rathi", type: "Sick Leave", period: "18 Oct", status: "Pending", reason: "Dental appointment and minor procedure." },
+            { id: "REQ-005", empId: "EMP045", name: "Pooja Hegde", type: "Comp Off", period: "25 Oct", status: "Pending", reason: "Worked over the weekend to cover critical release." }
+        ];
+
+        function getInitials(name) {
+            return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+        }
+
+        function renderQueue() {
+            const queueList = document.getElementById('queueList');
+            const pendingCountEl = document.getElementById('pendingCount');
+            const pendingRequests = requestData.filter(r => r.status === 'Pending');
+
+            // Sync Requests status if available in storage to maintain state across pages
+            const storedRequests = localStorage.getItem('requestDataSync');
+            if (storedRequests) {
+                requestData = JSON.parse(storedRequests);
+            }
+
+            const currentPending = requestData.filter(r => r.status === 'Pending');
+            pendingCountEl.innerText = currentPending.length;
+
+            if (currentPending.length === 0) {
+                queueList.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-clipboard-check"></i>
+                        <h4>Queue is Empty</h4>
+                        <p>You're all caught up! No pending requests to manage.</p>
+                    </div>
+                `;
+            } else {
+                queueList.innerHTML = currentPending.map(req => `
+                    <div class="queue-item" id="item-${req.id}">
+                        <div class="req-personnel">
+                            <div class="req-avatar">${getInitials(req.name)}</div>
+                            <div class="req-info">
+                                <h4>${req.name}</h4>
+                                <p>${req.empId}</p>
+                            </div>
+                        </div>
+
+                        <div class="req-details">
+                            <div class="detail-block">
+                                <span class="detail-label">Type</span>
+                                <span class="detail-value type">${req.type}</span>
+                            </div>
+                            <div class="detail-block">
+                                <span class="detail-label">Period</span>
+                                <span class="detail-value"><i class="far fa-calendar-alt" style="margin-right: 5px; color: #a0aec0;"></i>${req.period}</span>
+                            </div>
+                        </div>
+
+                        <div class="action-btns">
+                            <button class="action-btn btn-approve" data-tooltip="Approve" onclick="this.disabled=true; handleAction(this, '${req.id}', 'Approved')">
+                                <i class="fas fa-check"></i>
+                                <div class="spinner"></div>
+                            </button>
+                            <button class="action-btn btn-reject" data-tooltip="Reject" onclick="this.disabled=true; handleAction(this, '${req.id}', 'Rejected')">
+                                <i class="fas fa-times"></i>
+                                <div class="spinner"></div>
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        function handleAction(btnElement, reqId, newStatus) {
+            if (btnElement.classList.contains('is-loading')) return;
+
+            // Stop other buttons from working on this item
+            const parent = btnElement.closest('.action-btns');
+            const allBtns = parent.querySelectorAll('button');
+            allBtns.forEach(btn => btn.disabled = true);
+
+            btnElement.classList.add('is-loading');
+
+            // Simulate API logic
+            setTimeout(() => {
+                const reqIndex = requestData.findIndex(r => r.id === reqId);
+                if (reqIndex !== -1) {
+                    requestData[reqIndex].status = newStatus;
+                    localStorage.setItem('requestDataSync', JSON.stringify(requestData)); // Full state sync
+                    renderQueue(); // Re-render lists
+                }
+            }, 600);
+        }
+
+        // Initialize
+        document.addEventListener("DOMContentLoaded", renderQueue);
+    </script>
+</body>
+
+</html>

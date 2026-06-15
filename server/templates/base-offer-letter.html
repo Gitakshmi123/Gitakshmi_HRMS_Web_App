@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Offer Letter - {{CANDIDATE_NAME}}</title>
+    <style>
+        /* ============================================
+           LOCKED BASE STYLES - PRODUCTION GRADE
+           HR CANNOT MODIFY THESE STYLES
+           ============================================ */
+        
+        @page {
+            size: A4;
+            margin: 0;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', 'Arial', 'Helvetica', sans-serif;
+            font-size: 11pt;
+            line-height: 1.65;
+            color: #1a1a1a;
+            background: #ffffff;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        
+        /* PAGE STRUCTURE - LOCKED */
+        .page {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 20mm 20mm 30mm 20mm;
+            position: relative;
+            background: white;
+            page-break-after: always;
+        }
+        
+        .page:last-child {
+            page-break-after: auto;
+        }
+        
+        /* WATERMARK - LOCKED POSITION */
+        .watermark {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-45deg);
+            font-size: 72pt;
+            color: rgba(0, 0, 0, 0.05);
+            font-weight: 700;
+            letter-spacing: 10px;
+            z-index: 0;
+            pointer-events: none;
+            user-select: none;
+        }
+        
+        /* HEADER - LOCKED STRUCTURE */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding-bottom: 18px;
+            border-bottom: 3px solid #2563eb;
+            margin-bottom: 25px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .header-left {
+            flex: 1;
+        }
+        
+        .header-left h1 {
+            font-size: 26pt;
+            color: #2563eb;
+            margin-bottom: 6px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+        
+        .header-left .tagline {
+            font-size: 9pt;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: 500;
+        }
+        
+        .header-right {
+            flex-shrink: 0;
+            margin-left: 20px;
+        }
+        
+        .header-right img {
+            max-height: 65px;
+            max-width: 180px;
+            object-fit: contain;
+        }
+        
+        /* REFERENCE NUMBER - LOCKED */
+        .ref-number {
+            text-align: right;
+            font-size: 9pt;
+            color: #64748b;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+        
+        /* RECIPIENT SECTION - LOCKED STRUCTURE */
+        .recipient {
+            margin-bottom: 25px;
+            line-height: 1.5;
+        }
+        
+        .recipient p {
+            font-size: 11pt;
+            margin: 3px 0;
+            color: #1a1a1a;
+        }
+        
+        .recipient .name {
+            font-weight: 600;
+            font-size: 12pt;
+        }
+        
+        /* SUBJECT - LOCKED */
+        .subject {
+            margin: 25px 0;
+            padding: 12px 0;
+            border-top: 1px solid #e2e8f0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .subject p {
+            font-weight: 700;
+            font-size: 12pt;
+            color: #1a1a1a;
+            text-decoration: underline;
+            text-underline-offset: 3px;
+        }
+        
+        /* SALUTATION */
+        .salutation {
+            margin: 20px 0;
+            font-size: 11pt;
+        }
+        
+        /* EDITABLE CONTENT AREA - HR CAN STYLE CONTENT */
+        .content-body {
+            min-height: 400px;
+            margin-bottom: 35px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .content-body p {
+            margin-bottom: 12px;
+            text-align: justify;
+            font-size: 11pt;
+            line-height: 1.7;
+        }
+        
+        .content-body strong {
+            font-weight: 600;
+            color: #0f172a;
+        }
+        
+        .content-body em {
+            font-style: italic;
+            color: #334155;
+        }
+        
+        .content-body ol,
+        .content-body ul {
+            margin: 18px 0;
+            padding-left: 30px;
+        }
+        
+        .content-body li {
+            margin: 10px 0;
+            padding-left: 8px;
+            line-height: 1.7;
+        }
+        
+        .content-body ol li {
+            list-style-type: decimal;
+        }
+        
+        .content-body ul li {
+            list-style-type: disc;
+        }
+        
+        .content-body ul ul {
+            margin: 8px 0;
+            padding-left: 25px;
+        }
+        
+        .content-body ul ul li {
+            list-style-type: circle;
+            margin: 6px 0;
+            font-size: 10.5pt;
+        }
+        
+        .content-body .highlight {
+            background-color: #fef3c7;
+            padding: 2px 4px;
+            border-radius: 2px;
+        }
+        
+        /* SIGNATURE SECTION - LOCKED STRUCTURE */
+        .signature-section {
+            margin-top: 45px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .signature-section > p {
+            margin: 5px 0;
+            font-size: 11pt;
+        }
+        
+        .signature-section .company-name {
+            font-weight: 600;
+            font-size: 12pt;
+            margin: 8px 0;
+        }
+        
+        .signature-box {
+            margin-top: 55px;
+        }
+        
+        .signature-image {
+            height: 45px;
+            margin-bottom: 5px;
+        }
+        
+        .signature-line {
+            border-top: 1.5px solid #1a1a1a;
+            width: 220px;
+            margin-top: 8px;
+            margin-bottom: 8px;
+        }
+        
+        .signatory-name {
+            font-weight: 600;
+            font-size: 11pt;
+            margin-bottom: 3px;
+        }
+        
+        .signatory-designation {
+            font-size: 9.5pt;
+            color: #64748b;
+        }
+        
+        /* ACCEPTANCE SECTION - LOCKED */
+        .acceptance-section {
+            margin-top: 55px;
+            padding-top: 25px;
+            border-top: 2px solid #cbd5e1;
+            page-break-inside: avoid;
+        }
+        
+        .acceptance-section .title {
+            font-weight: 700;
+            font-size: 11.5pt;
+            margin-bottom: 12px;
+        }
+        
+        .acceptance-section .description {
+            font-size: 10pt;
+            margin-bottom: 25px;
+            line-height: 1.6;
+            color: #334155;
+        }
+        
+        .acceptance-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 50px;
+            margin-top: 25px;
+        }
+        
+        .acceptance-field {
+            position: relative;
+        }
+        
+        .acceptance-label {
+            font-size: 9pt;
+            color: #64748b;
+            margin-bottom: 35px;
+            display: block;
+            font-weight: 500;
+        }
+        
+        .acceptance-input {
+            border-bottom: 1.5px solid #1a1a1a;
+            padding-bottom: 8px;
+            min-height: 55px;
+            display: flex;
+            align-items: flex-end;
+        }
+        
+        .acceptance-input strong {
+            font-size: 11pt;
+            font-weight: 600;
+        }
+        
+        /* FOOTER - LOCKED */
+        .footer {
+            position: fixed;
+            bottom: 18mm;
+            left: 20mm;
+            right: 20mm;
+            padding-top: 12px;
+            border-top: 1px solid #cbd5e1;
+            font-size: 8.5pt;
+            color: #64748b;
+            text-align: center;
+            line-height: 1.5;
+            z-index: 1;
+            background: white;
+        }
+        
+        .footer p {
+            margin: 3px 0;
+        }
+        
+        .footer .address {
+            font-weight: 500;
+        }
+        
+        .footer .contact {
+            color: #94a3b8;
+        }
+        
+        /* PAGE NUMBER - LOCKED */
+        .page-number {
+            position: fixed;
+            bottom: 12mm;
+            right: 20mm;
+            font-size: 8pt;
+            color: #94a3b8;
+            font-weight: 500;
+        }
+        
+        /* PRINT OPTIMIZATION */
+        @media print {
+            body {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            
+            .page {
+                page-break-after: always;
+            }
+            
+            .page:last-child {
+                page-break-after: auto;
+            }
+            
+            .acceptance-section {
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- WATERMARK (Optional) -->
+    <div class="watermark">CONFIDENTIAL</div>
+    
+    <!-- PAGE 1: MAIN OFFER LETTER -->
+    <div class="page">
+        <!-- HEADER - LOCKED -->
+        <div class="header">
+            <div class="header-left">
+                <h1>Gitakshmi Technologies</h1>
+                <p class="tagline">TECHNOLOGIES</p>
+            </div>
+            <div class="header-right">
+                <!-- Logo placeholder - will be replaced with actual logo -->
+                <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='60' viewBox='0 0 150 60'%3E%3Crect width='150' height='60' fill='%232563eb'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='Arial' font-size='16' fill='white' font-weight='bold'%3ECOMPANY LOGO%3C/text%3E%3C/svg%3E" alt="Company Logo">
+            </div>
+        </div>
+        
+        <!-- REFERENCE NUMBER - LOCKED -->
+        <div class="ref-number">
+            Ref: GITK/2025/4782
+        </div>
+        
+        <!-- RECIPIENT ADDRESS - LOCKED STRUCTURE -->
+        <div class="recipient">
+            <p class="name">Mr. Dharmik Jethwani</p>
+            <p>123, Sample Address, Satellite Road</p>
+            <p>Ahmedabad, Gujarat - 380015</p>
+        </div>
+        
+        <!-- SUBJECT - LOCKED -->
+        <div class="subject">
+            <p>Offer to Join Gitakshmi Technologies Private Limited</p>
+        </div>
+        
+        <!-- SALUTATION -->
+        <div class="salutation">
+            <p>Dear Mr. Dharmik,</p>
+        </div>
+        
+        <!-- ============================================
+             EDITABLE CONTENT AREA
+             HR can customize this content
+             ============================================ -->
+        <div class="content-body">
+            <p>
+                Congratulations! Further to your application for employment with us, and the subsequent selection process, we 
+                are pleased to <strong>offer you the position of MERN Stack Developer</strong> at 
+                our <strong>Ahmedabad</strong> office on the following terms and conditions:
+            </p>
+
+            <ol>
+                <li>
+                    <strong>Appointment:</strong> You will be appointed as <strong>MERN Stack Developer</strong>, 
+                    with your registered address as the location. The employment headquarters (HQ) is located 
+                    at <strong>Ahmedabad, Gujarat - 380051</strong>. You may be required to work at any of our offices or remotely as per business requirements.
+                </li>
+
+                <li>
+                    <strong>Date of Joining:</strong> You are requested to join on or before <strong>18th December 2025</strong>. 
+                    Please confirm your acceptance and joining date at the earliest.
+                </li>
+
+                <li>
+                    <strong>Compensation:</strong> Upon your joining, the company will provide a detailed Appointment Letter outlining all terms and conditions 
+                    of your employment and a comprehensive compensation structure along with our Employee Handbook.
+                </li>
+
+                <li>
+                    <strong>Probation Period:</strong> You will be on probation for a period of <strong>3 months</strong> from the date of joining. 
+                    Your performance will be reviewed at the end of this period, and confirmation will be subject to satisfactory performance.
+                </li>
+
+                <li>
+                    <strong>Terms & Conditions:</strong> Your appointment and continued employment with the company is subject to you providing:
+                    <ul>
+                        <li>All original educational certificates along with one set of photocopies of the same</li>
+                        <li>Experience & Relieving letters from previous employers (if applicable)</li>
+                        <li>Residence Proof (Aadhaar Card / Passport / Driving License)</li>
+                        <li>Recent passport-size photographs (3 copies)</li>
+                        <li>PAN Card copy</li>
+                        <li>Bank account details with cancelled cheque</li>
+                    </ul>
+                </li>
+
+                <li>
+                    <strong>Background Verification:</strong> Your employment is subject to satisfactory verification of your past 
+                    employment history, educational credentials, and character references. All information provided by you during the 
+                    selection process will be thoroughly verified. Any discrepancy found may lead to immediate termination of employment.
+                </li>
+            </ol>
+
+            <p>
+                <strong>Note:</strong> Please sign the copy of this letter as a token of your acceptance and send the signed copy to 
+                us along with the above-mentioned documents within <strong>7 days</strong> of receiving this offer. Failure to do so may result in 
+                the withdrawal of this offer.
+            </p>
+
+            <p>
+                We are confident that you will enjoy working with us, and we look forward to a long and mutually beneficial association. 
+                We wish you all the very best in your new assignment and sincerely hope that you will contribute significantly to the 
+                continued success and growth of our organization.
+            </p>
+
+            <p>
+                As a new team member, we encourage you to <em>fearlessly internalize and uphold the spirit of innovation, integrity, and excellence</em> 
+                that defines our company culture.
+            </p>
+
+            <p style="margin-top: 20px;">
+                <strong>Stability, Integrity and Growth.</strong>
+            </p>
+        </div>
+        
+        <!-- SIGNATURE SECTION - LOCKED STRUCTURE -->
+        <div class="signature-section">
+            <p>Yours Truly,</p>
+            <p class="company-name">For Gitakshmi Technologies Private Limited</p>
+            
+            <div class="signature-box">
+                <!-- Signature image placeholder -->
+                <!-- <img src="signature.png" alt="Signature" class="signature-image"> -->
+                
+                <div class="signature-line"></div>
+                <p class="signatory-name">Authorized Signatory</p>
+                <p class="signatory-designation">Human Resources Manager</p>
+            </div>
+        </div>
+        
+        <!-- ACCEPTANCE SECTION - LOCKED -->
+        <div class="acceptance-section">
+            <p class="title">Acceptance of Offer:</p>
+            <p class="description">
+                I have read and understood all the terms and conditions as set forth in this offer letter and any annexures attached hereto. 
+                I hereby accept this offer of employment.
+            </p>
+            
+            <div class="acceptance-grid">
+                <div class="acceptance-field">
+                    <span class="acceptance-label">Your name in CAPITAL LETTERS</span>
+                    <div class="acceptance-input">
+                        <strong>DHARMIK JETHWANI</strong>
+                    </div>
+                </div>
+                
+                <div class="acceptance-field">
+                    <span class="acceptance-label">Your Signature with Date</span>
+                    <div class="acceptance-input"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- FOOTER - LOCKED -->
+        <div class="footer">
+            <p class="address">Gitakshmi Technologies Pvt. Ltd., Science City Road, Ahmedabad, Gujarat - 380051, India</p>
+            <p class="contact">Phone: +91 79 1234 5678 | Email: hr@gitakshmi.com | Website: www.gitakshmi.com | CIN: U72900GJ2020PTC123456</p>
+        </div>
+        
+        <div class="page-number">Page 1 of 1</div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,33 @@
+[
+  {
+    "_id": "69abcb3c6b65c7167f88e311",
+    "companyName": "movya tech",
+    "companyEmail": "movya@gmail.com",
+    "ownerName": "jay",
+    "phone": "9685743201",
+    "password": "$2b$10$16oFPZSGeWVBysOoiAon/uRf8HysF4jzIZzdPDxOBx/cuvlG7Xv4m",
+    "logo": null,
+    "tenantId": "tenant_8d0b226a-2bee-486c-858a-a8555ae897c5",
+    "apiKey": "key_32eb0da1-ef0e-4943-8805-df88e62e7afe",
+    "code": "mov001",
+    "emailDomain": null,
+    "plan": "free",
+    "status": "active",
+    "enabledModules": {
+      "hr": true,
+      "payroll": true,
+      "attendance": false,
+      "leave": false,
+      "recruitment": false,
+      "backgroundVerification": false,
+      "documentManagement": false,
+      "socialMediaIntegration": false,
+      "employeePortal": false
+    },
+    "isVerified": true,
+    "verificationToken": null,
+    "createdAt": "2026-03-07T06:52:44.272Z",
+    "updatedAt": "2026-03-07T06:54:44.014Z",
+    "__v": 0
+  }
+]

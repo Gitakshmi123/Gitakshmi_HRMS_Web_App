@@ -1,0 +1,407 @@
+/** @format */
+
+.onb-shell {
+  min-height: 100%;
+  color: #0f172a;
+  background: #ffffff;
+}
+
+.onb-dashboard-shell {
+  min-height: calc(100vh - 96px);
+  max-width: 100%;
+  overflow: hidden;
+  padding: 0.75rem;
+}
+
+.onb-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.65rem;
+}
+
+.onb-card {
+  background: #ffffff;
+  border: 1px solid #f1f5f9;
+}
+
+.onb-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.onb-input {
+  width: 100%;
+  min-height: 38px;
+  border-radius: 0.75rem;
+  border: 1px solid #dbe4ef;
+  background: #fff;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #0f172a;
+  outline: none;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    background 140ms ease;
+}
+
+.onb-input:focus {
+  border-color: #0f172a;
+}
+
+.onb-input::placeholder {
+  color: #94a3b8;
+}
+
+.onb-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.onb-dot-sky {
+  background: #0ea5e9;
+}
+.onb-dot-amber {
+  background: #f59e0b;
+}
+.onb-dot-rose {
+  background: #f43f5e;
+}
+.onb-dot-indigo {
+  background: #6366f1;
+}
+.onb-dot-emerald {
+  background: #10b981;
+}
+
+.onb-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin-bottom: 0.75rem;
+}
+
+.onb-metric-card {
+  position: relative;
+  overflow: hidden;
+  min-height: 76px;
+  border-radius: 1rem;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: #ffffff;
+  padding: 0.75rem;
+}
+
+.onb-metric-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+}
+
+.onb-metric-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 0.9rem;
+}
+
+.onb-metric-sky::before {
+  background: #0ea5e9;
+}
+.onb-metric-sky .onb-metric-icon {
+  color: #0369a1;
+  background: #e0f2fe;
+}
+.onb-metric-amber::before {
+  background: #f59e0b;
+}
+.onb-metric-amber .onb-metric-icon {
+  color: #b45309;
+  background: #fef3c7;
+}
+.onb-metric-indigo::before {
+  background: #6366f1;
+}
+.onb-metric-indigo .onb-metric-icon {
+  color: #4338ca;
+  background: #e0e7ff;
+}
+.onb-metric-emerald::before {
+  background: #10b981;
+}
+.onb-metric-emerald .onb-metric-icon {
+  color: #047857;
+  background: #d1fae5;
+}
+
+.onb-work-grid {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+  min-width: 0;
+}
+
+.onb-invite-card,
+.onb-board-card,
+.onb-detail-card,
+.onb-verification-panel {
+  border-radius: 1rem;
+  padding: 0.85rem;
+}
+
+.onb-invite-card {
+  position: sticky;
+  top: 0.75rem;
+}
+
+.onb-board-card {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.onb-kanban-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 0.25rem;
+}
+
+.onb-kanban-track {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(180px, 1fr));
+  gap: 0.55rem;
+  min-width: 940px;
+}
+
+.onb-kanban-column {
+  display: flex;
+  min-width: 0;
+  min-height: 340px;
+  max-height: calc(100vh - 360px);
+  flex-direction: column;
+  border-radius: 1rem;
+  border: 1px solid #f1f5f9;
+  background: #ffffff;
+  padding: 0.55rem;
+}
+
+.onb-column-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.55rem;
+  padding: 0.15rem 0.2rem 0.55rem;
+}
+
+.onb-column-body {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.45rem;
+  overflow-y: auto;
+  padding-right: 0.1rem;
+}
+
+.onb-person-card {
+  width: 100%;
+  border-radius: 0.9rem;
+  border: 1px solid #f1f5f9;
+  background: #fff;
+  padding: 0.7rem;
+  text-align: left;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease;
+}
+
+.onb-person-card:hover {
+  border-color: #cbd5e1;
+  transform: translateY(-1px);
+}
+
+.onb-person-card-active {
+  border-color: #4F46E5;
+}
+
+.onb-empty-card,
+.onb-soft-empty {
+  border-radius: 0.9rem;
+  border: 1px dashed #cbd5e1;
+  background: rgba(248, 250, 252, 0.9);
+  padding: 0.9rem;
+  text-align: center;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.onb-details-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  align-items: start;
+}
+
+.onb-doc-list {
+  display: grid;
+  max-height: 178px;
+  gap: 0.45rem;
+  overflow-y: auto;
+  padding-right: 0.1rem;
+}
+
+.onb-doc-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  border-radius: 0.85rem;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  padding: 0.65rem;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease;
+}
+
+.onb-doc-row:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.onb-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 1024px) {
+  .onb-grid.cols-4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .onb-grid.cols-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1279px) {
+  .onb-work-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .onb-invite-card {
+    position: static;
+  }
+
+  .onb-kanban-column {
+    max-height: none;
+  }
+}
+
+@media (max-width: 1023px) {
+  .onb-details-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 767px) {
+  .onb-dashboard-shell {
+    border-radius: 14px;
+    padding: 0.6rem;
+  }
+
+  .onb-toolbar {
+    flex-direction: column;
+  }
+
+  .onb-metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .onb-kanban-track {
+    min-width: 860px;
+    grid-template-columns: repeat(5, 168px);
+  }
+}
+
+.onb-work-grid-flat {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+.onb-board-card-flat {
+  overflow: hidden;
+}
+
+.onb-metric-card {
+  position: relative;
+  overflow: hidden;
+  min-height: 76px;
+  border-radius: 1.25rem;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: #ffffff;
+  padding: 1rem;
+}
+
+/* Full-width row for two detail panels — use Tailwind grid on the parent in JSX */
+.onb-details-grid-flat {
+  width: 100%;
+  min-width: 0;
+}
+
+/* Animations for Modal */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes zoom-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-in {
+  animation-fill-mode: forwards;
+}
+
+.fade-in {
+  animation-name: fade-in;
+}
+
+.zoom-in-95 {
+  animation-name: zoom-in;
+}
+
+.onb-person-card {
+  width: 100%;
+  border-radius: 1.5rem;
+  border: 1px solid #f1f5f9;
+  background: #fff;
+  padding: 1.25rem;
+  text-align: left;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.onb-person-card:hover {
+  transform: translateY(-4px);
+  border-color: #e2e8f0;
+}

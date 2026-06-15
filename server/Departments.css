@@ -1,0 +1,2 @@
+
+.btn-submit { width: 100%; padding: 14px; background: var(--primary); color: white; border: none; border-radius: 12px; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.2s; margin-top: 10px; box-shadow: 0 4px 12px rgba(0, 184, 148, 0.2); } .btn-submit:hover { background: #00a082; transform: translateY(-2px); box-shadow: 0 6px 15px rgba(0, 184, 148, 0.3); } .btn-submit:disabled { background: #a4b0be; cursor: not-allowed; transform: none; }

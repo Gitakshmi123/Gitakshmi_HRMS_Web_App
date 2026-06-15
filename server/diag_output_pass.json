@@ -1,0 +1,12 @@
+{
+  "connected": true,
+  "emailSearch": "git@gmail.com",
+  "user": {
+    "id": "69c56fa3d01f8b09a61759d5",
+    "role": "hr",
+    "tenant": "69c56fa3d01f8b09a61759d4",
+    "passwordHash": "$2b$10$L3pCrAAcGWNUJdMhjSiUmu9jEPZOy8Hmbl0wD3hBIbqJm.RJcrUU2"
+  },
+  "passwordMatch": true,
+  "error": null
+}

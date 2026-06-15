@@ -1,0 +1,10 @@
+{
+  "connected": true,
+  "tenantId": "69c56fa3d01f8b09a61759d4",
+  "tenant": {
+    "id": "69c56fa3d01f8b09a61759d4",
+    "code": "git001",
+    "status": "active"
+  },
+  "error": null
+}

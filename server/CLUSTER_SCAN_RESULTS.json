@@ -1,0 +1,83 @@
+{
+  "scanDate": "2026-02-07T06:25:18.786Z",
+  "totalDatabases": 14,
+  "masterDatabases": [
+    {
+      "name": "test",
+      "sizeOnDisk": "0.57",
+      "empty": false
+    }
+  ],
+  "tenantDatabases": [
+    {
+      "name": "company_695c98181a01d447895992ff",
+      "sizeOnDisk": "8.79",
+      "empty": false
+    },
+    {
+      "name": "company_695d41626eff2fdbc8a9b6cb",
+      "sizeOnDisk": "0.63",
+      "empty": false
+    },
+    {
+      "name": "company_695d4a6c409f9301a0df9a1d",
+      "sizeOnDisk": "1.10",
+      "empty": false
+    },
+    {
+      "name": "company_69661e7f9a31a4d8586249fe",
+      "sizeOnDisk": "0.93",
+      "empty": false
+    },
+    {
+      "name": "company_696647a058019a97bb12f7a7",
+      "sizeOnDisk": "0.78",
+      "empty": false
+    },
+    {
+      "name": "company_6966624e68da1a460f8fd6cb",
+      "sizeOnDisk": "0.77",
+      "empty": false
+    },
+    {
+      "name": "company_696df3ee47b68bc7fb26db74",
+      "sizeOnDisk": "1.58",
+      "empty": false
+    },
+    {
+      "name": "company_696e120ff361a38fe65c131c",
+      "sizeOnDisk": "0.87",
+      "empty": false
+    },
+    {
+      "name": "company_696e13c2472f4997a2b49b4a",
+      "sizeOnDisk": "0.76",
+      "empty": false
+    },
+    {
+      "name": "company_69789673b783b1d7805d0ba1",
+      "sizeOnDisk": "0.87",
+      "empty": false
+    }
+  ],
+  "orphanedTenants": [],
+  "systemDatabases": [
+    {
+      "name": "admin",
+      "sizeOnDisk": "0.35",
+      "empty": false
+    },
+    {
+      "name": "local",
+      "sizeOnDisk": "60182.94",
+      "empty": false
+    }
+  ],
+  "otherDatabases": [
+    {
+      "name": "hrms_tenants_data",
+      "sizeOnDisk": "0.75",
+      "empty": false
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+version: "3.9"
+services:
+  server:
+    build: ./server
+    ports:
+      - "5000:5000"
+    env_file:
+      - ./server/.env
+    environment:
+      - PORT=5000
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - mongo
+      - redis
+  client:
+    build: ./client
+    ports:
+      - "5173:80"
+    environment:
+      - VITE_API_BASE=https://hrms.gitakshmi.com/api
+    depends_on:
+      - server
+  mongo:
+    image: mongo:6
+    ports:
+      - "27017:27017"
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"

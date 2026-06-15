@@ -1,0 +1,15 @@
+{
+  "step": "success",
+  "error": null,
+  "log": [
+    "Connected to MongoDB",
+    "Found 7 active tenants",
+    "Checking tenant git001 (69c56fa3d01f8b09a61759d4)",
+    "  Found User record in tenant git001",
+    "  Password MATCHED!"
+  ],
+  "tokenData": {
+    "id": "69c56fa3d01f8b09a61759d5",
+    "tenant": "git001"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "success": false,
+  "log": [
+    "Testing with file: C:\\HRMS\\backend\\uploads\\resumes\\resume-1771396745147-642278867.pdf",
+    "TEST FAILED: Extracted text is too short (<200 chars). Please upload a text-based PDF or Word document. Scanned PDFs are not supported without OCR. | Stack: Error: Extracted text is too short (<200 chars). Please upload a text-based PDF or Word document. Scanned PDFs are not supported without OCR.\n    at ResumeParserService.parseResume (C:\\HRMS\\backend\\services\\ResumeParser.service.js:44:23)\n    at async test (C:\\HRMS\\backend\\test_parser.js:33:22)"
+  ],
+  "error": "Extracted text is too short (<200 chars). Please upload a text-based PDF or Word document. Scanned PDFs are not supported without OCR."
+}

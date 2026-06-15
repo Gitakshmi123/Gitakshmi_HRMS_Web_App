@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Letter</title>
+    <style>
+        /* Font Embedding - Microsoft Word Compatible */
+        @font-face {
+            font-family: 'Calibri';
+            src: local('Calibri'), local('Calibri Regular');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        @font-face {
+            font-family: 'Calibri';
+            src: local('Calibri Bold');
+            font-weight: bold;
+            font-style: normal;
+        }
+
+        @font-face {
+            font-family: 'Arial';
+            src: local('Arial'), local('Arial Regular');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        @page {
+            size: A4;
+            margin: 0;
+            background: white;
+        }
+
+        * {
+            box-sizing: border-box;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        /* Corporate Typography - Matches Reference PDF */
+        body {
+            margin: 0;
+            padding: 0;
+            background: white;
+            font-family: 'Calibri', 'Carlito', 'Arial', sans-serif;
+            font-size: 11pt;
+            line-height: 1.4;
+            color: #000;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        /* SAFE PRINT LAYOUT - Matches Generator Logic */
+        .letter-wrapper-container {
+            width: 210mm;
+            min-height: 285mm;
+            /* Safe height to avoid Page 2 */
+            margin: 0 auto;
+            background-color: white;
+            display: flex;
+            /* FLEX LAYOUT */
+            flex-direction: column;
+            /* Stack Content -> Footer */
+            position: relative;
+        }
+
+        /* Legacy Wrapper Support */
+        .letter-wrapper {
+            width: 210mm;
+            min-height: 285mm;
+            margin: 0 auto;
+            background-color: white;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .letterhead-background {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            pointer-events: none;
+            background-size: 210mm 297mm !important;
+            background-repeat: no-repeat !important;
+            background-position: top center !important;
+        }
+
+        .letter-content-wrapper {
+            position: relative;
+            z-index: 10;
+            flex: 1;
+            /* Grow content */
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+        }
+
+        /* Content Area */
+        .letter-content {
+            width: 100%;
+            flex: 1;
+            /* Takes all available space, pushing footer down */
+            padding: 25mm 20mm 5mm 20mm;
+            /* Professional Margins */
+            box-sizing: border-box;
+            overflow: visible;
+        }
+
+        /* STATIC FOOTER (Not Fixed) */
+        .letter-footer {
+            width: 100%;
+            padding: 2mm 20mm 15mm 20mm;
+            background: white;
+            border-top: 2px solid #C00000;
+            /* Corporate Red Line */
+            margin-top: auto;
+            /* Flex trick: Push to bottom */
+            z-index: 10;
+            page-break-inside: avoid;
+            /* Never split footer */
+            position: relative;
+        }
+
+        .letter-footer-content {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .footer-company-name {
+            color: #C00000;
+            /* Corporate Red */
+            font-weight: bold;
+            font-size: 11pt;
+            margin-bottom: 2px;
+        }
+
+        .footer-details {
+            color: #333;
+            font-size: 8pt;
+            line-height: 1.3;
+        }
+
+        /* Helper Classes */
+        .page-break {
+            page-break-before: always;
+        }
+
+        /* Specific Reference PDF styling adjustments */
+        p {
+            margin-bottom: 1em !important;
+        }
+
+        strong {
+            font-weight: 700 !important;
+        }
+
+        ol {
+            margin-left: 10mm;
+            padding-left: 0;
+        }
+
+        li {
+            padding-left: 5mm;
+            margin-bottom: 0.5em;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 0.5em auto;
+        }
+
+        @media print {
+            .letter-wrapper-container {
+                -webkit-print-color-adjust: exact;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Letter Wrapper Structure -->
+    <div class="letter-wrapper">
+        <div class="letter-content-wrapper">
+            <div class="letter-content">
+                {{BODY_CONTENT}}
+            </div>
+        </div>
+        <!-- Footer will be injected -->
+    </div>
+</body>
+
+</html>

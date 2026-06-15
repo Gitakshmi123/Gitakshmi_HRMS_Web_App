@@ -1,0 +1,131 @@
+<!-- @format -->
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Clear HRMS Cache</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      }
+      .container {
+        background: white;
+        padding: 40px;
+        border-radius: 20px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        text-align: center;
+        max-width: 500px;
+      }
+      h1 {
+        color: #333;
+        margin-bottom: 20px;
+      }
+      .status {
+        font-size: 18px;
+        margin: 20px 0;
+        padding: 15px;
+        border-radius: 10px;
+        font-weight: bold;
+      }
+      .success {
+        background: #d4edda;
+        color: #155724;
+        border: 2px solid #c3e6cb;
+      }
+      .info {
+        background: #d1ecf1;
+        color: #0c5460;
+        border: 2px solid #bee5eb;
+      }
+      button {
+        background: #667eea;
+        color: white;
+        border: none;
+        padding: 15px 30px;
+        font-size: 16px;
+        border-radius: 10px;
+        cursor: pointer;
+        margin: 10px;
+        font-weight: bold;
+      }
+      button:hover {
+        background: #5568d3;
+      }
+      .step {
+        text-align: left;
+        margin: 15px 0;
+        padding: 10px;
+        background: #f8f9fa;
+        border-left: 4px solid #667eea;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🔧 HRMS Cache Cleaner</h1>
+      <div id="status" class="status info">
+        Ready to clear cache and fix errors
+      </div>
+
+      <div class="step">
+        <strong>Step 1:</strong> Click the button below to clear cache
+      </div>
+      <div class="step"><strong>Step 2:</strong> Wait for success message</div>
+      <div class="step">
+        <strong>Step 3:</strong> Click "Open HRMS" to login again
+      </div>
+
+      <button onclick="clearCache()">🗑️ Clear Cache Now</button>
+      <button id="openBtn" onclick="openHRMS()" style="display: none">
+        ✅ Open HRMS
+      </button>
+    </div>
+
+    <script>
+      function clearCache() {
+        try {
+          // Clear all storage
+          localStorage.clear();
+          sessionStorage.clear();
+
+          // Clear cookies
+          document.cookie.split(";").forEach(function (c) {
+            document.cookie = c
+              .replace(/^ +/, "")
+              .replace(
+                /=.*/,
+                "=;expires=" + new Date().toUTCString() + ";path=/",
+              );
+          });
+
+          // Show success
+          document.getElementById("status").className = "status success";
+          document.getElementById("status").innerHTML =
+            '✅ Cache cleared successfully!<br>Now click "Open HRMS" button';
+          document.getElementById("openBtn").style.display = "inline-block";
+        } catch (error) {
+          document.getElementById("status").className = "status error";
+          document.getElementById("status").innerHTML =
+            "❌ Error: " + error.message;
+        }
+      }
+
+      function openHRMS() {
+        // Open HRMS in new tab
+        window.open("http://localhost:5176/hr/employees", "_blank");
+
+        // Update status
+        document.getElementById("status").innerHTML =
+          "✅ HRMS opened in new tab!<br>Please login with your credentials";
+      }
+    </script>
+  </body>
+</html>

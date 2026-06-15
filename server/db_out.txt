@@ -1,0 +1,2 @@
+User git@gmail.com has role: company_super_admin
+Tenant adminEmail: git@gmail.com meta.email: git@gmail.com

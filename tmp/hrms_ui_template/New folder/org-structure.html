@@ -1,0 +1,933 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Organization Structure | Global Tech</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #00b894;
+            --bg-color: #fcfcfc;
+            --text-main: #2d3436;
+            --text-muted: #636e72;
+            --border-color: #f1f2f6;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+        }
+
+        /* Sidebar Navigation (Reused) */
+        .sidebar {
+            width: 80px;
+            background-color: #ffffff;
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            height: 100vh;
+            left: 0;
+            top: 0;
+            z-index: 100;
+            overflow: hidden;
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
+        }
+
+        .sidebar:hover {
+            width: 260px;
+            box-shadow: 4px 0 15px rgba(0, 0, 0, 0.05);
+            overflow-y: auto;
+        }
+
+        .sidebar-brand {
+            padding: 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 260px;
+        }
+
+        .brand-icon {
+            width: 32px;
+            height: 32px;
+            background-color: #00b894;
+            color: white;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 16px;
+        }
+
+        .brand-text {
+            font-size: 16px;
+            font-weight: 700;
+            color: #2d3436;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .sidebar:hover .brand-text {
+            opacity: 1;
+        }
+
+        .sidebar-menu {
+            padding: 10px 16px;
+            flex: 1;
+            min-width: 260px;
+        }
+
+        .menu-section {
+            font-size: 11px;
+            font-weight: 600;
+            color: #b2bec3;
+            letter-spacing: 0.5px;
+            margin: 20px 0 10px 12px;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .sidebar:hover .menu-section {
+            opacity: 1;
+        }
+
+        .menu-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            color: #636e72;
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 4px;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .menu-item i {
+            font-size: 16px;
+            width: 20px;
+            text-align: center;
+            color: #a4b0be;
+        }
+
+        .menu-item span {
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .sidebar:hover .menu-item span {
+            opacity: 1;
+        }
+
+        .menu-item:hover {
+            background-color: #f8f9fa;
+        }
+
+        .menu-item.active {
+            background: linear-gradient(135deg, #00b894 0%, #00cec9 100%);
+            box-shadow: 0 4px 10px rgba(0, 184, 148, 0.2);
+            color: white;
+        }
+
+        .menu-item.active i {
+            color: white;
+        }
+
+        .sidebar-footer {
+            padding: 24px;
+            margin-top: auto;
+            min-width: 260px;
+        }
+
+        .system-status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #2d3436;
+        }
+
+        .system-status-indicator .dot {
+            width: 8px;
+            height: 8px;
+            background-color: #00b894;
+            border-radius: 50%;
+        }
+
+        .system-version {
+            font-size: 11px;
+            color: #b2bec3;
+            padding-left: 16px;
+            margin-top: 4px;
+        }
+
+        .sidebar:not(:hover) .brand-text,
+        .sidebar:not(:hover) .menu-item span,
+        .sidebar:not(:hover) .menu-section,
+        .sidebar:not(:hover) .system-status-indicator span,
+        .sidebar:not(:hover) .system-version {
+            display: none;
+        }
+
+        /* Layout */
+        .main-wrapper {
+            margin-left: 80px;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            transition: margin-left 0.3s ease;
+        }
+
+        /* Top Navigation */
+        .top-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 40px;
+            background-color: #ffffff;
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 90;
+        }
+
+        .nav-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .nav-left i {
+            color: #b2bec3;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .nav-left h1 {
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: 0;
+            color: #2d3436;
+            text-transform: uppercase;
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 25px;
+        }
+
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+        }
+
+        .user-profile .avatar {
+            width: 35px;
+            height: 35px;
+            background: linear-gradient(135deg, #00b894 0%, #00cec9 100%);
+            color: white;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .user-details h4 {
+            font-size: 13px;
+            font-weight: 700;
+            color: #2d3436;
+        }
+
+        .user-details p {
+            font-size: 11px;
+            color: #a4b0be;
+            margin-top: 2px;
+        }
+
+        .nav-actions-pill {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            background-color: #f8f9fa;
+            border-radius: 30px;
+            padding: 8px 18px;
+            border: 1px solid #f1f2f6;
+        }
+
+        .nav-actions-pill i {
+            color: #636e72;
+            cursor: pointer;
+            font-size: 15px;
+            transition: color 0.2s;
+        }
+
+        .nav-actions-pill i:hover {
+            color: #2d3436;
+        }
+
+        .nav-actions-pill .divider {
+            width: 1px;
+            height: 16px;
+            background-color: #dfe6e9;
+        }
+
+        .notification-icon {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .bell-badge {
+            position: absolute;
+            top: 0px;
+            right: -2px;
+            width: 6px;
+            height: 6px;
+            background-color: #ff7675;
+            border-radius: 50%;
+            border: 2px solid #f8f9fa;
+        }
+
+        /* ------------------------- */
+        /* Org Structure Specific CSS  */
+        /* ------------------------- */
+
+        .white-toolbar {
+            background-color: #ffffff;
+            padding: 20px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .toolbar-title h2 {
+            font-size: 22px;
+            font-weight: 800;
+            color: #2d3436;
+        }
+
+        .toolbar-title p {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .btn-toolbar-action {
+            background: #ffffff;
+            color: #64748b;
+            padding: 10px 18px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            border: 1px solid #cbd5e1;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-toolbar-action:hover {
+            background: #f8fafc;
+            color: #0f172a;
+            border-color: #94a3b8;
+        }
+
+        /* Page Content */
+        .page-content {
+            padding: 0;
+            height: calc(100vh - 150px);
+            overflow: auto;
+            position: relative;
+        }
+
+        /* Grid background pattern */
+        .page-content::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image:
+                linear-gradient(to right, #f1f5f9 1px, transparent 1px),
+                linear-gradient(to bottom, #f1f5f9 1px, transparent 1px);
+            background-size: 40px 40px;
+            z-index: 0;
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        /* Tree Layout Styles */
+        .tree-container {
+            padding: 40px;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+            min-width: fit-content;
+        }
+
+        .tree {
+            display: inline-flex;
+        }
+
+        .tree ul {
+            padding-top: 30px;
+            position: relative;
+            transition: all 0.4s;
+            display: flex;
+            justify-content: center;
+            padding-left: 0;
+            list-style-type: none;
+        }
+
+        .tree li {
+            position: relative;
+            padding: 30px 10px 0 10px;
+            transition: all 0.4s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* Connecting lines */
+        .tree li::before,
+        .tree li::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 50%;
+            border-top: 2px solid #cbd5e1;
+            width: 50%;
+            height: 30px;
+            z-index: -1;
+        }
+
+        .tree li::after {
+            right: auto;
+            left: 50%;
+            border-left: 2px solid #cbd5e1;
+        }
+
+        /* Adjust lines for siblings */
+        .tree li:only-child::after,
+        .tree li:only-child::before {
+            display: none;
+        }
+
+        .tree li:only-child {
+            padding-top: 0;
+        }
+
+        .tree li:first-child::before,
+        .tree li:last-child::after {
+            border: 0 none;
+        }
+
+        .tree li:last-child::before {
+            border-right: 2px solid #cbd5e1;
+            border-radius: 0 6px 0 0;
+        }
+
+        .tree li:first-child::after {
+            border-radius: 6px 0 0 0;
+        }
+
+        /* Drop down lines from parents */
+        .tree ul::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            border-left: 2px solid #cbd5e1;
+            width: 0;
+            height: 30px;
+            margin-left: -1px;
+            z-index: -1;
+        }
+
+        /* Premium Node Card */
+        .node-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 20px 25px;
+            min-width: 240px;
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+            transition: all 0.3s ease;
+            position: relative;
+            z-index: 2;
+        }
+
+        .node-card:hover {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            transform: translateY(-3px);
+            border-color: #cbd5e1;
+        }
+
+        /* Department Color Coding (Top Border) */
+        .dept-exec {
+            border-top: 4px solid #6c5ce7;
+        }
+
+        .dept-tech {
+            border-top: 4px solid #00b894;
+        }
+
+        .dept-hr {
+            border-top: 4px solid #fd79a8;
+        }
+
+        .dept-sales {
+            border-top: 4px solid #fdcb6e;
+        }
+
+        .dept-design {
+            border-top: 4px solid #0984e3;
+        }
+
+        .node-avatar {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background-size: cover;
+            background-position: center;
+            background-color: #e2e8f0;
+            margin-bottom: 12px;
+            border: 2px solid #fff;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: #64748b;
+            font-size: 18px;
+        }
+
+        .node-name {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 4px;
+        }
+
+        .node-role {
+            font-size: 12px;
+            color: #64748b;
+            font-weight: 600;
+        }
+
+        /* Toggle Button */
+        .node-toggle {
+            width: 24px;
+            height: 24px;
+            background: #fff;
+            border: 1px solid #cbd5e1;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            cursor: pointer;
+            z-index: 3;
+            color: #64748b;
+            margin-top: -12px;
+            margin-bottom: 8px;
+            /* Give some space before the connecting tree lines */
+            position: relative;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            transition: all 0.2s;
+        }
+
+        .node-toggle:hover {
+            background: #f8fafc;
+            color: #0f172a;
+            border-color: #94a3b8;
+            transform: scale(1.1);
+        }
+
+        /* Hide children when collapsed */
+        li.collapsed>ul {
+            display: none !important;
+        }
+
+        /* Adjust toggle icon based on state */
+        li.collapsed>.node-toggle i::before {
+            content: "\f067";
+            /* font-awesome plus */
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-brand">
+            <div class="brand-icon">H</div>
+            <div class="brand-text">Global Tech</div>
+        </div>
+
+        <div class="sidebar-menu">
+            <div class="menu-section">OVERVIEW</div>
+            <a href="dashboard.html" class="menu-item">
+                <i class="fas fa-layer-group"></i>
+                <span>Dashboard</span>
+            </a>
+            <a href="reports.html" class="menu-item">
+                <i class="fas fa-chart-pie"></i>
+                <span>Reports</span>
+            </a>
+
+            <div class="menu-section">PEOPLE</div>
+            <a href="employees.html" class="menu-item">
+                <i class="fas fa-users"></i>
+                <span>Employees</span>
+            </a>
+            <a href="departments.html" class="menu-item">
+                <i class="fas fa-building"></i>
+                <span>Departments</span>
+            </a>
+            <a href="org-structure.html" class="menu-item active">
+                <i class="fas fa-sitemap"></i>
+                <span>Org Structure</span>
+            </a>
+            <a href="users.html" class="menu-item">
+                <i class="fas fa-user-circle"></i>
+                <span>Users</span>
+            </a>
+
+            <div class="menu-section">ATTENDANCE</div>
+            <a href="attendance.html" class="menu-item">
+                <i class="fas fa-tachometer-alt"></i>
+                <span>Dashboard</span>
+            </a>
+            <a href="calendar.html" class="menu-item">
+                <i class="far fa-calendar-alt"></i>
+                <span>Calendar</span>
+            </a>
+            <a href="face-updates.html" class="menu-item">
+                <i class="fas fa-user-clock"></i>
+                <span>Face Updates</span>
+            </a>
+
+            <div class="menu-section" style="margin-top: 24px;">LEAVE</div>
+            <a href="leave-requests.html" class="menu-item">
+                <i class="fas fa-plane-departure"></i>
+                <span>Leave Requests</span>
+            </a>
+            <a href="policies.html" class="menu-item">
+                <i class="fas fa-shield-alt"></i>
+                <span>Policies</span>
+            </a>
+        </div>
+
+        <div class="sidebar-footer">
+            <div class="system-status-indicator">
+                <div class="dot"></div>
+                <span>SYSTEM ACTIVE</span>
+            </div>
+            <div class="system-version">v2.5.0 Stable Release</div>
+        </div>
+    </div>
+
+    <!-- Main Wrapper -->
+    <div class="main-wrapper">
+        <!-- Top Nav -->
+        <nav class="top-nav">
+            <div class="nav-left">
+                <i class="fas fa-arrow-left" onclick="window.history.back()"></i>
+                <h1>ORG STRUCTURE</h1>
+            </div>
+            <div class="nav-right">
+                <div class="user-profile">
+                    <div class="avatar">T</div>
+                    <div class="user-details">
+                        <h4>Test</h4>
+                        <p>tes001</p>
+                    </div>
+                    <i class="fas fa-chevron-down" style="font-size: 10px; color: #a4b0be; margin-left: 10px;"></i>
+                </div>
+
+                <div class="nav-actions-pill">
+                    <i class="far fa-moon"></i>
+                    <div class="divider"></div>
+                    <div class="notification-icon">
+                        <i class="far fa-bell"></i>
+                        <span class="bell-badge"></span>
+                    </div>
+                    <div class="divider"></div>
+                    <i class="fas fa-sign-out-alt"></i>
+                </div>
+            </div>
+        </nav>
+
+        <!-- White Toolbar -->
+        <div class="white-toolbar">
+            <div class="toolbar-title">
+                <h2>Organization Structure</h2>
+                <p>Interactive overview of company hierarchy and functional lines.</p>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn-toolbar-action" onclick="toggleAll(false)">
+                    <i class="fas fa-expand-arrows-alt"></i> Expand All
+                </button>
+                <button class="btn-toolbar-action" onclick="toggleAll(true)">
+                    <i class="fas fa-compress-arrows-alt"></i> Collapse All
+                </button>
+            </div>
+        </div>
+
+        <!-- Page Content -->
+        <div class="page-content">
+            <div class="tree-container">
+                <div class="tree" id="orgTree">
+                    <ul>
+                        <!-- Executive Root -->
+                        <li>
+                            <div class="node-card dept-exec">
+                                <div class="node-avatar"
+                                    style="background-image: url('https://randomuser.me/api/portraits/men/75.jpg')">
+                                </div>
+                                <div class="node-name">Rajeev Khanna</div>
+                                <div class="node-role">Chief Executive Officer</div>
+                            </div>
+                            <div class="node-toggle" onclick="toggleNode(this)"><i class="fas fa-minus"></i></div>
+                            <ul>
+                                <!-- Department 1 -->
+                                <li>
+                                    <div class="node-card dept-tech">
+                                        <div class="node-avatar"
+                                            style="background-image: url('https://randomuser.me/api/portraits/men/32.jpg')">
+                                        </div>
+                                        <div class="node-name">Rahul Sharma</div>
+                                        <div class="node-role">VP of Engineering</div>
+                                    </div>
+                                    <div class="node-toggle" onclick="toggleNode(this)"><i class="fas fa-minus"></i>
+                                    </div>
+                                    <ul>
+                                        <li>
+                                            <div class="node-card dept-tech">
+                                                <div class="node-avatar">VS</div>
+                                                <div class="node-name">Vikram Singh</div>
+                                                <div class="node-role">Backend Lead</div>
+                                            </div>
+                                            <div class="node-toggle" onclick="toggleNode(this)"><i
+                                                    class="fas fa-minus"></i></div>
+                                            <ul>
+                                                <li>
+                                                    <div class="node-card dept-tech">
+                                                        <div class="node-avatar"
+                                                            style="background-image: url('https://randomuser.me/api/portraits/men/55.jpg')">
+                                                        </div>
+                                                        <div class="node-name">Rohan Mehta</div>
+                                                        <div class="node-role">Software Engineer II</div>
+                                                    </div>
+                                                </li>
+                                                <li>
+                                                    <div class="node-card dept-tech">
+                                                        <div class="node-avatar"
+                                                            style="background-image: url('https://randomuser.me/api/portraits/women/33.jpg')">
+                                                        </div>
+                                                        <div class="node-name">Pooja Patel</div>
+                                                        <div class="node-role">Database Admin</div>
+                                                    </div>
+                                                </li>
+                                            </ul>
+                                        </li>
+                                        <li>
+                                            <div class="node-card dept-tech">
+                                                <div class="node-avatar"
+                                                    style="background-image: url('https://randomuser.me/api/portraits/women/44.jpg')">
+                                                </div>
+                                                <div class="node-name">Ananya Desai</div>
+                                                <div class="node-role">Frontend Lead</div>
+                                            </div>
+                                            <div class="node-toggle" onclick="toggleNode(this)"><i
+                                                    class="fas fa-minus"></i></div>
+                                            <ul>
+                                                <li>
+                                                    <div class="node-card dept-tech">
+                                                        <div class="node-avatar"
+                                                            style="background-image: url('https://randomuser.me/api/portraits/men/22.jpg')">
+                                                        </div>
+                                                        <div class="node-name">Kabir Das</div>
+                                                        <div class="node-role">UI Developer</div>
+                                                    </div>
+                                                </li>
+                                            </ul>
+                                        </li>
+                                    </ul>
+                                </li>
+                                <!-- Department 2 -->
+                                <li>
+                                    <div class="node-card dept-hr">
+                                        <div class="node-avatar"
+                                            style="background-image: url('https://randomuser.me/api/portraits/women/45.jpg')">
+                                        </div>
+                                        <div class="node-name">Neha Gupta</div>
+                                        <div class="node-role">HR Director</div>
+                                    </div>
+                                    <div class="node-toggle" onclick="toggleNode(this)"><i class="fas fa-minus"></i>
+                                    </div>
+                                    <ul>
+                                        <li>
+                                            <div class="node-card dept-hr">
+                                                <div class="node-avatar">SK</div>
+                                                <div class="node-name">Sneha Kapoor</div>
+                                                <div class="node-role">Recruitment Manager</div>
+                                            </div>
+                                            <div class="node-toggle" onclick="toggleNode(this)"><i
+                                                    class="fas fa-minus"></i></div>
+                                            <ul>
+                                                <li>
+                                                    <div class="node-card dept-hr">
+                                                        <div class="node-avatar"
+                                                            style="background-image: url('https://randomuser.me/api/portraits/women/12.jpg')">
+                                                        </div>
+                                                        <div class="node-name">Diya Reddy</div>
+                                                        <div class="node-role">HR Specialist</div>
+                                                    </div>
+                                                </li>
+                                            </ul>
+                                        </li>
+                                        <li>
+                                            <div class="node-card dept-hr">
+                                                <div class="node-avatar"
+                                                    style="background-image: url('https://randomuser.me/api/portraits/men/41.jpg')">
+                                                </div>
+                                                <div class="node-name">Karan Joshi</div>
+                                                <div class="node-role">Payroll Admin</div>
+                                            </div>
+                                        </li>
+                                    </ul>
+                                </li>
+                                <!-- Department 3 -->
+                                <li>
+                                    <div class="node-card dept-design">
+                                        <div class="node-avatar"
+                                            style="background-image: url('https://randomuser.me/api/portraits/men/67.jpg')">
+                                        </div>
+                                        <div class="node-name">Amit Kumar</div>
+                                        <div class="node-role">Head of Design</div>
+                                    </div>
+                                    <div class="node-toggle" onclick="toggleNode(this)"><i class="fas fa-minus"></i>
+                                    </div>
+                                    <ul>
+                                        <li>
+                                            <div class="node-card dept-design">
+                                                <div class="node-avatar"
+                                                    style="background-image: url('https://randomuser.me/api/portraits/women/68.jpg')">
+                                                </div>
+                                                <div class="node-name">Priya Singh</div>
+                                                <div class="node-role">Product Designer</div>
+                                            </div>
+                                            <div class="node-toggle" onclick="toggleNode(this)"><i
+                                                    class="fas fa-minus"></i></div>
+                                            <ul>
+                                                <li>
+                                                    <div class="node-card dept-design">
+                                                        <div class="node-avatar"
+                                                            style="background-image: url('https://randomuser.me/api/portraits/men/15.jpg')">
+                                                        </div>
+                                                        <div class="node-name">Arjun Nair</div>
+                                                        <div class="node-role">UX Researcher</div>
+                                                    </div>
+                                                </li>
+                                                <li>
+                                                    <div class="node-card dept-design">
+                                                        <div class="node-avatar"
+                                                            style="background-image: url('https://randomuser.me/api/portraits/women/19.jpg')">
+                                                        </div>
+                                                        <div class="node-name">Simran Kaur</div>
+                                                        <div class="node-role">Graphic Designer</div>
+                                                    </div>
+                                                </li>
+                                            </ul>
+                                        </li>
+                                    </ul>
+                                </li>
+                                <!-- Department 4 (New) -->
+                                <li>
+                                    <div class="node-card dept-sales">
+                                        <div class="node-avatar"
+                                            style="background-image: url('https://randomuser.me/api/portraits/men/82.jpg')">
+                                        </div>
+                                        <div class="node-name">Manish Tiwari</div>
+                                        <div class="node-role">Sales Director</div>
+                                    </div>
+                                    <div class="node-toggle" onclick="toggleNode(this)"><i class="fas fa-minus"></i>
+                                    </div>
+                                    <ul>
+                                        <li>
+                                            <div class="node-card dept-sales">
+                                                <div class="node-avatar"
+                                                    style="background-image: url('https://randomuser.me/api/portraits/men/52.jpg')">
+                                                </div>
+                                                <div class="node-name">Sahil Verma</div>
+                                                <div class="node-role">B2B Sales Executive</div>
+                                            </div>
+                                        </li>
+                                    </ul>
+                                </li>
+                            </ul>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Toggle individual node
+        function toggleNode(btn) {
+            // Find the parent <li> element to toggle class
+            const li = btn.closest('li');
+            li.classList.toggle('collapsed');
+        }
+
+        // Toggle all nodes
+        function toggleAll(collapse) {
+            const listItems = document.querySelectorAll('#orgTree li');
+            listItems.forEach(li => {
+                // Only touch li's that actually have a toggle child
+                if (li.querySelector('.node-toggle')) {
+                    if (collapse) {
+                        li.classList.add('collapsed');
+                    } else {
+                        li.classList.remove('collapsed');
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+
+</html>

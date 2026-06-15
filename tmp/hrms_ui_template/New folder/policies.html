@@ -1,0 +1,1774 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Policies | Global Tech</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #00b894;
+            --bg-color: #fcfcfc;
+            --text-main: #2d3436;
+            --text-muted: #636e72;
+            --border-color: #f1f2f6;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: #f8fafc;
+            color: var(--text-main);
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 80px;
+            background: #fff;
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            height: 100vh;
+            left: 0;
+            top: 0;
+            z-index: 100;
+            overflow: hidden;
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
+        }
+
+        .sidebar:hover {
+            width: 260px;
+            box-shadow: 4px 0 15px rgba(0, 0, 0, 0.05);
+            overflow-y: auto;
+        }
+
+        .sidebar-brand {
+            padding: 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 260px;
+        }
+
+        .brand-icon {
+            width: 32px;
+            height: 32px;
+            background: #00b894;
+            color: white;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 16px;
+        }
+
+        .brand-text {
+            font-size: 16px;
+            font-weight: 700;
+            color: #2d3436;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .sidebar:hover .brand-text {
+            opacity: 1;
+        }
+
+        .sidebar-menu {
+            padding: 10px 16px;
+            flex: 1;
+            min-width: 260px;
+        }
+
+        .menu-section {
+            font-size: 11px;
+            font-weight: 600;
+            color: #b2bec3;
+            letter-spacing: 0.5px;
+            margin: 20px 0 10px 12px;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .sidebar:hover .menu-section {
+            opacity: 1;
+        }
+
+        .menu-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            color: #636e72;
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 4px;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .menu-item i {
+            font-size: 16px;
+            width: 20px;
+            text-align: center;
+            color: #a4b0be;
+        }
+
+        .menu-item span {
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .sidebar:hover .menu-item span {
+            opacity: 1;
+        }
+
+        .menu-item:hover {
+            background: #f8f9fa;
+        }
+
+        .menu-item.active {
+            background: linear-gradient(135deg, #00b894 0%, #00cec9 100%);
+            box-shadow: 0 4px 10px rgba(0, 184, 148, 0.2);
+            color: white;
+        }
+
+        .menu-item.active i {
+            color: white;
+        }
+
+        .sidebar-footer {
+            padding: 24px;
+            margin-top: auto;
+            min-width: 260px;
+        }
+
+        .system-status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #2d3436;
+        }
+
+        .system-status-indicator .dot {
+            width: 8px;
+            height: 8px;
+            background: #00b894;
+            border-radius: 50%;
+        }
+
+        .system-version {
+            font-size: 11px;
+            color: #b2bec3;
+            padding-left: 16px;
+            margin-top: 4px;
+        }
+
+        .sidebar:not(:hover) .brand-text,
+        .sidebar:not(:hover) .menu-item span,
+        .sidebar:not(:hover) .menu-section,
+        .sidebar:not(:hover) .system-status-indicator span,
+        .sidebar:not(:hover) .system-version {
+            display: none;
+        }
+
+        /* Layout */
+        .main-wrapper {
+            margin-left: 80px;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            transition: all 0.3s ease;
+        }
+
+        .sidebar:hover~.main-wrapper {
+            margin-left: 260px;
+        }
+
+        /* Top Nav */
+        .top-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 40px;
+            background: #fff;
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 90;
+        }
+
+        .nav-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .nav-left i {
+            color: #b2bec3;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .nav-left h1 {
+            font-size: 16px;
+            font-weight: 700;
+            color: #2d3436;
+            text-transform: uppercase;
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 25px;
+        }
+
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+        }
+
+        .user-profile .avatar {
+            width: 35px;
+            height: 35px;
+            background: linear-gradient(135deg, #00b894 0%, #00cec9 100%);
+            color: white;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .user-details h4 {
+            font-size: 13px;
+            font-weight: 700;
+            color: #2d3436;
+        }
+
+        .user-details p {
+            font-size: 11px;
+            color: #a4b0be;
+            margin-top: 2px;
+        }
+
+        .nav-actions-pill {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            background: #f8f9fa;
+            border-radius: 30px;
+            padding: 8px 18px;
+            border: 1px solid #f1f2f6;
+        }
+
+        .nav-actions-pill i {
+            color: #636e72;
+            cursor: pointer;
+            font-size: 15px;
+            transition: color 0.2s;
+        }
+
+        .nav-actions-pill i:hover {
+            color: #2d3436;
+        }
+
+        .nav-actions-pill .divider {
+            width: 1px;
+            height: 16px;
+            background: #dfe6e9;
+        }
+
+        .notification-icon {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .bell-badge {
+            position: absolute;
+            top: 0;
+            right: -2px;
+            width: 6px;
+            height: 6px;
+            background: #ff7675;
+            border-radius: 50%;
+            border: 2px solid #f8f9fa;
+        }
+
+        /* Toolbar */
+        .white-toolbar {
+            background: #fff;
+            padding: 24px 40px;
+            border-bottom: 1px solid var(--border-color);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
+            position: sticky;
+            top: 66px;
+            z-index: 80;
+        }
+
+        .toolbar-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        /* Category Tabs */
+        .policy-tabs {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .policy-tab {
+            padding: 8px 20px;
+            border-radius: 20px;
+            border: 1px solid #e2e8f0;
+            background: white;
+            color: #64748b;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .policy-tab:hover {
+            border-color: #00b894;
+            color: #00b894;
+        }
+
+        .policy-tab.active {
+            background: linear-gradient(135deg, #00b894, #00cec9);
+            color: white;
+            border-color: transparent;
+            box-shadow: 0 4px 10px rgba(0, 184, 148, 0.2);
+        }
+
+        /* Page Content */
+        .page-content {
+            padding: 28px 40px;
+        }
+
+        /* Policy Cards Grid */
+        .policies-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 20px;
+        }
+
+        .policy-card {
+            background: white;
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.02);
+            transition: all 0.3s ease;
+        }
+
+        .policy-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.06);
+        }
+
+        .policy-card-header {
+            padding: 20px 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            cursor: pointer;
+            border-bottom: 1px solid transparent;
+            transition: border-color 0.2s;
+        }
+
+        .policy-card.open .policy-card-header {
+            border-color: var(--border-color);
+        }
+
+        .policy-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+
+        .policy-header-info {
+            flex: 1;
+        }
+
+        .policy-header-info h3 {
+            font-size: 15px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 4px;
+        }
+
+        .policy-header-info p {
+            font-size: 12px;
+            color: #64748b;
+        }
+
+        .policy-chevron {
+            color: #94a3b8;
+            transition: transform 0.3s ease;
+        }
+
+        .policy-card.open .policy-chevron {
+            transform: rotate(180deg);
+        }
+
+        .policy-card-body {
+            display: none;
+            padding: 0 24px 20px;
+        }
+
+        .policy-card.open .policy-card-body {
+            display: block;
+        }
+
+        .policy-rule {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 12px 0;
+            border-bottom: 1px solid #f8fafc;
+        }
+
+        .policy-rule:last-child {
+            border-bottom: none;
+        }
+
+        .policy-rule-icon {
+            width: 28px;
+            height: 28px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .policy-rule-text strong {
+            display: block;
+            font-size: 13px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 2px;
+        }
+
+        .policy-rule-text span {
+            font-size: 12px;
+            color: #64748b;
+            line-height: 1.5;
+        }
+
+        /* Badge */
+        .policy-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .badge-active {
+            background: #dcfce7;
+            color: #16a34a;
+        }
+
+        .badge-mandatory {
+            background: #fef2f2;
+            color: #ef4444;
+        }
+
+        .badge-optional {
+            background: #f1f5f9;
+            color: #64748b;
+        }
+
+        /* Summary Bar */
+        .summary-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .summary-item {
+            background: white;
+            border-radius: 12px;
+            padding: 16px 20px;
+            border: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .summary-item-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+
+        .summary-item-text strong {
+            display: block;
+            font-size: 18px;
+            font-weight: 800;
+            color: #1e293b;
+        }
+
+        .summary-item-text span {
+            font-size: 11px;
+            color: #64748b;
+            font-weight: 600;
+        }
+
+        /* ── Add Policy Modal ── */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.45);
+            backdrop-filter: blur(4px);
+            z-index: 999;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.2s ease;
+        }
+
+        .modal-overlay.open {
+            display: flex;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        .modal-box {
+            background: #fff;
+            border-radius: 20px;
+            width: 560px;
+            max-width: 95vw;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.15);
+            animation: slideUp 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(30px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 24px 28px 20px;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        .modal-header-left {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .modal-header-icon {
+            width: 44px;
+            height: 44px;
+            background: linear-gradient(135deg, #00b894, #00cec9);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 18px;
+        }
+
+        .modal-header h3 {
+            font-size: 18px;
+            font-weight: 800;
+            color: #0f172a;
+        }
+
+        .modal-header p {
+            font-size: 12px;
+            color: #64748b;
+            margin-top: 2px;
+        }
+
+        .modal-close {
+            width: 34px;
+            height: 34px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #64748b;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .modal-close:hover {
+            background: #fee2e2;
+            color: #ef4444;
+            border-color: #fca5a5;
+        }
+
+        .modal-body {
+            padding: 24px 28px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .form-row.full {
+            grid-template-columns: 1fr;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .form-group label {
+            font-size: 12px;
+            font-weight: 700;
+            color: #374151;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            padding: 10px 14px;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 13px;
+            color: #1e293b;
+            font-family: 'Inter', sans-serif;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            outline: none;
+            background: #f8fafc;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            border-color: #00b894;
+            box-shadow: 0 0 0 3px rgba(0, 184, 148, 0.12);
+            background: #fff;
+        }
+
+        .form-group input.error,
+        .form-group select.error,
+        .form-group textarea.error {
+            border-color: #ef4444;
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .form-error {
+            font-size: 11px;
+            color: #ef4444;
+            font-weight: 600;
+            display: none;
+        }
+
+        .form-error.show {
+            display: block;
+        }
+
+        /* Color picker row */
+        .color-options {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .color-opt {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: transform 0.15s, border-color 0.15s;
+        }
+
+        .color-opt:hover {
+            transform: scale(1.15);
+        }
+
+        .color-opt.selected {
+            border-color: #1e293b;
+            transform: scale(1.1);
+        }
+
+        /* Rules section */
+        .rules-section {
+            margin-top: 4px;
+        }
+
+        .rules-section label {
+            font-size: 12px;
+            font-weight: 700;
+            color: #374151;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        .rule-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: flex-start;
+        }
+
+        .rule-row input {
+            flex: 1;
+            padding: 9px 12px;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 12px;
+            color: #1e293b;
+            outline: none;
+            background: #f8fafc;
+            font-family: 'Inter', sans-serif;
+            transition: border-color 0.2s;
+        }
+
+        .rule-row input:focus {
+            border-color: #00b894;
+            background: #fff;
+        }
+
+        .rule-row input:first-child {
+            flex: 0 0 130px;
+            font-weight: 700;
+        }
+
+        .btn-remove-rule {
+            width: 32px;
+            height: 32px;
+            margin-top: 1px;
+            background: #fef2f2;
+            border: 1.5px solid #fca5a5;
+            border-radius: 8px;
+            cursor: pointer;
+            color: #ef4444;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        .btn-remove-rule:hover {
+            background: #fee2e2;
+        }
+
+        .btn-add-rule {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #00b894;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 4px 0;
+            transition: opacity 0.2s;
+        }
+
+        .btn-add-rule:hover {
+            opacity: 0.75;
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            padding: 20px 28px 24px;
+            border-top: 1px solid #f1f5f9;
+        }
+
+        .btn-cancel {
+            padding: 10px 22px;
+            border: 1.5px solid #e2e8f0;
+            background: white;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 700;
+            color: #64748b;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-cancel:hover {
+            background: #f8fafc;
+            border-color: #cbd5e1;
+        }
+
+        .btn-save {
+            padding: 10px 28px;
+            background: linear-gradient(135deg, #00b894, #00cec9);
+            border: none;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 700;
+            color: white;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0, 184, 148, 0.25);
+            transition: opacity 0.2s, transform 0.15s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-save:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        .btn-save:active {
+            transform: translateY(0);
+        }
+
+        /* Card Actions (Edit/Delete) */
+        .card-actions {
+            position: relative;
+            margin-left: 6px;
+        }
+
+        .btn-card-action {
+            width: 30px;
+            height: 30px;
+            background: #f8fafc;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #94a3b8;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+
+        .btn-card-action:hover {
+            background: #f1f5f9;
+            color: #475569;
+            border-color: #cbd5e1;
+        }
+
+        .card-action-menu {
+            display: none;
+            position: absolute;
+            top: 36px;
+            right: 0;
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+            z-index: 200;
+            min-width: 130px;
+            overflow: hidden;
+            animation: fadeIn 0.15s ease;
+        }
+
+        .card-action-menu.open {
+            display: block;
+        }
+
+        .card-action-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s;
+            color: #374151;
+            border: none;
+            background: none;
+            width: 100%;
+            text-align: left;
+        }
+
+        .card-action-item:hover {
+            background: #f8fafc;
+        }
+
+        .card-action-item.delete {
+            color: #ef4444;
+        }
+
+        .card-action-item.delete:hover {
+            background: #fef2f2;
+        }
+
+        .card-action-item i {
+            width: 14px;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-brand">
+            <div class="brand-icon">H</div>
+            <div class="brand-text">Global Tech</div>
+        </div>
+        <div class="sidebar-menu">
+            <div class="menu-section">OVERVIEW</div>
+            <a href="dashboard.html" class="menu-item"><i class="fas fa-layer-group"></i><span>Dashboard</span></a>
+            <a href="reports.html" class="menu-item"><i class="fas fa-chart-pie"></i><span>Reports</span></a>
+
+            <div class="menu-section">PEOPLE</div>
+            <a href="employees.html" class="menu-item"><i class="fas fa-users"></i><span>Employees</span></a>
+            <a href="departments.html" class="menu-item"><i class="fas fa-building"></i><span>Departments</span></a>
+            <a href="org-structure.html" class="menu-item"><i class="fas fa-sitemap"></i><span>Org Structure</span></a>
+            <a href="users.html" class="menu-item"><i class="fas fa-user-circle"></i><span>Users</span></a>
+
+            <div class="menu-section">ATTENDANCE</div>
+            <a href="attendance.html" class="menu-item"><i class="fas fa-tachometer-alt"></i><span>Dashboard</span></a>
+            <a href="calendar.html" class="menu-item"><i class="far fa-calendar-alt"></i><span>Calendar</span></a>
+            <a href="face-updates.html" class="menu-item"><i class="fas fa-user-clock"></i><span>Face Updates</span></a>
+
+            <div class="menu-section" style="margin-top:24px;">LEAVE</div>
+            <a href="leave-requests.html" class="menu-item"><i class="fas fa-plane-departure"></i><span>Leave
+                    Requests</span></a>
+            <a href="policies.html" class="menu-item active"><i class="fas fa-shield-alt"></i><span>Policies</span></a>
+        </div>
+        <div class="sidebar-footer">
+            <div class="system-status-indicator">
+                <div class="dot"></div><span>SYSTEM ACTIVE</span>
+            </div>
+            <div class="system-version">v2.5.0 Stable Release</div>
+        </div>
+    </div>
+
+    <div class="main-wrapper">
+        <!-- Top Nav -->
+        <nav class="top-nav">
+            <div class="nav-left">
+                <i class="fas fa-arrow-left" onclick="window.history.back()"></i>
+                <h1>LEAVE MANAGEMENT</h1>
+            </div>
+            <div class="nav-right">
+                <div class="user-profile">
+                    <div class="avatar">T</div>
+                    <div class="user-details">
+                        <h4>Test</h4>
+                        <p>tes001</p>
+                    </div>
+                    <i class="fas fa-chevron-down" style="font-size:10px; color:#a4b0be; margin-left:10px;"></i>
+                </div>
+                <div class="nav-actions-pill">
+                    <i class="far fa-moon"></i>
+                    <div class="divider"></div>
+                    <div class="notification-icon"><i class="far fa-bell"></i><span class="bell-badge"></span></div>
+                    <div class="divider"></div>
+                    <i class="fas fa-sign-out-alt"></i>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Toolbar -->
+        <div class="white-toolbar">
+            <div class="toolbar-top">
+                <div>
+                    <h2 style="font-size:24px; font-weight:800; color:#0f172a; margin-bottom:4px;">Company Policies</h2>
+                    <p
+                        style="font-size:11px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">
+                        HR rules & guidelines for all employees</p>
+                </div>
+                <button id="openAddPolicyBtn" onclick="openAddPolicy()"
+                    style="padding:10px 20px; background:linear-gradient(135deg,#00b894,#00cec9); color:white; border:none; border-radius:10px; font-weight:700; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:8px; box-shadow:0 4px 12px rgba(0,184,148,0.25); transition:opacity 0.2s;"
+                    onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+                    <i class="fas fa-plus"></i> Add Policy
+                </button>
+            </div>
+            <!-- Filter Tabs -->
+            <div class="policy-tabs">
+                <button class="policy-tab active" onclick="filterPolicies('all', this)">All Policies</button>
+                <button class="policy-tab" onclick="filterPolicies('leave', this)">Leave</button>
+                <button class="policy-tab" onclick="filterPolicies('attendance', this)">Attendance</button>
+                <button class="policy-tab" onclick="filterPolicies('wfh', this)">Work From Home</button>
+                <button class="policy-tab" onclick="filterPolicies('general', this)">General</button>
+            </div>
+        </div>
+
+        <div class="page-content">
+            <!-- Summary Bar -->
+            <div class="summary-bar">
+                <div class="summary-item">
+                    <div class="summary-item-icon" style="background:#dcfce7; color:#16a34a;"><i
+                            class="fas fa-file-contract"></i></div>
+                    <div class="summary-item-text"><strong>12</strong><span>Total Policies</span></div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-item-icon" style="background:#eff6ff; color:#2563eb;"><i
+                            class="fas fa-check-circle"></i></div>
+                    <div class="summary-item-text"><strong>10</strong><span>Active</span></div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-item-icon" style="background:#fffbeb; color:#f59e0b;"><i
+                            class="fas fa-edit"></i></div>
+                    <div class="summary-item-text"><strong>2</strong><span>Under Review</span></div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-item-icon" style="background:#fef2f2; color:#ef4444;"><i
+                            class="fas fa-exclamation-circle"></i></div>
+                    <div class="summary-item-text"><strong>5</strong><span>Mandatory</span></div>
+                </div>
+            </div>
+
+            <!-- Policies Grid -->
+            <div class="policies-grid" id="policiesGrid">
+
+                <!-- Sick Leave Policy -->
+                <div class="policy-card" data-category="leave">
+                    <div class="policy-card-header" onclick="toggleCard(this)">
+                        <div class="policy-icon" style="background:#fef2f2; color:#ef4444;"><i
+                                class="fas fa-briefcase-medical"></i></div>
+                        <div class="policy-header-info">
+                            <h3>Sick Leave Policy</h3>
+                            <p>Medical leave entitlement &amp; rules</p>
+                        </div>
+                        <span class="policy-badge badge-mandatory">Mandatory</span>
+                        <i class="fas fa-chevron-down policy-chevron" style="margin-left:8px;"></i>
+                        <div class="card-actions" onclick="event.stopPropagation()">
+                            <button class="btn-card-action" onclick="toggleActionMenu(this)"><i
+                                    class="fas fa-ellipsis-v"></i></button>
+                            <div class="card-action-menu">
+                                <button class="card-action-item" onclick="editPolicy(this)"><i class="fas fa-pen"></i>
+                                    Edit</button>
+                                <button class="card-action-item delete" onclick="deletePolicy(this)"><i
+                                        class="fas fa-trash"></i> Delete</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="policy-card-body">
+                        <div class="policy-rule">
+                            <div class="policy-rule-icon" style="background:#fef2f2; color:#ef4444;"><i
+                                    class="fas fa-calendar-day"></i></div>
+                            <div class="policy-rule-text"><strong>Annual Entitlement</strong><span>12 Sick Leave days
+                                    per calendar year (Jan–Dec).</span></div>
+                        </div>
+                        <div class="policy-rule">
+                            <div class="policy-rule-icon" style="background:#fef2f2; color:#ef4444;"><i
+                                    class="fas fa-file-medical"></i></div>
+                            <div class="policy-rule-text"><strong>Medical Certificate</strong><span>Required for
+                                    absences of 3+ consecutive days.</span></div>
+                        </div>
+                        <div class="policy-rule">
+                            <div class="policy-rule-icon" style="background:#fef2f2; color:#ef4444;"><i
+                                    class="fas fa-ban"></i></div>
+                            <div class="policy-rule-text"><strong>No Carry Forward</strong><span>Unused Sick Leave
+                                    cannot be carried to next year or encashed.</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Casual Leave Policy -->
+                <div class="policy-card" data-category="leave">
+                    <div class="policy-card-header" onclick="toggleCard(this)">
+                        <div class="policy-icon" style="background:#eff6ff; color:#2563eb;"><i
+                                class="fas fa-umbrella-beach"></i></div>
+                        <div class="policy-header-info">
+                            <h3>Casual Leave Policy</h3>
+                            <p>Personal &amp; casual day-off rules</p>
+                        </div>
+                        <span class="policy-badge badge-active">Active</span>
+                        <i class="fas fa-chevron-down policy-chevron" style="margin-left:8px;"></i>
+                        <div class="card-actions" onclick="event.stopPropagation()">
+                            <button class="btn-card-action" onclick="toggleActionMenu(this)"><i
+                                    class="fas fa-ellipsis-v"></i></button>
+                            <div class="card-action-menu">
+                                <button class="card-action-item" onclick="editPolicy(this)"><i class="fas fa-pen"></i>
+                                    Edit</button>
+                                <button class="card-action-item delete" onclick="deletePolicy(this)"><i
+                                        class="fas fa-trash"></i> Delete</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="policy-card-body">
+                        <div class="policy-rule">
+                            <div class="policy-rule-icon" style="background:#eff6ff; color:#2563eb;"><i
+                                    class="fas fa-calendar-alt"></i></div>
+                            <div class="policy-rule-text"><strong>Annual Entitlement</strong><span>8 Casual Leave days
+                                    per year, accrued monthly (0.67/month).</span></div>
+                        </div>
+                        <div class="policy-rule">
+                            <div class="policy-rule-icon" style="background:#eff6ff; color:#2563eb;"><i
+                                    class="fas fa-clock"></i></div>
+                            <div class="policy-rule-text"><strong>Prior Notice</strong><span>Minimum 1 day advance
+                                    notice required for approval.</span></div>
+                        </div>
+                        <div class="policy-rule">
+                            <div class="policy-rule-icon" style="background:#eff6ff; color:#2563eb;"><i
+                                    class="fas fa-forward"></i></div>
+                            <div class="policy-rule-text"><strong>Carry Forward</strong><span>Up to 4 unused CL days can
+                                    be carried to next year.</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- WFH Policy -->
+                <div class="policy-card" data-category="wfh">
+                    <div class="policy-card-header" onclick="toggleCard(this)">
+                        <div class="policy-icon" style="background:#f0fdf4; color:#16a34a;"><i class="fas fa-home"></i>
+                        </div>
+                        <div class="policy-header-info">
+                            <h3>Work From Home Policy</h3>
+                            <p>Remote work eligibility &amp; guidelines</p>
+                        </div>
+                        <span class="policy-badge badge-active">Active</span>
+                        <i class="fas fa-chevron-down policy-chevron" style="margin-left:8px;"></i>
+                        <div class="card-actions" onclick="event.stopPropagation()">
+                            <button class="btn-card-action" onclick="toggleActionMenu(this)"><i
+                                    class="fas fa-ellipsis-v"></i></button>
+                            <div class="card-action-menu">
+                                <button class="card-action-item" onclick="editPolicy(this)"><i class="fas fa-pen"></i>
+                                    Edit</button>
+                                <button class="card-action-item delete" onclick="deletePolicy(this)"><i
+                                        class="fas fa-trash"></i> Delete</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="policy-card-body">
+                        <div class="policy-rule">
+                            <div class="policy-rule-icon" style="background:#f0fdf4; color:#16a34a;"><i
+                                    class="fas fa-calendar-week"></i></div>
+                            <div class="policy-rule-text"><strong>WFH Limit</strong><span>Maximum 2 WFH days per week
+                                    per employee.</span></div>
+                        </div>
+                        <div class="policy-rule">
+                            <div class="policy-rule-icon" style="background:#f0fdf4; color:#16a34a;"><i
+                                    class="fas fa-user-check"></i></div>
+                            <div class="policy-rule-text"><strong>Manager Approval</strong><span>WFH requests must be
+                                    approved by direct manager before 9 AM.</span></div>
+                        </div>
+                        <div class="policy-rule">
+                            <div class="policy-rule-icon" style="background:#f0fdf4; color:#16a34a;"><i
+                                    class="fas fa-laptop"></i></div>
+                            <div class="policy-rule-text"><strong>Availability</strong><span>Employee must remain online
+                                    and reachable during core hours (10 AM – 5 PM).</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Attendance Policy -->
+                <div class="policy-card" data-category="attendance">
+                    <div class="policy-card-header" onclick="toggleCard(this)">
+                        <div class="policy-icon" style="background:#fffbeb; color:#f59e0b;"><i
+                                class="fas fa-fingerprint"></i></div>
+                        <div class="policy-header-info">
+                            <h3>Attendance &amp; Punctuality</h3>
+                            <p>Clock-in/out &amp; timing rules</p>
+                        </div>
+                        <span class="policy-badge badge-mandatory">Mandatory</span>
+                        <i class="fas fa-chevron-down policy-chevron" style="margin-left:8px;"></i>
+                        <div class="card-actions" onclick="event.stopPropagation()">
+                            <button class="btn-card-action" onclick="toggleActionMenu(this)"><i
+                                    class="fas fa-ellipsis-v"></i></button>
+                            <div class="card-action-menu">
+                                <button class="card-action-item" onclick="editPolicy(this)"><i class="fas fa-pen"></i>
+                                    Edit</button>
+                                <button class="card-action-item delete" onclick="deletePolicy(this)"><i
+                                        class="fas fa-trash"></i> Delete</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="policy-card-body">
+                        <div class="policy-rule">
+                            <div class="policy-rule-icon" style="background:#fffbeb; color:#f59e0b;"><i
+                                    class="fas fa-clock"></i></div>
+                            <div class="policy-rule-text"><strong>Office Hours</strong><span>Official work hours: 9:00
+                                    AM – 6:00 PM (Mon–Sat).</span></div>
+                        </div>
+                        <div class="policy-rule">
+                            <div class="policy-rule-icon" style="background:#fffbeb; color:#f59e0b;"><i
+                                    class="fas fa-stopwatch"></i></div>
+                            <div class="policy-rule-text"><strong>Late Mark</strong><span>Arriving after 9:30 AM counts
+                                    as late. 3 late marks = 1 day absent.</span></div>
+                        </div>
+                        <div class="policy-rule">
+                            <div class="policy-rule-icon" style="background:#fffbeb; color:#f59e0b;"><i
+                                    class="fas fa-mobile-alt"></i></div>
+                            <div class="policy-rule-text"><strong>Biometric Punch</strong><span>Both in-time and
+                                    out-time must be marked via face recognition system.</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Code of Conduct -->
+                <div class="policy-card" data-category="general">
+                    <div class="policy-card-header" onclick="toggleCard(this)">
+                        <div class="policy-icon" style="background:#f3e8ff; color:#9333ea;"><i class="fas fa-gavel"></i>
+                        </div>
+                        <div class="policy-header-info">
+                            <h3>Code of Conduct</h3>
+                            <p>Workplace behavior &amp; ethics</p>
+                        </div>
+                        <span class="policy-badge badge-mandatory">Mandatory</span>
+                        <i class="fas fa-chevron-down policy-chevron" style="margin-left:8px;"></i>
+                        <div class="card-actions" onclick="event.stopPropagation()">
+                            <button class="btn-card-action" onclick="toggleActionMenu(this)"><i
+                                    class="fas fa-ellipsis-v"></i></button>
+                            <div class="card-action-menu">
+                                <button class="card-action-item" onclick="editPolicy(this)"><i class="fas fa-pen"></i>
+                                    Edit</button>
+                                <button class="card-action-item delete" onclick="deletePolicy(this)"><i
+                                        class="fas fa-trash"></i> Delete</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="policy-card-body">
+                        <div class="policy-rule">
+                            <div class="policy-rule-icon" style="background:#f3e8ff; color:#9333ea;"><i
+                                    class="fas fa-handshake"></i></div>
+                            <div class="policy-rule-text"><strong>Respect & Inclusion</strong><span>All employees must
+                                    treat colleagues with dignity regardless of role, gender, or religion.</span></div>
+                        </div>
+                        <div class="policy-rule">
+                            <div class="policy-rule-icon" style="background:#f3e8ff; color:#9333ea;"><i
+                                    class="fas fa-lock"></i></div>
+                            <div class="policy-rule-text"><strong>Confidentiality</strong><span>Company data, client
+                                    info, and internal processes must not be shared externally.</span></div>
+                        </div>
+                        <div class="policy-rule">
+                            <div class="policy-rule-icon" style="background:#f3e8ff; color:#9333ea;"><i
+                                    class="fas fa-exclamation-triangle"></i></div>
+                            <div class="policy-rule-text"><strong>Zero Tolerance</strong><span>Harassment,
+                                    discrimination, or violence will result in immediate disciplinary action.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Annual Leave / EL -->
+                <div class="policy-card" data-category="leave">
+                    <div class="policy-card-header" onclick="toggleCard(this)">
+                        <div class="policy-icon" style="background:#ecfdf5; color:#10b981;"><i
+                                class="fas fa-plane-departure"></i></div>
+                        <div class="policy-header-info">
+                            <h3>Earned / Annual Leave</h3>
+                            <p>Planned vacation &amp; earned leave rules</p>
+                        </div>
+                        <span class="policy-badge badge-active">Active</span>
+                        <i class="fas fa-chevron-down policy-chevron" style="margin-left:8px;"></i>
+                        <div class="card-actions" onclick="event.stopPropagation()">
+                            <button class="btn-card-action" onclick="toggleActionMenu(this)"><i
+                                    class="fas fa-ellipsis-v"></i></button>
+                            <div class="card-action-menu">
+                                <button class="card-action-item" onclick="editPolicy(this)"><i class="fas fa-pen"></i>
+                                    Edit</button>
+                                <button class="card-action-item delete" onclick="deletePolicy(this)"><i
+                                        class="fas fa-trash"></i> Delete</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="policy-card-body">
+                        <div class="policy-rule">
+                            <div class="policy-rule-icon" style="background:#ecfdf5; color:#10b981;"><i
+                                    class="fas fa-calendar-check"></i></div>
+                            <div class="policy-rule-text"><strong>Annual Entitlement</strong><span>18 days of Earned
+                                    Leave per year (accrued at 1.5 days/month).</span></div>
+                        </div>
+                        <div class="policy-rule">
+                            <div class="policy-rule-icon" style="background:#ecfdf5; color:#10b981;"><i
+                                    class="fas fa-bell"></i></div>
+                            <div class="policy-rule-text"><strong>Notice Period</strong><span>Minimum 7 days advance
+                                    notice required for leaves longer than 3 days.</span></div>
+                        </div>
+                        <div class="policy-rule">
+                            <div class="policy-rule-icon" style="background:#ecfdf5; color:#10b981;"><i
+                                    class="fas fa-coins"></i></div>
+                            <div class="policy-rule-text"><strong>Encashment</strong><span>Up to 15 EL days can be
+                                    encashed at end of year if not availed.</span></div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════ ADD POLICY MODAL ═══════════ -->
+    <div class="modal-overlay" id="addPolicyModal">
+        <div class="modal-box">
+            <!-- Header -->
+            <div class="modal-header">
+                <div class="modal-header-left">
+                    <div class="modal-header-icon"><i class="fas fa-shield-alt"></i></div>
+                    <div>
+                        <h3>Add New Policy</h3>
+                        <p>Fill in details to create a company policy</p>
+                    </div>
+                </div>
+                <button class="modal-close" onclick="closeAddPolicy()"><i class="fas fa-times"></i></button>
+            </div>
+
+            <!-- Body -->
+            <div class="modal-body">
+                <!-- Row 1: Name + Category -->
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Policy Name *</label>
+                        <input type="text" id="p_name" placeholder="e.g. Sick Leave Policy">
+                        <span class="form-error" id="err_name">Policy name is required.</span>
+                    </div>
+                    <div class="form-group">
+                        <label>Category *</label>
+                        <select id="p_category">
+                            <option value="">-- Select Category --</option>
+                            <option value="leave">Leave</option>
+                            <option value="attendance">Attendance</option>
+                            <option value="wfh">Work From Home</option>
+                            <option value="general">General</option>
+                        </select>
+                        <span class="form-error" id="err_cat">Please select a category.</span>
+                    </div>
+                </div>
+
+                <!-- Row 2: Description -->
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label>Short Description *</label>
+                        <input type="text" id="p_desc" placeholder="e.g. Medical leave entitlement & rules">
+                        <span class="form-error" id="err_desc">Description is required.</span>
+                    </div>
+                </div>
+
+                <!-- Row 3: Status + Type -->
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Status</label>
+                        <select id="p_status">
+                            <option value="active">Active</option>
+                            <option value="mandatory">Mandatory</option>
+                            <option value="optional">Optional</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Icon</label>
+                        <select id="p_icon">
+                            <option value="fa-file-contract">📄 Document</option>
+                            <option value="fa-briefcase-medical">🏥 Medical</option>
+                            <option value="fa-umbrella-beach">🏖️ Beach / Casual</option>
+                            <option value="fa-home">🏠 Work From Home</option>
+                            <option value="fa-fingerprint">👆 Attendance</option>
+                            <option value="fa-gavel">⚖️ Code of Conduct</option>
+                            <option value="fa-plane-departure">✈️ Travel Leave</option>
+                            <option value="fa-baby">👶 Maternity / Paternity</option>
+                            <option value="fa-coins">💰 Encashment</option>
+                            <option value="fa-shield-alt">🛡️ General Policy</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Color -->
+                <div class="form-group" style="margin-bottom:18px;">
+                    <label>Card Color Theme</label>
+                    <div class="color-options" id="colorOptions">
+                        <div class="color-opt selected" data-bg="#fef2f2" data-color="#ef4444"
+                            style="background:#ef4444;" onclick="selectColor(this)"></div>
+                        <div class="color-opt" data-bg="#eff6ff" data-color="#2563eb" style="background:#2563eb;"
+                            onclick="selectColor(this)"></div>
+                        <div class="color-opt" data-bg="#f0fdf4" data-color="#16a34a" style="background:#16a34a;"
+                            onclick="selectColor(this)"></div>
+                        <div class="color-opt" data-bg="#fffbeb" data-color="#f59e0b" style="background:#f59e0b;"
+                            onclick="selectColor(this)"></div>
+                        <div class="color-opt" data-bg="#faf5ff" data-color="#7c3aed" style="background:#7c3aed;"
+                            onclick="selectColor(this)"></div>
+                        <div class="color-opt" data-bg="#ecfdf5" data-color="#10b981" style="background:#10b981;"
+                            onclick="selectColor(this)"></div>
+                        <div class="color-opt" data-bg="#fff7ed" data-color="#ea580c" style="background:#ea580c;"
+                            onclick="selectColor(this)"></div>
+                        <div class="color-opt" data-bg="#f0f9ff" data-color="#0284c7" style="background:#0284c7;"
+                            onclick="selectColor(this)"></div>
+                    </div>
+                </div>
+
+                <!-- Policy Rules -->
+                <div class="rules-section">
+                    <label>Policy Rules / Details</label>
+                    <div id="rulesContainer">
+                        <div class="rule-row">
+                            <input type="text" placeholder="Rule title" class="rule-title">
+                            <input type="text" placeholder="Rule description / detail" class="rule-detail">
+                            <button class="btn-remove-rule" onclick="removeRule(this)"><i
+                                    class="fas fa-trash"></i></button>
+                        </div>
+                    </div>
+                    <button class="btn-add-rule" onclick="addRuleRow()">
+                        <i class="fas fa-plus-circle"></i> Add Rule
+                    </button>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeAddPolicy()">Cancel</button>
+                <button class="btn-save" onclick="savePolicy()">
+                    <i class="fas fa-check"></i> Save Policy
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleCard(header) {
+            const card = header.parentElement;
+            card.classList.toggle('open');
+        }
+
+        function filterPolicies(category, btn) {
+            // Update active tab
+            document.querySelectorAll('.policy-tab').forEach(t => t.classList.remove('active'));
+            btn.classList.add('active');
+
+            // Filter cards
+            document.querySelectorAll('.policy-card').forEach(card => {
+                if (category === 'all' || card.dataset.category === category) {
+                    card.style.display = '';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        }
+
+        /* ═════ ADD POLICY MODAL LOGIC ═════ */
+        let selectedColor = { bg: '#fef2f2', color: '#ef4444' };
+        let editingCard = null; // reference to card being edited
+
+        function openAddPolicy() {
+            editingCard = null;
+            // Reset modal title to ADD mode
+            document.querySelector('#addPolicyModal .modal-header h3').textContent = 'Add New Policy';
+            document.querySelector('#addPolicyModal .modal-header p').textContent = 'Fill in details to create a company policy';
+            document.querySelector('.btn-save i').className = 'fas fa-check';
+            document.querySelector('.btn-save').childNodes[1].textContent = ' Save Policy';
+            document.getElementById('addPolicyModal').classList.add('open');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeAddPolicy() {
+            document.getElementById('addPolicyModal').classList.remove('open');
+            document.body.style.overflow = '';
+            resetForm();
+        }
+
+        // Close modal on outside click
+        document.getElementById('addPolicyModal').addEventListener('click', function (e) {
+            if (e.target === this) closeAddPolicy();
+        });
+
+        function selectColor(el) {
+            document.querySelectorAll('.color-opt').forEach(c => c.classList.remove('selected'));
+            el.classList.add('selected');
+            selectedColor = { bg: el.dataset.bg, color: el.dataset.color };
+        }
+
+        function addRuleRow() {
+            const container = document.getElementById('rulesContainer');
+            const row = document.createElement('div');
+            row.className = 'rule-row';
+            row.innerHTML = `
+                <input type="text" placeholder="Rule title" class="rule-title">
+                <input type="text" placeholder="Rule description / detail" class="rule-detail">
+                <button class="btn-remove-rule" onclick="removeRule(this)"><i class="fas fa-trash"></i></button>
+            `;
+            container.appendChild(row);
+        }
+
+        function removeRule(btn) {
+            const rows = document.querySelectorAll('.rule-row');
+            if (rows.length <= 1) { btn.closest('.rule-row').querySelectorAll('input').forEach(i => i.value = ''); return; }
+            btn.closest('.rule-row').remove();
+        }
+
+        function resetForm() {
+            ['p_name', 'p_desc'].forEach(id => document.getElementById(id).value = '');
+            document.getElementById('p_category').value = '';
+            document.getElementById('p_status').value = 'active';
+            document.getElementById('p_icon').value = 'fa-file-contract';
+            document.getElementById('rulesContainer').innerHTML = `
+                <div class="rule-row">
+                    <input type="text" placeholder="Rule title" class="rule-title">
+                    <input type="text" placeholder="Rule description / detail" class="rule-detail">
+                    <button class="btn-remove-rule" onclick="removeRule(this)"><i class="fas fa-trash"></i></button>
+                </div>`;
+            document.querySelectorAll('.color-opt').forEach((c, i) => c.classList.toggle('selected', i === 0));
+            selectedColor = { bg: '#fef2f2', color: '#ef4444' };
+            document.querySelectorAll('.form-error').forEach(e => e.classList.remove('show'));
+            document.querySelectorAll('.form-group input, .form-group select, .form-group textarea').forEach(el => el.classList.remove('error'));
+        }
+
+        function savePolicy() {
+            let valid = true;
+
+            const name = document.getElementById('p_name');
+            const cat = document.getElementById('p_category');
+            const desc = document.getElementById('p_desc');
+
+            // Validate
+            [{ field: name, errId: 'err_name' }, { field: cat, errId: 'err_cat' }, { field: desc, errId: 'err_desc' }]
+                .forEach(({ field, errId }) => {
+                    if (!field.value.trim()) {
+                        field.classList.add('error');
+                        document.getElementById(errId).classList.add('show');
+                        valid = false;
+                    } else {
+                        field.classList.remove('error');
+                        document.getElementById(errId).classList.remove('show');
+                    }
+                });
+
+            if (!valid) return;
+
+            const icon = document.getElementById('p_icon').value;
+            const status = document.getElementById('p_status').value;
+
+            // Build badge
+            const badgeMap = {
+                active: ['badge-active', 'Active'],
+                mandatory: ['badge-mandatory', 'Mandatory'],
+                optional: ['badge-optional', 'Optional']
+            };
+            const [badgeClass, badgeLabel] = badgeMap[status];
+
+            // Build rules HTML
+            const ruleTitles = [...document.querySelectorAll('.rule-title')].map(i => i.value.trim()).filter(Boolean);
+            const ruleDetails = [...document.querySelectorAll('.rule-detail')].map(i => i.value.trim());
+            let rulesHTML = '';
+            ruleTitles.forEach((title, idx) => {
+                rulesHTML += `
+                <div class="policy-rule">
+                    <div class="policy-rule-icon" style="background:${selectedColor.bg}; color:${selectedColor.color};"><i class="fas fa-check-circle"></i></div>
+                    <div class="policy-rule-text"><strong>${title}</strong><span>${ruleDetails[idx] || ''}</span></div>
+                </div>`;
+            });
+            if (!rulesHTML) rulesHTML = `<p style="font-size:13px; color:#94a3b8; padding:8px 0;">No rules added yet.</p>`;
+
+            if (editingCard) {
+                // ── EDIT MODE: update existing card in-place ──
+                const header = editingCard.querySelector('.policy-card-header');
+                header.querySelector('.policy-header-info h3').textContent = name.value.trim();
+                header.querySelector('.policy-header-info p').textContent = desc.value.trim();
+                // Update badge
+                const badgeEl = header.querySelector('.policy-badge');
+                badgeEl.className = `policy-badge ${badgeClass}`;
+                badgeEl.textContent = badgeLabel;
+                // Update icon color
+                const iconEl = header.querySelector('.policy-icon');
+                iconEl.style.background = selectedColor.bg;
+                iconEl.style.color = selectedColor.color;
+                iconEl.innerHTML = `<i class="fas ${icon}"></i>`;
+                // Update category
+                editingCard.dataset.category = cat.value;
+                // Update body rules
+                editingCard.querySelector('.policy-card-body').innerHTML = rulesHTML;
+                // Flash
+                editingCard.style.outline = '2px solid #00b894';
+                setTimeout(() => editingCard.style.outline = '', 2000);
+                closeAddPolicy();
+            } else {
+                // ── ADD MODE: append new card ──
+                const card = document.createElement('div');
+                card.className = 'policy-card';
+                card.dataset.category = cat.value;
+                card.innerHTML = `
+                    <div class="policy-card-header" onclick="toggleCard(this)">
+                        <div class="policy-icon" style="background:${selectedColor.bg}; color:${selectedColor.color};">
+                            <i class="fas ${icon}"></i>
+                        </div>
+                        <div class="policy-header-info">
+                            <h3>${name.value.trim()}</h3>
+                            <p>${desc.value.trim()}</p>
+                        </div>
+                        <span class="policy-badge ${badgeClass}">${badgeLabel}</span>
+                        <i class="fas fa-chevron-down policy-chevron" style="margin-left:8px;"></i>
+                        <div class="card-actions" onclick="event.stopPropagation()">
+                            <button class="btn-card-action" onclick="toggleActionMenu(this)"><i class="fas fa-ellipsis-v"></i></button>
+                            <div class="card-action-menu">
+                                <button class="card-action-item" onclick="editPolicy(this)"><i class="fas fa-pen"></i> Edit</button>
+                                <button class="card-action-item delete" onclick="deletePolicy(this)"><i class="fas fa-trash"></i> Delete</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="policy-card-body">${rulesHTML}</div>
+                `;
+
+                // Append to grid
+                document.getElementById('policiesGrid').appendChild(card);
+
+                // Update summary count
+                const totalEl = document.querySelector('.summary-item:nth-child(1) strong');
+                if (totalEl) totalEl.textContent = parseInt(totalEl.textContent || 0) + 1;
+
+                // Close & reset
+                closeAddPolicy();
+
+                // Flash success
+                card.style.outline = '2px solid #00b894';
+                setTimeout(() => card.style.outline = '', 2000);
+            }
+        }
+
+        /* ═════ ACTION MENU (3-dot) ═════ */
+        function toggleActionMenu(btn) {
+            const menu = btn.nextElementSibling;
+            // Close all others first
+            document.querySelectorAll('.card-action-menu.open').forEach(m => { if (m !== menu) m.classList.remove('open'); });
+            menu.classList.toggle('open');
+        }
+        // Close menus on outside click
+        document.addEventListener('click', () => {
+            document.querySelectorAll('.card-action-menu.open').forEach(m => m.classList.remove('open'));
+        });
+
+        /* ═════ EDIT POLICY ═════ */
+        function editPolicy(btn) {
+            const card = btn.closest('.policy-card');
+            editingCard = card;
+
+            // Read card data
+            const header = card.querySelector('.policy-card-header');
+            const name = header.querySelector('.policy-header-info h3').textContent;
+            const desc = header.querySelector('.policy-header-info p').textContent;
+            const badgeEl = header.querySelector('.policy-badge');
+            const badgeText = badgeEl.textContent.trim().toLowerCase();
+            const category = card.dataset.category || '';
+
+            // Pre-fill form
+            document.getElementById('p_name').value = name;
+            document.getElementById('p_desc').value = desc;
+            document.getElementById('p_category').value = category;
+            document.getElementById('p_status').value = badgeText === 'active' ? 'active' : badgeText === 'mandatory' ? 'mandatory' : 'optional';
+
+            // Pre-fill rules from card body
+            const rules = [...card.querySelectorAll('.policy-rule')];
+            const container = document.getElementById('rulesContainer');
+            container.innerHTML = '';
+            if (rules.length > 0) {
+                rules.forEach(rule => {
+                    const ruleTitle = rule.querySelector('strong')?.textContent || '';
+                    const ruleDetail = rule.querySelector('span')?.textContent || '';
+                    const row = document.createElement('div');
+                    row.className = 'rule-row';
+                    row.innerHTML =
+                        '<input type="text" placeholder="Rule title" class="rule-title" value="' + ruleTitle.replace(/"/g, '&quot;') + '">' +
+                        '<input type="text" placeholder="Rule description / detail" class="rule-detail" value="' + ruleDetail.replace(/"/g, '&quot;') + '">' +
+                        '<button class="btn-remove-rule" onclick="removeRule(this)"><i class="fas fa-trash"></i></button>';
+                    container.appendChild(row);
+                });
+            } else {
+                container.innerHTML = `< div class="rule-row" >
+            <input type="text" placeholder="Rule title" class="rule-title">
+                <input type="text" placeholder="Rule description / detail" class="rule-detail">
+                    <button class="btn-remove-rule" onclick="removeRule(this)"><i class="fas fa-trash"></i></button>
+                </div>`;
+            }
+
+            // Switch modal title to EDIT mode
+            document.querySelector('#addPolicyModal .modal-header h3').textContent = 'Edit Policy';
+            document.querySelector('#addPolicyModal .modal-header p').textContent = 'Update the details of this policy';
+            document.querySelector('.btn-save i').className = 'fas fa-save';
+            document.querySelector('.btn-save').childNodes[1].textContent = ' Update Policy';
+
+            // Close dropdown & open modal
+            btn.closest('.card-action-menu').classList.remove('open');
+            document.getElementById('addPolicyModal').classList.add('open');
+            document.body.style.overflow = 'hidden';
+        }
+
+        /* ═════ DELETE POLICY ═════ */
+        function deletePolicy(btn) {
+            const card = btn.closest('.policy-card');
+            const name = card.querySelector('.policy-header-info h3')?.textContent || 'this policy';
+            btn.closest('.card-action-menu').classList.remove('open');
+            if (confirm(`Are you sure you want to delete "${name}"? This cannot be undone.`)) {
+                card.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                card.style.opacity = '0';
+                card.style.transform = 'scale(0.95)';
+                setTimeout(() => {
+                    card.remove();
+                    // Update total count
+                    const totalEl = document.querySelector('.summary-item:nth-child(1) strong');
+                    if (totalEl) totalEl.textContent = Math.max(0, parseInt(totalEl.textContent || 1) - 1);
+                }, 300);
+            }
+        }
+    </script>
+</body>
+
+</html>

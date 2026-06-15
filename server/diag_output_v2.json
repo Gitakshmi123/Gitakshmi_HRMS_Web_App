@@ -1,0 +1,14 @@
+{
+  "connected": true,
+  "emailSearch": "git@gmail.com",
+  "usersFound": [
+    {
+      "id": "69c56fa3d01f8b09a61759d5",
+      "email": "git@gmail.com",
+      "role": "hr",
+      "tenant": "69c56fa3d01f8b09a61759d4"
+    }
+  ],
+  "employeesFound": [],
+  "error": null
+}

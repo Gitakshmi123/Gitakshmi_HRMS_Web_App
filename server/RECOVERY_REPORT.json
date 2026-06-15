@@ -1,0 +1,88 @@
+{
+  "recoveryDate": "2026-02-07T06:26:30.327Z",
+  "totalDatabases": 10,
+  "recovered": [
+    {
+      "tenantId": "695c98181a01d447895992ff",
+      "companyName": "My Company",
+      "companyCode": "REC695C98",
+      "adminEmail": "admin@rec695c98.recovered",
+      "defaultPassword": "Recovery@123",
+      "dbSize": 9216000
+    },
+    {
+      "tenantId": "695d41626eff2fdbc8a9b6cb",
+      "companyName": "Recovered Company 695d4162",
+      "companyCode": "REC695D41",
+      "adminEmail": "admin@rec695d41.recovered",
+      "defaultPassword": "Recovery@123",
+      "dbSize": 659456
+    },
+    {
+      "tenantId": "695d4a6c409f9301a0df9a1d",
+      "companyName": "Recovered Company 695d4a6c",
+      "companyCode": "REC695D4A",
+      "adminEmail": "admin@rec695d4a.recovered",
+      "defaultPassword": "Recovery@123",
+      "dbSize": 1150976
+    },
+    {
+      "tenantId": "69661e7f9a31a4d8586249fe",
+      "companyName": "Recovered Company 69661e7f",
+      "companyCode": "REC69661E",
+      "adminEmail": "admin@rec69661e.recovered",
+      "defaultPassword": "Recovery@123",
+      "dbSize": 978944
+    },
+    {
+      "tenantId": "696647a058019a97bb12f7a7",
+      "companyName": "Recovered Company 696647a0",
+      "companyCode": "REC696647",
+      "adminEmail": "admin@rec696647.recovered",
+      "defaultPassword": "Recovery@123",
+      "dbSize": 815104
+    },
+    {
+      "tenantId": "6966624e68da1a460f8fd6cb",
+      "companyName": "Recovered Company 6966624e",
+      "companyCode": "REC696662",
+      "adminEmail": "admin@rec696662.recovered",
+      "defaultPassword": "Recovery@123",
+      "dbSize": 811008
+    },
+    {
+      "tenantId": "696df3ee47b68bc7fb26db74",
+      "companyName": "Recovered Company 696df3ee",
+      "companyCode": "REC696DF3",
+      "adminEmail": "admin@rec696df3.recovered",
+      "defaultPassword": "Recovery@123",
+      "dbSize": 1654784
+    },
+    {
+      "tenantId": "696e120ff361a38fe65c131c",
+      "companyName": "Recovered Company 696e120f",
+      "companyCode": "REC696E12",
+      "adminEmail": "admin@rec696e12.recovered",
+      "defaultPassword": "Recovery@123",
+      "dbSize": 909312
+    },
+    {
+      "tenantId": "696e13c2472f4997a2b49b4a",
+      "companyName": "Recovered Company 696e13c2",
+      "companyCode": "REC696E13",
+      "adminEmail": "admin@rec696e13.recovered",
+      "defaultPassword": "Recovery@123",
+      "dbSize": 798720
+    },
+    {
+      "tenantId": "69789673b783b1d7805d0ba1",
+      "companyName": "Recovered Company 69789673",
+      "companyCode": "REC697896",
+      "adminEmail": "admin@rec697896.recovered",
+      "defaultPassword": "Recovery@123",
+      "dbSize": 913408
+    }
+  ],
+  "skipped": [],
+  "failed": []
+}

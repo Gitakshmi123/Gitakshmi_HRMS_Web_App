@@ -1,0 +1,297 @@
+export const DEPARTMENT_DESIGNATION_MASTER = [
+  {
+    department: 'Management Department',
+    designations: [
+      'Chairman',
+      'Founder',
+      'Co-Founder',
+      'Managing Director (MD)',
+      'Chief Executive Officer (CEO)',
+      'Chief Operating Officer (COO)',
+      'Chief Technology Officer (CTO)',
+      'Chief Financial Officer (CFO)',
+      'Chief Information Officer (CIO)',
+      'Chief Strategy Officer',
+      'Vice President (VP)',
+      'General Manager (GM)',
+      'Director',
+      'Assistant Director'
+    ]
+  },
+  {
+    department: 'Human Resource (HR) Department',
+    designations: [
+      'HR Director',
+      'HR Manager',
+      'Assistant HR Manager',
+      'HR Executive',
+      'HR Recruiter',
+      'Talent Acquisition Specialist',
+      'Payroll Executive',
+      'HR Operations Executive',
+      'Employee Relations Executive',
+      'Training Coordinator',
+      'HR Intern'
+    ]
+  },
+  {
+    department: 'Finance & Accounts Department',
+    designations: [
+      'Finance Director',
+      'Finance Manager',
+      'Accounts Manager',
+      'Chartered Accountant (CA)',
+      'Senior Accountant',
+      'Junior Accountant',
+      'Accounts Executive',
+      'Billing Executive',
+      'GST Executive',
+      'Tax Consultant',
+      'Payroll Accountant',
+      'Audit Executive'
+    ]
+  },
+  {
+    department: 'Sales & Business Development Department',
+    designations: [
+      'Sales Director',
+      'Business Development Manager (BDM)',
+      'Business Development Executive (BDE)',
+      'International Sales Manager',
+      'SAP Sales Manager',
+      'IT Sales Executive',
+      'Lead Generation Executive',
+      'Client Acquisition Executive',
+      'CRM Executive',
+      'Account Manager',
+      'Relationship Manager'
+    ]
+  },
+  {
+    department: 'Marketing Department',
+    designations: [
+      'Marketing Director',
+      'Digital Marketing Manager',
+      'SEO Specialist',
+      'Social Media Manager',
+      'Performance Marketer',
+      'Content Writer',
+      'Brand Manager',
+      'Graphic Designer',
+      'Video Editor',
+      'Campaign Executive',
+      'Marketing Executive'
+    ]
+  },
+  {
+    department: 'Software Development Department',
+    designations: [
+      'Software Architect',
+      'Technical Lead',
+      'Project Manager',
+      'Team Lead',
+      'Senior Software Engineer',
+      'Software Developer',
+      'Full Stack Developer',
+      'MERN Stack Developer',
+      'Frontend Developer',
+      'Backend Developer',
+      'Mobile App Developer',
+      'React Developer',
+      'Node.js Developer',
+      'PHP Developer',
+      'Python Developer',
+      'Laravel Developer',
+      'Java Developer',
+      'UI/UX Designer',
+      'Web Designer',
+      'Intern Developer'
+    ]
+  },
+  {
+    department: 'SAP Department',
+    designations: [
+      'SAP Practice Head',
+      'SAP Delivery Manager',
+      'SAP Project Manager',
+      'SAP Functional Consultant',
+      'SAP Technical Consultant',
+      'SAP ABAP Developer',
+      'SAP BASIS Consultant',
+      'SAP FICO Consultant',
+      'SAP MM Consultant',
+      'SAP SD Consultant',
+      'SAP PP Consultant',
+      'SAP HCM Consultant',
+      'SAP SuccessFactors Consultant',
+      'SAP BTP Consultant',
+      'SAP UI5/FIORI Developer',
+      'SAP Support Executive',
+      'SAP Trainer'
+    ]
+  },
+  {
+    department: 'Cloud / DevOps / Infrastructure Department',
+    designations: [
+      'Cloud Architect',
+      'DevOps Engineer',
+      'AWS Engineer',
+      'Azure Engineer',
+      'System Administrator',
+      'Network Engineer',
+      'Linux Administrator',
+      'Infrastructure Manager',
+      'Security Engineer',
+      'Cybersecurity Analyst',
+      'IT Support Engineer',
+      'Desktop Support Engineer'
+    ]
+  },
+  {
+    department: 'AI / Data Science Department',
+    designations: [
+      'AI Engineer',
+      'Machine Learning Engineer',
+      'Data Scientist',
+      'Data Analyst',
+      'Power BI Developer',
+      'Business Intelligence Analyst',
+      'RPA Developer',
+      'AI Research Engineer',
+      'NLP Engineer'
+    ]
+  },
+  {
+    department: 'Quality Assurance (QA) Department',
+    designations: [
+      'QA Manager',
+      'QA Lead',
+      'Manual Tester',
+      'Automation Tester',
+      'Software Test Engineer',
+      'Performance Tester',
+      'UAT Coordinator',
+      'QA Analyst'
+    ]
+  },
+  {
+    department: 'Product Management Department',
+    designations: [
+      'Product Manager',
+      'Associate Product Manager',
+      'Product Owner',
+      'Business Analyst',
+      'Functional Analyst',
+      'Scrum Master',
+      'Implementation Consultant'
+    ]
+  },
+  {
+    department: 'Logistics & Supply Chain Department',
+    designations: [
+      'Logistics Manager',
+      'Supply Chain Manager',
+      'Warehouse Manager',
+      'Inventory Manager',
+      'Procurement Executive',
+      'Dispatch Executive',
+      'Transport Coordinator',
+      'Import Export Executive',
+      'Custom Clearance Executive',
+      'Shipping Coordinator',
+      'Fleet Manager',
+      'Operations Executive'
+    ]
+  },
+  {
+    department: 'Customer Support Department',
+    designations: [
+      'Customer Support Manager',
+      'Technical Support Executive',
+      'Helpdesk Executive',
+      'CRM Support Executive',
+      'Client Success Manager',
+      'Customer Relationship Executive'
+    ]
+  },
+  {
+    department: 'Administration Department',
+    designations: [
+      'Admin Manager',
+      'Office Administrator',
+      'Front Desk Executive',
+      'Receptionist',
+      'Office Assistant',
+      'Facility Manager'
+    ]
+  },
+  {
+    department: 'Legal & Compliance Department',
+    designations: [
+      'Legal Advisor',
+      'Compliance Officer',
+      'Company Secretary (CS)',
+      'Contract Manager',
+      'Legal Executive'
+    ]
+  },
+  {
+    department: 'Research & Innovation (TechnoLabs)',
+    designations: [
+      'R&D Head',
+      'Innovation Manager',
+      'Research Engineer',
+      'Prototype Developer',
+      'Emerging Technology Specialist',
+      'IoT Engineer',
+      'Blockchain Developer'
+    ]
+  },
+  {
+    department: 'Training & Academy Department',
+    designations: [
+      'Training Manager',
+      'Technical Trainer',
+      'SAP Trainer',
+      'Corporate Trainer',
+      'Placement Coordinator',
+      'Course Coordinator'
+    ]
+  },
+  {
+    department: 'Project Management Office (PMO)',
+    designations: [
+      'PMO Head',
+      'Program Manager',
+      'Project Coordinator',
+      'Delivery Manager',
+      'Resource Manager'
+    ]
+  }
+];
+
+export const DEPARTMENT_OPTIONS = DEPARTMENT_DESIGNATION_MASTER.map((item) => item.department);
+
+export const EMPLOYEE_LEVEL_OPTIONS = [
+  'Intern',
+  'Junior Executive',
+  'Executive',
+  'Senior Executive',
+  'Team Lead',
+  'Assistant Manager',
+  'Manager',
+  'Senior Manager',
+  'Head',
+  'Director',
+  'VP',
+  'CXO'
+];
+
+export const ALL_DESIGNATION_OPTIONS = [
+  ...new Set(DEPARTMENT_DESIGNATION_MASTER.flatMap((item) => item.designations))
+].sort((a, b) => a.localeCompare(b));
+
+export const getDesignationsForDepartment = (department) => {
+  const normalized = String(department || '').trim().toLowerCase();
+  return DEPARTMENT_DESIGNATION_MASTER.find((item) => item.department.toLowerCase() === normalized)?.designations || [];
+};

@@ -1,0 +1,2817 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #00b894;
+            --bg-color: #fcfcfc;
+            --card-bg: #ffffff;
+            --text-main: #2d3436;
+            --text-muted: #636e72;
+            --border-color: #f1f2f6;
+
+            --present-bg: #e8f8f5;
+            --present-text: #00b894;
+            --multi-bg: #fff9e6;
+            --multi-text: #fdcb6e;
+            --absent-bg: #ffeef0;
+            --absent-text: #ff7675;
+            --leave-bg: #eff3ff;
+            --leave-text: #74b9ff;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Sidebar Navigation */
+        .sidebar {
+            width: 80px;
+            background-color: #ffffff;
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            height: 100vh;
+            left: 0;
+            top: 0;
+            z-index: 100;
+            overflow: hidden;
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
+        }
+
+        .sidebar:hover {
+            width: 260px;
+            box-shadow: 4px 0 15px rgba(0, 0, 0, 0.05);
+            overflow-y: auto;
+        }
+
+        .sidebar-brand {
+            padding: 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 1px solid transparent;
+            min-width: 260px;
+        }
+
+        .brand-icon {
+            width: 32px;
+            height: 32px;
+            background-color: #00b894;
+            color: white;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 16px;
+        }
+
+        .brand-text {
+            font-size: 16px;
+            font-weight: 700;
+            color: #2d3436;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .sidebar:hover .brand-text {
+            opacity: 1;
+            transition-delay: 0.1s;
+        }
+
+        .sidebar-menu {
+            padding: 10px 16px;
+            flex: 1;
+            min-width: 260px;
+        }
+
+        .menu-section {
+            font-size: 11px;
+            font-weight: 600;
+            color: #b2bec3;
+            letter-spacing: 0.5px;
+            margin: 20px 0 10px 12px;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .sidebar:hover .menu-section {
+            opacity: 1;
+            transition-delay: 0.1s;
+        }
+
+        .menu-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            color: #636e72;
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 4px;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .menu-item span {
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .sidebar:hover .menu-item span {
+            opacity: 1;
+            transition-delay: 0.1s;
+        }
+
+        .menu-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            color: #636e72;
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 4px;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .menu-item span {
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .sidebar:hover .menu-item span {
+            opacity: 1;
+            transition-delay: 0.1s;
+        }
+
+        .menu-item i {
+            font-size: 16px;
+            width: 20px;
+            text-align: center;
+            color: #a4b0be;
+        }
+
+        .menu-item:hover {
+            background-color: #f8f9fa;
+        }
+
+        .menu-item:hover i {
+            color: #2d3436;
+        }
+
+        .menu-item.active {
+            background: linear-gradient(135deg, #00b894 0%, #00cec9 100%);
+            box-shadow: 0 4px 10px rgba(0, 184, 148, 0.2);
+        }
+
+        .menu-item.active i {
+            color: white;
+        }
+
+        .sidebar-footer {
+            padding: 24px;
+            margin-top: auto;
+            min-width: 260px;
+        }
+
+        .system-status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #2d3436;
+            margin-bottom: 4px;
+            white-space: nowrap;
+        }
+
+        .system-status-indicator span {
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .sidebar:hover .system-status-indicator span {
+            opacity: 1;
+            transition-delay: 0.1s;
+        }
+
+        .system-status-indicator .dot {
+            width: 8px;
+            height: 8px;
+            background-color: #00b894;
+            border-radius: 50%;
+        }
+
+        .system-version {
+            font-size: 11px;
+            color: #b2bec3;
+            padding-left: 16px;
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .sidebar:hover .system-version {
+            opacity: 1;
+            transition-delay: 0.1s;
+        }
+
+        /* Layout */
+        .main-wrapper {
+            margin-left: 80px;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            transition: margin-left 0.3s ease;
+        }
+
+        /* Top Navigation */
+        .top-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 40px;
+            background-color: #ffffff;
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 90;
+        }
+
+        .nav-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .nav-left i {
+            color: #b2bec3;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .nav-left h1 {
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: 0;
+            color: #2d3436;
+            text-transform: uppercase;
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 25px;
+        }
+
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+        }
+
+        .avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background-color: #e3f2fd;
+            color: #0984e3;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .user-details {
+            text-align: left;
+        }
+
+        .user-details h4 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #2d3436;
+        }
+
+        .user-details p {
+            font-size: 11px;
+            color: #a4b0be;
+            margin-top: 2px;
+        }
+
+        .nav-actions-pill {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            background-color: #f8f9fa;
+            border-radius: 30px;
+            padding: 8px 18px;
+            border: 1px solid #f1f2f6;
+        }
+
+        .nav-actions-pill i {
+            color: #636e72;
+            cursor: pointer;
+            font-size: 15px;
+            transition: color 0.2s;
+        }
+
+        .nav-actions-pill i:hover {
+            color: #2d3436;
+        }
+
+        .nav-actions-pill .divider {
+            width: 1px;
+            height: 16px;
+            background-color: #dfe6e9;
+        }
+
+        .notification-icon {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .bell-badge {
+            position: absolute;
+            top: 0px;
+            right: -2px;
+            width: 6px;
+            height: 6px;
+            background-color: #ff7675;
+            border-radius: 50%;
+            border: 2px solid #f8f9fa;
+        }
+
+        /* Main Content */
+        .container {
+            padding: 30px 40px;
+            flex: 1;
+            width: 100%;
+        }
+
+        /* Welcome Banner */
+        .welcome-banner {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+            position: relative;
+        }
+
+        .welcome-banner::before {
+            content: '';
+            position: absolute;
+            left: 25px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 4px;
+            height: 24px;
+            background-color: var(--primary);
+            border-radius: 4px;
+        }
+
+        .welcome-text h2 {
+            margin-left: 15px;
+            font-size: 18px;
+            font-weight: 800;
+            color: #2c3e50;
+        }
+
+        .welcome-text span {
+            color: var(--primary);
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .system-status {
+            background-color: var(--present-bg);
+            color: var(--present-text);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
+        /* Stat Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px 25px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+        }
+
+        .stat-info h3 {
+            font-size: 10px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+            font-weight: 700;
+        }
+
+        .stat-info .value {
+            font-size: 28px;
+            font-weight: 800;
+            color: #2c3e50;
+        }
+
+        .stat-icon {
+            width: 45px;
+            height: 45px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .icon-present {
+            background-color: var(--present-bg);
+            color: var(--present-text);
+        }
+
+        .icon-multi {
+            background-color: var(--multi-bg);
+            color: var(--multi-text);
+        }
+
+        .icon-absent {
+            background-color: var(--absent-bg);
+            color: var(--absent-text);
+        }
+
+        .icon-leave {
+            background-color: var(--leave-bg);
+            color: var(--leave-text);
+        }
+
+        /* Charts Section */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .chart-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 25px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+            position: relative;
+        }
+
+        .chart-card .title-wrap {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 30px;
+        }
+
+        .title-indicator {
+            width: 4px;
+            height: 14px;
+            background-color: var(--primary);
+            border-radius: 4px;
+        }
+
+        .chart-title {
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+        }
+
+        /* Employee Distribution Chart Mock */
+        .distribution-content {
+            display: flex;
+            align-items: center;
+            gap: 50px;
+        }
+
+        .donut-chart {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: 15px solid var(--primary);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .donut-chart .num {
+            font-size: 22px;
+            font-weight: 800;
+        }
+
+        .donut-chart .lbl {
+            font-size: 9px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .chart-legend {
+            flex: 1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .legend-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background-color: var(--primary);
+        }
+
+        .legend-value {
+            font-weight: 800;
+            color: var(--text-main);
+            font-size: 14px;
+        }
+
+        /* Birthdays Card */
+        .birthdays-card .header-right {
+            position: absolute;
+            top: 25px;
+            right: 25px;
+            background-color: #f1f2f6;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 9px;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .no-data {
+            height: 120px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #b2bec3;
+            gap: 10px;
+        }
+
+        .no-data i {
+            font-size: 24px;
+        }
+
+        .no-data p {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Table Section */
+        .table-section {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 25px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .table-header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 20px;
+        }
+
+        .table-title h3 {
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #2c3e50;
+            margin-bottom: 4px;
+        }
+
+        .table-title p {
+            font-size: 10px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .btn-manage {
+            background-color: #0f1626;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            text-transform: uppercase;
+        }
+
+        .btn-manage:hover {
+            background-color: #1e2638;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            text-align: left;
+            padding: 12px 15px;
+            border-top: 2px solid #0f1626;
+            border-bottom: 2px solid #0f1626;
+            border-right: 2px solid #0f1626;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            letter-spacing: 0.5px;
+        }
+
+        th:first-child {
+            border-left: 2px solid #0f1626;
+        }
+
+        td {
+            padding: 20px 15px;
+            font-size: 13px;
+            border-bottom: 1px solid var(--border-color);
+            border-right: 2px solid #0f1626;
+        }
+
+        td:first-child {
+            border-left: 2px solid #0f1626;
+        }
+
+        tr:last-child td {
+            border-bottom: 2px solid #0f1626;
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(3px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            width: 500px;
+            max-width: 90%;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            transform: translateY(20px);
+            transition: transform 0.3s ease;
+            overflow: hidden;
+        }
+
+        .modal-overlay.active .modal-card {
+            transform: translateY(0);
+        }
+
+        .modal-header {
+            padding: 20px 25px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #fdfdfd;
+        }
+
+        .modal-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .modal-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+
+        .modal-title h3 {
+            font-size: 14px;
+            font-weight: 700;
+            color: #2c3e50;
+        }
+
+        .close-modal {
+            background: none;
+            border: none;
+            font-size: 18px;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .close-modal:hover {
+            color: var(--red-text);
+        }
+
+        .modal-body {
+            padding: 0;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .employee-list {
+            list-style: none;
+        }
+
+        .employee-item {
+            display: flex;
+            align-items: center;
+            padding: 15px 25px;
+            border-bottom: 1px solid var(--border-color);
+            transition: background-color 0.2s;
+        }
+
+        .employee-item:hover {
+            background-color: #f8f9fa;
+        }
+
+        .employee-item:last-child {
+            border-bottom: none;
+        }
+
+        .emp-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            color: #4a5568;
+            margin-right: 15px;
+        }
+
+        .emp-info {
+            flex: 1;
+        }
+
+        .emp-info h4 {
+            font-size: 14px;
+            color: #2d3748;
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
+
+        .emp-info p {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .emp-status {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 12px;
+        }
+
+        /* Status Badges */
+        .status-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-pending {
+            background-color: #fdf6e3;
+            color: #d4a373;
+        }
+
+        .status-approved {
+            background-color: #e8f8f5;
+            color: var(--primary);
+        }
+
+        .status-rejected {
+            background-color: #ffeef0;
+            color: #ff7675;
+        }
+
+        /* Request Pipeline Employee */
+        .req-personnel {
+            display: flex;
+            align-items: center;
+        }
+
+        .req-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background-color: #dfe6e9;
+            color: #2c3e50;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 11px;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+
+        .req-info h4 {
+            font-size: 13px;
+            color: #2d3436;
+            font-weight: 600;
+        }
+
+        .req-info span {
+            font-size: 10px;
+            color: var(--text-muted);
+        }
+
+        /* Action Buttons */
+        .action-btns {
+            display: flex;
+            gap: 10px;
+        }
+
+        .action-btn {
+            background: none;
+            border: none;
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .btn-approve {
+            color: var(--primary);
+            background-color: #e8f8f5;
+        }
+
+        .btn-approve:hover {
+            background-color: var(--primary);
+            color: white;
+        }
+
+        .btn-reject {
+            color: #ff7675;
+            background-color: #ffeef0;
+        }
+
+        .btn-reject:hover {
+            background-color: #ff7675;
+            color: white;
+        }
+
+        .btn-view {
+            color: #0984e3;
+            background-color: #eff3ff;
+        }
+
+        .btn-view:hover {
+            background-color: #0984e3;
+            color: white;
+        }
+
+        /* Tooltip */
+        .action-btn::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%) translateY(-5px);
+            background-color: #2d3436;
+            color: white;
+            font-size: 10px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.2s;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .action-btn:hover::after {
+            opacity: 1;
+            visibility: visible;
+            transform: translateX(-50%) translateY(-10px);
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #a4b0be;
+        }
+
+        .empty-state i {
+            font-size: 32px;
+            margin-bottom: 10px;
+            color: #dfe6e9;
+        }
+
+        .empty-state h4 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #636e72;
+            margin-bottom: 5px;
+        }
+
+        .empty-state p {
+            font-size: 12px;
+        }
+
+        /* Sortable Header */
+        th.sortable {
+            cursor: pointer;
+            position: relative;
+        }
+
+        th.sortable:hover {
+            color: #2c3e50;
+        }
+
+        th.sortable i {
+            margin-left: 5px;
+            font-size: 10px;
+            color: #b2bec3;
+        }
+
+        /* Notification Badge */
+        .btn-manage-wrap {
+            position: relative;
+            display: inline-block;
+        }
+
+        .badge-count {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background-color: #ff7675;
+            color: white;
+            font-size: 9px;
+            font-weight: 800;
+            padding: 2px 6px;
+            border-radius: 10px;
+            border: 2px solid var(--card-bg);
+        }
+
+        /* Loading Spinner inside Action Buttons */
+        .spinner {
+            display: none;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(0, 0, 0, 0.1);
+            border-top-color: currentColor;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .is-loading i {
+            display: none;
+        }
+
+        .is-loading .spinner {
+            display: block;
+        }
+
+
+        /* Reports Tabbing */
+        .reports-tabs {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 25px;
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 30px;
+            padding: 8px 15px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+            width: fit-content;
+        }
+
+        .report-tab {
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #a4b0be;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .report-tab:hover {
+            color: #2d3436;
+        }
+
+        .report-tab.active {
+            background-color: #e8f9f5;
+            color: #00b894;
+        }
+
+        /* Smart Dashboard CSS */
+        .smart-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+
+        .smart-stat-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+            transition: transform 0.2s, box-shadow 0.2s;
+            cursor: pointer;
+        }
+
+        .smart-stat-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+        }
+
+        .smart-stat-icon {
+            width: 45px;
+            height: 45px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .smart-stat-info h3 {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 5px;
+        }
+
+        .smart-stat-info .value {
+            font-size: 24px;
+            font-weight: 800;
+            color: #2d3436;
+        }
+
+        .smart-stat-info .value.danger {
+            color: #ff7675;
+        }
+
+        .smart-stat-info .value.success {
+            color: #00b894;
+        }
+
+        .smart-stat-info .value.warning {
+            color: #e1b12c;
+        }
+
+        /* Dashboard Toolbar */
+        .dashboard-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            background-color: #f8f9fa;
+            padding: 12px 20px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+        }
+
+        .toolbar-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .dept-select {
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid #dfe6e9;
+            background-color: white;
+            font-size: 12px;
+            font-weight: 600;
+            color: #2d3436;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .toolbar-right .btn-reminder {
+            background-color: #ffeaa7;
+            color: #d35400;
+            border: 1px solid #f1c40f;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .toolbar-right .btn-reminder:hover {
+            background-color: #f1c40f;
+            color: white;
+        }
+
+        /* Smart Table */
+        .smart-table-wrapper {
+            background-color: white;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+        }
+
+        .smart-table-wrapper table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .smart-table-wrapper th,
+        .smart-table-wrapper td {
+            padding: 15px 20px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .smart-table-wrapper th {
+            font-size: 10px;
+            font-weight: 800;
+            color: #b2bec3;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            background-color: #fafbfc;
+        }
+
+        .smart-table-wrapper td {
+            font-size: 13px;
+            color: #2d3436;
+            font-weight: 500;
+        }
+
+        .smart-table-wrapper tr:last-child td {
+            border-bottom: none;
+        }
+
+        .smart-table-wrapper tr:hover td {
+            background-color: #f8f9fa;
+        }
+
+        /* Profile & Avatar */
+        .staff-profile-pill {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .staff-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background-color: #e3f2fd;
+            color: #0984e3;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 12px;
+        }
+
+        .staff-name {
+            font-weight: 700;
+            color: #2d3436;
+            transition: color 0.2s;
+        }
+
+        .staff-profile-pill:hover .staff-name {
+            color: #0984e3;
+        }
+
+        .staff-role {
+            font-size: 10px;
+            color: #a4b0be;
+            font-weight: 600;
+            margin-top: 2px;
+        }
+
+        /* Shift Status Indicators */
+        .shift-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 20px;
+            width: fit-content;
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+        }
+
+        .shift-on-time {
+            background-color: #e8f9f5;
+            color: #00b894;
+            border: 1px solid #ccf1e8;
+        }
+
+        .shift-on-time .status-dot {
+            background-color: #00b894;
+        }
+
+        .shift-late {
+            background-color: #ffefef;
+            color: #ff7675;
+            border: 1px solid #ffd1d1;
+        }
+
+        .shift-late .status-dot {
+            background-color: #ff7675;
+        }
+
+        .shift-early {
+            background-color: #fff8e5;
+            color: #f39c12;
+            border: 1px solid #fbe6af;
+        }
+
+        .shift-early .status-dot {
+            background-color: #f39c12;
+        }
+
+        /* Visual Timeline Bar */
+        .timeline-cell {
+            min-width: 250px;
+        }
+
+        .timeline-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 9px;
+            font-weight: 700;
+            color: #b2bec3;
+            margin-bottom: 5px;
+        }
+
+        .timeline-container {
+            width: 100%;
+            height: 6px;
+            background-color: #f1f2f6;
+            border-radius: 4px;
+            position: relative;
+        }
+
+        .timeline-fill {
+            height: 100%;
+            background-color: #0984e3;
+            border-radius: 4px;
+            position: absolute;
+            transition: width 0.5s ease, left 0.5s ease;
+        }
+
+        .timeline-fill.late {
+            background-color: #ff7675;
+        }
+
+        .timeline-time-info {
+            font-size: 10px;
+            font-weight: 600;
+            color: #636e72;
+            margin-top: 5px;
+            text-align: right;
+        }
+
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .nav-right .nav-actions {
+                display: none;
+            }
+        }
+
+        /* Manage Queue Modal List */
+        .queue-item {
+            background-color: #f8f9fa;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .queue-item:last-child {
+            margin-bottom: 0;
+        }
+
+        /* Replacement Movements Specific */
+        .staff-exchange {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .staff-exchange .exchange-icon {
+            color: #b2bec3;
+            font-size: 14px;
+        }
+
+        .movement-path {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #2d3436;
+        }
+
+        .movement-path i {
+            color: #0984e3;
+            font-size: 10px;
+        }
+
+        .badge-live {
+            background-color: #ffefef;
+            color: #ff7675;
+            font-size: 9px;
+            font-weight: 800;
+            padding: 3px 6px;
+            border-radius: 4px;
+            border: 1px solid #ffd1d1;
+            margin-left: 10px;
+            animation: pulse-red 2s infinite;
+        }
+
+        @keyframes pulse-red {
+            0% {
+                box-shadow: 0 0 0 0 rgba(255, 118, 117, 0.4);
+            }
+
+            70% {
+                box-shadow: 0 0 0 6px rgba(255, 118, 117, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(255, 118, 117, 0);
+            }
+        }
+
+        .status-badge.active {
+            background-color: #e8f9f5;
+            color: #00b894;
+            border: 1px solid #ccf1e8;
+        }
+
+        .status-badge.pending {
+            background-color: #fff9e6;
+            color: #fdcb6e;
+            border: 1px solid #ffeeba;
+        }
+
+        .status-badge.completed {
+            background-color: #f1f2f6;
+            color: #636e72;
+            border: 1px solid #dfe4ea;
+        }
+
+        .row-alert-orange {
+            background-color: #fffaf0 !important;
+            border-left: 3px solid #e1b12c;
+        }
+
+        .action-flex {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-end-movement {
+            background-color: white;
+            color: #d63031;
+            border: 1px solid #fab1a0;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-end-movement:hover {
+            background-color: #ffefef;
+        }
+
+        .btn-view-details {
+            background-color: #f8f9fa;
+            color: #0984e3;
+            border: 1px solid #dfe6e9;
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-view-details:hover {
+            background-color: #e3f2fd;
+            border-color: #74b9ff;
+        }
+
+        #global-error-display {
+            display: none;
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #d63031;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            z-index: 9999;
+            font-weight: 600;
+            font-size: 14px;
+            animation: slideDown 0.3s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                top: -50px;
+                opacity: 0;
+            }
+
+            to {
+                top: 20px;
+                opacity: 1;
+            }
+        }
+
+        /* Blinking LIVE Badge */
+        .badge-live-blink {
+            background-color: #ff7675;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 9px;
+            font-weight: 800;
+            margin-left: 8px;
+            animation: blinker 1.5s linear infinite;
+            display: inline-block;
+            vertical-align: middle;
+        }
+
+        @keyframes blinker {
+            50% {
+                opacity: 0.2;
+            }
+        }
+
+        .row-alert-orange {
+            background-color: #fffaf0 !important;
+            border-left: 4px solid #f39c12 !important;
+        }
+
+        /* Movement Details Modal Styles */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(4px);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .details-modal {
+            background: white;
+            width: 90%;
+            max-width: 500px;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+            padding: 30px;
+            position: relative;
+            transform: scale(0.9);
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-overlay.active .details-modal {
+            transform: scale(1);
+            opacity: 1;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 20px;
+            color: #a4b0be;
+            cursor: pointer;
+        }
+
+        .details-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+
+        .detail-item {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .detail-item label {
+            font-size: 10px;
+            text-transform: uppercase;
+            font-weight: 800;
+            color: #a4b0be;
+            letter-spacing: 0.5px;
+        }
+
+        .detail-item span {
+            font-size: 13px;
+            font-weight: 600;
+            color: #2d3436;
+        }
+
+        .doc-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: #f1f2f6;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #0984e3;
+            text-decoration: none;
+            margin-top: 5px;
+        }
+
+        .duration-badge {
+            background: #fff9e6;
+            color: #f39c12;
+            padding: 10px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        /* Performance Specific Styles */
+        .star-rating {
+            color: #fdcb6e;
+            font-size: 13px;
+        }
+
+        .attendance-pill {
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 700;
+        }
+
+        .attendance-pill.good {
+            background: #e8f9f5;
+            color: #00b894;
+        }
+
+        .attendance-pill.avg {
+            background: #fff9e6;
+            color: #f39c12;
+        }
+
+        .attendance-pill.poor {
+            background: #ffefef;
+            color: #ff7675;
+        }
+
+        .progress-container {
+            width: 100%;
+            height: 6px;
+            background: #f1f2f6;
+            border-radius: 10px;
+            margin-top: 4px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            border-radius: 10px;
+            transition: width 0.3s ease;
+        }
+
+        .btn-add-review {
+            background: #eff3ff;
+            color: #0984e3;
+            border: none;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-add-review:hover {
+            background: #3498db;
+            color: white;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="global-error-display"></div>
+
+    <!-- Movement Details Modal -->
+    <div class="modal-overlay" id="movementModalOverlay">
+        <div class="details-modal">
+            <div class="modal-header">
+                <div>
+                    <h3 style="font-size: 18px; color: #2d3436;">Movement Details</h3>
+                    <p style="font-size: 11px; color: #a4b0be; font-weight: 600;" id="modalMovementId">REF: MOV-000</p>
+                </div>
+                <button class="modal-close" onclick="closeMovementModal()"><i class="fas fa-times"></i></button>
+            </div>
+
+            <div class="details-section">
+                <div class="detail-item">
+                    <label>Original Staff</label>
+                    <span id="modalOriginalName">--</span>
+                </div>
+                <div class="detail-item">
+                    <label>Replaced By</label>
+                    <span id="modalReplacementName">--</span>
+                </div>
+                <div class="detail-item">
+                    <label>Site From</label>
+                    <span id="modalSiteFrom">--</span>
+                </div>
+                <div class="detail-item">
+                    <label>Site To</label>
+                    <span id="modalSiteTo">--</span>
+                </div>
+                <div class="detail-item">
+                    <label>Status</label>
+                    <span id="modalStatus">--</span>
+                </div>
+                <div class="detail-item">
+                    <label>Reason</label>
+                    <span id="modalReason">--</span>
+                </div>
+            </div>
+
+            <hr style="border: none; border-top: 1px solid #f1f2f6; margin-bottom: 20px;">
+
+            <div class="detail-item">
+                <label>Approved By</label>
+                <div style="display: flex; align-items: center; gap: 10px; margin-top: 5px;">
+                    <div style="width: 24px; height: 24px; border-radius: 50%; background: #dfe6e9; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800;"
+                        id="modalApproverInitials">M</div>
+                    <span id="modalApprovedBy" style="font-size: 13px; font-weight: 700;">Manager Name</span>
+                </div>
+            </div>
+
+            <div class="detail-item" style="margin-top: 20px;">
+                <label>Attached Document</label>
+                <a href="#" class="doc-link">
+                    <i class="fas fa-file-medical"></i>
+                    <span id="modalDocumentName">Document.pdf</span>
+                </a>
+            </div>
+
+            <div class="duration-badge">
+                <i class="far fa-clock"></i>
+                <div style="font-size: 11px; font-weight: 700;">
+                    Currently Active for: <span id="modalDurationCalculation">--</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-brand">
+            <div class="brand-icon">H</div>
+            <div class="brand-text">Global Tech</div>
+        </div>
+
+        <div class="sidebar-menu">
+            <div class="menu-section">OVERVIEW</div>
+            <a href="dashboard.html" class="menu-item">
+                <i class="fas fa-layer-group"></i>
+                <span>Dashboard</span>
+            </a>
+            <a href="reports.html" class="menu-item active">
+                <i class="fas fa-chart-pie"></i>
+                <span>Reports</span>
+            </a>
+
+            <div class="menu-section">PEOPLE</div>
+            <a href="employees.html" class="menu-item">
+                <i class="fas fa-users"></i>
+                <span>Employees</span>
+            </a>
+            <a href="departments.html" class="menu-item">
+                <i class="fas fa-building"></i>
+                <span>Departments</span>
+            </a>
+            <a href="org-structure.html" class="menu-item">
+                <i class="fas fa-sitemap"></i>
+                <span>Org Structure</span>
+            </a>
+            <a href="users.html" class="menu-item">
+                <i class="fas fa-user-circle"></i>
+                <span>Users</span>
+            </a>
+
+            <div class="menu-section">ATTENDANCE</div>
+            <a href="#" class="menu-item">
+                <i class="fas fa-fingerprint"></i>
+                <span>Dashboard</span>
+            </a>
+            <a href="manage-queue.html" class="menu-item">
+                <i class="fas fa-inbox"></i>
+                <span>Manage Queue</span>
+            </a>
+        </div>
+
+        <div class="sidebar-footer">
+            <div class="system-status-indicator">
+                <div class="dot"></div>
+                <span>SYSTEM ACTIVE</span>
+            </div>
+            <div class="system-version">v2.5.0 Stable Release</div>
+        </div>
+    </div>
+
+    <!-- Main Content Wrapper -->
+    <div class="main-wrapper">
+        <!-- Top Navigation -->
+        <nav class="top-nav">
+            <div class="nav-left">
+                <i class="fas fa-arrow-left"></i>
+                <h1>REPORTS</h1>
+            </div>
+
+            <div class="nav-right">
+                <div class="user-profile">
+                    <div class="avatar">T</div>
+                    <div class="user-details">
+                        <h4>Test</h4>
+                        <p>tes001</p>
+                    </div>
+                    <i class="fas fa-chevron-down" style="font-size: 10px; color: #a4b0be; margin-left: 10px;"></i>
+                </div>
+
+                <div class="nav-actions-pill">
+                    <i class="far fa-moon"></i>
+                    <div class="divider"></div>
+                    <div class="notification-icon">
+                        <i class="far fa-bell"></i>
+                        <span class="bell-badge"></span>
+                    </div>
+                    <div class="divider"></div>
+                    <i class="fas fa-sign-out-alt"></i>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Container -->
+        <div class="container">
+
+            <!-- Reports Navigation Tabs -->
+            <div class="reports-tabs">
+                <div class="report-tab active" data-target="tab-staffing">
+                    <i class="fas fa-users-cog"></i> STAFFING OVERVIEW
+                </div>
+                <div class="report-tab" data-target="tab-replacement">
+                    <i class="fas fa-user-plus"></i> REPLACEMENT MOVEMENTS
+                </div>
+                <div class="report-tab" data-target="tab-hiring">
+                    <i class="fas fa-chart-line"></i> HIRING TRENDS
+                </div>
+                <div class="report-tab" data-target="tab-performance">
+                    <i class="far fa-clock"></i> PERFORMANCE
+                </div>
+            </div>
+
+            <!-- Tab Contents Wrapper -->
+            <div class="tab-contents-container">
+
+                <!-- 1. STAFFING OVERVIEW -->
+                <div id="tab-staffing" class="tab-content active" style="display: block;">
+
+                    <!-- Smart Dashboard Content -->
+
+                    <!-- Top Metric Cards -->
+                    <div class="smart-stats-grid">
+                        <div class="smart-stat-card" onclick="filterByCard('All')">
+                            <div class="smart-stat-icon" style="background-color: #e8f9f5; color: #00b894;">
+                                <i class="fas fa-users"></i>
+                            </div>
+                            <div class="smart-stat-info">
+                                <h3>Total Headcount</h3>
+                                <div class="value" id="staffTotalCount">--</div>
+                            </div>
+                        </div>
+
+                        <div class="smart-stat-card" onclick="filterByCard('Late')">
+                            <div class="smart-stat-icon" style="background-color: #ffefef; color: #ff7675;">
+                                <i class="far fa-clock"></i>
+                            </div>
+                            <div class="smart-stat-info">
+                                <h3>Late Arrivals</h3>
+                                <div class="value danger" id="staffLateCount">--</div>
+                            </div>
+                        </div>
+
+                        <div class="smart-stat-card" onclick="filterByCard('On-Duty')">
+                            <div class="smart-stat-icon" style="background-color: #fef5e7; color: #e67e22;">
+                                <i class="fas fa-briefcase"></i>
+                            </div>
+                            <div class="smart-stat-info">
+                                <h3>On-Duty Currently</h3>
+                                <div class="value" id="staffOnDutyCount">--</div>
+                            </div>
+                        </div>
+
+                        <div class="smart-stat-card" onclick="filterByCard('All')">
+                            <div class="smart-stat-icon" style="background-color: #eff3ff; color: #0984e3;">
+                                <i class="fas fa-hourglass-half"></i>
+                            </div>
+                            <div class="smart-stat-info">
+                                <h3>Avg Work Hours</h3>
+                                <div class="value" style="font-size: 20px;">8h 15m</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Toolbar (Filters & Bulk Actions) -->
+                    <div class="dashboard-toolbar">
+                        <div class="toolbar-left">
+                            <select class="dept-select" id="deptFilter">
+                                <option value="All">All Departments</option>
+                                <option value="Engineering">Engineering</option>
+                                <option value="Design">Design</option>
+                                <option value="HR">HR</option>
+                                <option value="Marketing">Marketing</option>
+                            </select>
+                            <span style="font-size: 12px; color: #636e72; font-weight: 600;">Showing
+                                <span id="staffCount">--</span> Staff</span>
+                        </div>
+                        <div class="toolbar-right">
+                            <button class="btn-reminder" onclick="sendReminder()">
+                                <i class="far fa-envelope"></i> Send Reminder to Late Comers
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Smart Staff Table -->
+                    <div class="smart-table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th style="width: 50px; text-align: center;"><input type="checkbox" id="selectAll">
+                                    </th>
+                                    <th>Employee Profile</th>
+                                    <th>Department</th>
+                                    <th>Shift Status</th>
+                                    <th>Visual Timeline (9 AM - 6 PM)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="smartStaffBody">
+                                <!-- Dynamic Staff Rows Injected via JS -->
+                            </tbody>
+                        </table>
+                    </div> <!-- smart-table-wrapper -->
+                </div> <!-- tab-staffing -->
+
+                <!-- 2. REPLACEMENT MOVEMENTS -->
+                <div id="tab-replacement" class="tab-content" style="display: none;">
+                    <div class="dashboard-toolbar" style="margin-bottom: 20px;">
+                        <div class="toolbar-left">
+                            <h3 style="font-size: 16px; color: #2d3436; margin: 0; font-weight: 800;">
+                                REPLACEMENT
+                                MOVEMENTS <span class="badge-live-blink">LIVE</span></h3>
+                            <p style="font-size: 10px; color: #a4b0be; margin: 2px 0 0 0; font-weight: 600;">
+                                ACTIVE
+                                AND SCHEDULED SUBSTITUTIONS</p>
+                        </div>
+                        <div class="toolbar-right">
+                            <select class="dept-select" id="movementFilter">
+                                <option value="All">All Statuses</option>
+                                <option value="Active">Active</option>
+                                <option value="Pending">Pending</option>
+                                <option value="Completed">Completed</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="smart-table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Original Staff</th>
+                                    <th>Replaced By</th>
+                                    <th>Movement Path</th>
+                                    <th>Shift Period</th>
+                                    <th>Reason</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="movementBody">
+                                <!-- Dynamic Movement Rows injected via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 3. HIRING TRENDS -->
+                <div id="tab-hiring" class="tab-content" style="display: none;">
+
+                    <!-- Top Metric Cards -->
+                    <div class="smart-stats-grid" style="margin-bottom: 25px;">
+                        <div class="smart-stat-card">
+                            <div class="smart-stat-icon" style="background-color: #fff4e6; color: #f39c12;">
+                                <i class="fas fa-briefcase"></i>
+                            </div>
+                            <div class="smart-stat-info">
+                                <h3>Open Positions</h3>
+                                <div class="value">14</div>
+                            </div>
+                        </div>
+                        <div class="smart-stat-card">
+                            <div class="smart-stat-icon" style="background-color: #e8f9f5; color: #00b894;">
+                                <i class="fas fa-user-plus"></i>
+                            </div>
+                            <div class="smart-stat-info">
+                                <h3>Joinings This Month</h3>
+                                <div class="value">28</div>
+                            </div>
+                        </div>
+                        <div class="smart-stat-card">
+                            <div class="smart-stat-icon" style="background-color: #f0f3ff; color: #3498db;">
+                                <i class="fas fa-check-circle"></i>
+                            </div>
+                            <div class="smart-stat-info">
+                                <h3>Success Rate</h3>
+                                <div class="value">86%</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Charts Section -->
+                    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 25px;">
+                        <div class="chart-card"
+                            style="background: white; padding: 20px; border-radius: 12px; border: 1px solid var(--border-color);">
+                            <h4 style="font-size: 14px; margin-bottom: 20px; color: #2d3436;">Hiring vs
+                                Attrition
+                                Trend</h4>
+                            <div style="height: 300px;">
+                                <canvas id="hiringAttritionChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="chart-card"
+                            style="background: white; padding: 20px; border-radius: 12px; border: 1px solid var(--border-color);">
+                            <h4 style="font-size: 14px; margin-bottom: 20px; color: #2d3436;">Dept-wise
+                                Hiring</h4>
+                            <div style="height: 300px;">
+                                <canvas id="deptHiringChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Pipeline Table -->
+                    <div class="dashboard-toolbar">
+                        <div class="toolbar-left">
+                            <h3 style="font-size: 16px; font-weight: 800; color: #2d3436;">ACTIVE
+                                PIPELINE</h3>
+                            <p style="font-size: 10px; color: #a4b0be; margin-top: 2px;">PROCESS
+                                TRACKING</p>
+                        </div>
+                    </div>
+
+                    <div class="smart-table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Position</th>
+                                    <th>Candidate Name</th>
+                                    <th>Current Stage</th>
+                                    <th>Recruiter Name</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pipelineBody">
+                                <!-- Rows injected via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 4. PERFORMANCE -->
+                <div id="tab-performance" class="tab-content" style="display: none;">
+                    <!-- Top Metric Cards -->
+                    <div class="smart-stats-grid" style="margin-bottom: 25px;">
+                        <div class="smart-stat-card">
+                            <div class="smart-stat-icon" style="background-color: #fff9e6; color: #f1c40f;">
+                                <i class="fas fa-star"></i>
+                            </div>
+                            <div class="smart-stat-info">
+                                <h3>Company Avg Rating</h3>
+                                <div class="value">4.2 <span style="font-size: 12px; color: #a4b0be;">/
+                                        5</span></div>
+                            </div>
+                        </div>
+                        <div class="smart-stat-card">
+                            <div class="smart-stat-icon" style="background-color: #e8f9f5; color: #00b894;">
+                                <i class="fas fa-trophy"></i>
+                            </div>
+                            <div class="smart-stat-info">
+                                <h3>Top Performer</h3>
+                                <div class="value" style="font-size: 18px;">Neha Gupta</div>
+                            </div>
+                        </div>
+                        <div class="smart-stat-card">
+                            <div class="smart-stat-icon" style="background-color: #eff3ff; color: #3498db;">
+                                <i class="fas fa-bullseye"></i>
+                            </div>
+                            <div class="smart-stat-info">
+                                <h3>Goals Completed</h3>
+                                <div class="value">78%</div>
+                            </div>
+                        </div>
+                        <div class="smart-stat-card">
+                            <div class="smart-stat-icon" style="background-color: #ffefef; color: #ff7675;">
+                                <i class="fas fa-exclamation-circle"></i>
+                            </div>
+                            <div class="smart-stat-info">
+                                <h3>Pending Reviews</h3>
+                                <div class="value danger">12</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dashboard Toolbar -->
+                    <div class="dashboard-toolbar">
+                        <div class="toolbar-left">
+                            <h3 style="font-size: 16px; font-weight: 800; color: #2d3436;">EMPLOYEE
+                                PERFORMANCE REPORT
+                            </h3>
+                            <p style="font-size: 10px; color: #a4b0be; margin-top: 2px;">PERFORMANCE
+                                ANALYTICS</p>
+                        </div>
+                        <div class="toolbar-right">
+                            <select class="dept-select" id="perfFilter">
+                                <option value="All">All Departments</option>
+                                <option value="Engineering">Engineering</option>
+                                <option value="Design">Design</option>
+                                <option value="HR">HR</option>
+                                <option value="Marketing">Marketing</option>
+                            </select>
+                            <button class="btn-reminder"
+                                style="background: #f1f2f6; color: #2d3436; border: 1px solid #dfe4ea;">
+                                <i class="fas fa-download"></i> Export
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Smart Performance Table -->
+                    <div class="smart-table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Employee</th>
+                                    <th>Department</th>
+                                    <th>Overall Rating</th>
+                                    <th>Attendance Score</th>
+                                    <th>Target Progress</th>
+                                </tr>
+                            </thead>
+                            <tbody id="performanceBody">
+                                <!-- Rows injected via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div> <!-- End Tab Contents Wrapper -->
+
+        </div>
+    </div>
+
+    <script>
+        // Set active state on sidebar
+        document.querySelectorAll('.menu-item').forEach(item => {
+            item.classList.remove('active');
+            if (item.innerText.includes('Reports')) {
+                item.classList.add('active');
+            }
+        });
+
+        // Set active state on report tabs with Javascript Toggling
+        const tabs = document.querySelectorAll('.report-tab');
+        const contents = document.querySelectorAll('.tab-content');
+
+        tabs.forEach(tab => {
+            tab.addEventListener('click', function () {
+                // Remove active classes
+                tabs.forEach(t => t.classList.remove('active'));
+                contents.forEach(c => {
+                    c.classList.remove('active');
+                    c.style.display = 'none';
+                });
+
+                // Add active class to clicked tab
+                this.classList.add('active');
+
+                // Show corresponding content
+                const targetId = this.getAttribute('data-target');
+                const targetContent = document.getElementById(targetId);
+                if (targetContent) {
+                    targetContent.classList.add('active');
+                    targetContent.style.display = 'block';
+
+                    // Initialize components based on tab
+                    if (targetId === 'tab-hiring') {
+                        initHiringCharts();
+                        renderPipelineTable();
+                    } else if (targetId === 'tab-performance') {
+                        renderPerformanceTable();
+                    }
+                }
+            });
+        });
+
+        // --- Smart Dashboard Logic --- //
+
+        const smartStaffData = [
+            // Present Employees from Dashboard
+            { id: "EMP001", name: "Rahul Sharma", role: "Software Engineer", dept: "Engineering", status: "On-Time", login: "09:00", logout: "18:00" },
+            { id: "EMP002", name: "Priya Singh", role: "Product Manager", dept: "Product", status: "Late", login: "09:15", logout: "18:20" },
+            { id: "EMP003", name: "Amit Kumar", role: "UI/UX Designer", dept: "Design", status: "Late", login: "09:30", logout: "18:30" },
+            { id: "EMP004", name: "Neha Gupta", role: "HR Executive", dept: "HR", status: "On-Time", login: "08:50", logout: "18:00" },
+            { id: "EMP005", name: "Vikram Patel", role: "Frontend Dev", dept: "Engineering", status: "On-Time", login: "09:05", logout: "18:05" },
+            { id: "EMP031", name: "Simran Kaur", role: "Analyst", dept: "Finance", status: "Late", login: "09:20", logout: "18:20" },
+            // Multi-punch Employees from Dashboard
+            { id: "EMP012", name: "Suresh Menon", role: "QA Tester", dept: "Engineering", status: "Early Exit", login: "09:10", logout: "16:00" },
+            { id: "EMP025", name: "Anjali Verma", role: "Marketing Lead", dept: "Marketing", status: "Early Exit", login: "09:00", logout: "15:30" },
+            { id: "EMP034", name: "Karthik Raj", role: "System Admin", dept: "IT", status: "Late", login: "09:30", logout: "18:00" },
+        ];
+
+        function getInitials(name) {
+            return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+        }
+
+        // Calculate percentage positions for timeline
+        // Assume day window is 09:00 to 18:00 (9 hours total, 540 minutes)
+        // Anything before 09:00 starts at 0%. Anything after 18:00 caps at 100%.
+        function calculateTimeline(loginStr, logoutStr) {
+            const dayStartMin = 9 * 60; // 09:00
+            const dayEndMin = 18 * 60;  // 18:00
+            const totalMins = dayEndMin - dayStartMin;
+
+            function timeToMins(tStr) {
+                const [h, m] = tStr.split(':').map(Number);
+                return (h * 60) + m;
+            }
+
+            let inMin = timeToMins(loginStr);
+            let outMin = timeToMins(logoutStr);
+
+            // Bound the visualizations strictly to the 9AM - 6PM graphical window
+            if (inMin < dayStartMin) inMin = dayStartMin;
+            if (outMin > dayEndMin) outMin = dayEndMin;
+            if (outMin < inMin) outMin = inMin;
+
+            const leftPct = ((inMin - dayStartMin) / totalMins) * 100;
+            const widthPct = ((outMin - inMin) / totalMins) * 100;
+
+            return { left: Math.max(0, leftPct), width: Math.max(0, Math.min(widthPct, 100)) };
+        }
+
+        function getStatusClass(status) {
+            if (status === "On-Time") return "shift-on-time";
+            if (status === "Late") return "shift-late";
+            if (status === "Early Exit") return "shift-early";
+            return "";
+        }
+
+        function renderSmartTable(data) {
+            const tbody = document.getElementById('smartStaffBody');
+            document.getElementById('staffCount').innerText = data.length;
+
+            if (data.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 40px; color: #a4b0be;">No staff found in this filter.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = data.map(emp => {
+                const timeline = calculateTimeline(emp.login, emp.logout);
+                // Use a warning color for early exits too
+                const fillClass = emp.status === "Late" ? "late" : (emp.status === "Early Exit" ? "early" : "");
+                const barColor = emp.status === "Late" ? "#ff7675" : (emp.status === "Early Exit" ? "#f39c12" : "#0984e3");
+
+                return `
+                        <tr>
+                            <td style="text-align: center;"><input type="checkbox" class="row-checkbox"></td>
+                            <td>
+                                <a href="#" class="staff-profile-pill">
+                                    <div class="staff-avatar">${getInitials(emp.name)}</div>
+                                    <div>
+                                        <div class="staff-name">${emp.name}</div>
+                                        <div class="staff-role">${emp.role}</div>
+                                    </div>
+                                </a>
+                            </td>
+                            <td><span style="font-weight: 700; color: #636e72; font-size: 11px;">${emp.dept}</span></td>
+                            <td>
+                                <div class="shift-status ${getStatusClass(emp.status)}">
+                                    <div class="status-dot"></div>
+                                    ${emp.status}
+                                </div>
+                            </td>
+                            <td class="timeline-cell">
+                                <div class="timeline-header">
+                                    <span>09:00</span>
+                                    <span>18:00</span>
+                                </div>
+                                <div class="timeline-container">
+                                    <div class="timeline-fill" style="left: ${timeline.left}%; width: ${timeline.width}%; background-color: ${barColor};"></div>
+                                </div>
+                                <div class="timeline-time-info">${emp.login} &rarr; ${emp.logout}</div>
+                            </td>
+                        </tr>
+                    `;
+            }).join('');
+        }
+
+        // Filter logic by Card Click
+        function filterByCard(type) {
+            // Reset department dropdown visually when a card is clicked
+            document.getElementById('deptFilter').value = 'All';
+
+            if (type === 'All' || type === 'On-Duty') {
+                // In this mockup, all array members are treated as "On-Duty". 
+                renderSmartTable(smartStaffData);
+            } else if (type === 'Late') {
+                renderSmartTable(smartStaffData.filter(e => e.status === "Late"));
+            }
+        }
+
+        // Initialization & Interactivity
+        document.addEventListener("DOMContentLoaded", () => {
+            // Update Top Summary Cards dynamically based on the dataset
+            document.getElementById('staffTotalCount').innerText = smartStaffData.length;
+            document.getElementById('staffLateCount').innerText = smartStaffData.filter(e => e.status === "Late").length;
+            document.getElementById('staffOnDutyCount').innerText = smartStaffData.length; // Assuming all in list are on-duty for this mockup
+
+            renderSmartTable(smartStaffData);
+
+            // Department Filter
+            document.getElementById('deptFilter').addEventListener('change', function () {
+                const dept = this.value;
+                if (dept === "All") renderSmartTable(smartStaffData);
+                else renderSmartTable(smartStaffData.filter(e => e.dept === dept));
+            });
+
+            // Select All Checkbox
+            document.getElementById('selectAll').addEventListener('change', function () {
+                const isChecked = this.checked;
+                document.querySelectorAll('.row-checkbox').forEach(cb => cb.checked = isChecked);
+            });
+
+            // Render Initial Movements Data
+            renderMovements(movementData);
+
+            // Movement Filter
+            document.getElementById('movementFilter').addEventListener('change', function () {
+                const status = this.value;
+                if (status === "All") renderMovements(movementData);
+                else renderMovements(movementData.filter(m => m.status === status));
+            });
+        });
+
+        // Send Reminder Action
+        function sendReminder() {
+            const selected = document.querySelectorAll('.row-checkbox:checked').length;
+            if (selected === 0) {
+                alert('Please select at least one staff member to send a reminder.');
+                return;
+            }
+            alert(`Reminder emails successfully queued for ${selected} selected staff members!`);
+        }
+
+        // Error Catcher - Just in case
+        window.addEventListener('error', function (event) {
+            console.error("Caught unhandled JS Error: ", event.message);
+            const errorDiv = document.getElementById('global-error-display');
+            if (errorDiv) {
+                errorDiv.innerText = "âš ï¸ JavaScript Error: " + event.message;
+                errorDiv.style.display = 'block';
+            }
+
+            const tb = document.getElementById('movementBody');
+            if (tb && tb.children.length === 0) {
+                tb.innerHTML = `<tr><td colspan="7" style="color:red; text-align:center;">JS Error: ${event.message}</td></tr>`;
+            }
+        });
+
+        // --- Replacement Movements Logic --- //
+
+        const movementData = [
+            {
+                id: "MOV001",
+                original: { name: "Sneha Reddy", id: "EMP008" },
+                replacement: { name: "Rahul Sharma", id: "EMP001" },
+                path: { from: "Main Branch", to: "City Center" },
+                shift: "26 Feb, 09:00 - 18:00",
+                reason: "Medical Leave",
+                status: "Active",
+                isAlert: false,
+                approvedBy: "Neha Gupta",
+                documentName: "Medical_Certificate.pdf",
+                startTime: "2026-02-24T09:00:00Z"
+            },
+            {
+                id: "MOV002",
+                original: { name: "Ravi Shankar", id: "EMP015" },
+                replacement: { name: "Priya Singh", id: "EMP002" },
+                path: { from: "West Site", to: "Main Branch" },
+                shift: "26 Feb, 10:00 - 19:00",
+                reason: "Absenteeism",
+                status: "Pending",
+                isAlert: true,
+                approvedBy: "Sanjana M.",
+                documentName: "Warning_Notice.pdf",
+                startTime: "2026-02-26T10:00:00Z"
+            },
+            {
+                id: "MOV003",
+                original: { name: "Karan Johar", id: "EMP019" },
+                replacement: { name: "Amit Kumar", id: "EMP003" },
+                path: { from: "South Site", to: "East Wing" },
+                shift: "25 Feb, 09:00 - 18:00",
+                reason: "Emergency",
+                status: "Completed",
+                isAlert: false,
+                approvedBy: "Vikram Patel",
+                documentName: "Emergency_Request.pdf",
+                startTime: "2026-02-25T09:00:00Z"
+            },
+            {
+                id: "MOV004",
+                original: { name: "Neha Gupta", id: "EMP011" },
+                replacement: { name: "Vikram Patel", id: "EMP005" },
+                path: { from: "Main Branch", to: "North Site" },
+                shift: "26 Feb, 08:00 - 17:00",
+                reason: "Sick Leave",
+                status: "Active",
+                isAlert: true,
+                approvedBy: "Sanjana M.",
+                documentName: "Doctor_Note.pdf",
+                startTime: "2026-02-26T08:00:00Z"
+            },
+            {
+                id: "MOV005",
+                original: { name: "Simran Kaur", id: "EMP052" },
+                replacement: { name: "Anjali Verma", id: "EMP025" },
+                path: { from: "East Wing", to: "West Site" },
+                shift: "26 Feb, 09:00 - 18:00",
+                reason: "Weekly Off Swap",
+                status: "Pending",
+                isAlert: false,
+                approvedBy: "Neha Gupta",
+                documentName: "Swap_Approval.pdf",
+                startTime: "2026-02-26T09:00:00Z"
+            }
+        ];
+
+        function renderMovements(data) {
+            const tbody = document.getElementById('movementBody');
+
+            if (data.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 40px; color: #a4b0be;">No movements found matching criteria.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = data.map(mov => {
+                const statusLower = mov.status.toLowerCase();
+                const alertClass = (mov.status === 'Active' && mov.isAlert) ? "row-alert-orange" : "";
+
+                return `
+                        <tr class="${alertClass}">
+                            <td>
+                                <div class="staff-profile-pill">
+                                    <div class="staff-avatar" style="background-color: #f1f2f6; color: #636e72;">${getInitials(mov.original.name)}</div>
+                                    <div>
+                                        <div class="staff-name">${mov.original.name}</div>
+                                        <div class="staff-role">${mov.original.id}</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="staff-profile-pill">
+                                    <div class="staff-avatar" style="background-color: #e8f9f5; color: #00b894;">${getInitials(mov.replacement.name)}</div>
+                                    <div>
+                                        <div class="staff-name">${mov.replacement.name}</div>
+                                        <div class="staff-role">${mov.replacement.id}</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <div style="font-size: 11px; font-weight: 700; color: #2d3436;">
+                                    ${mov.path.from} <i class="fas fa-long-arrow-alt-right" style="margin: 0 5px; color: #a4b0be;"></i> ${mov.path.to}
+                                </div>
+                            </td>
+                            <td>
+                                <div style="font-weight: 600; color: #636e72; font-size: 11px;">
+                                    <i class="far fa-calendar-alt" style="margin-right: 4px; color: #b2bec3;"></i>${mov.shift}
+                                </div>
+                            </td>
+                            <td style="font-size: 11px; font-weight: 600; color: #2d3436;">${mov.reason}</td>
+                            <td>
+                                <span class="status-badge ${statusLower}" style="font-size: 10px; padding: 3px 8px; border-radius: 12px; font-weight: 700;">
+                                    ${mov.status}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="action-flex">
+                                    <button class="btn-view" onclick="showMovementDetails('${mov.id}')" style="width: 24px; height: 24px; border-radius: 4px; border: none; background: #f1f2f6; color: #636e72; cursor: pointer;" title="View Details">
+                                        <i class="far fa-eye" style="font-size: 11px;"></i>
+                                    </button>
+                                    ${mov.status === 'Active' ? `
+                                        <button class="btn-end-movement" onclick="alert('Movement ended for ${mov.original.name}')" 
+                                                style="background: #ff7675; color: white; border: none; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; cursor: pointer; margin-left: 5px;">
+                                            End
+                                        </button>
+                                    ` : ''}
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+            }).join('');
+        }
+
+        // --- Hiring Trends Logic --- //
+
+        const pipelineData = [
+            { pos: "Senior Java Developer", name: "Amit Trivedi", stage: "Technical Round", recruiter: "Sanjana M." },
+            { pos: "Marketing Specialist", name: "Rohan Das", stage: "Final Interview", recruiter: "Neha Gupta" },
+            { pos: "QA Engineer", name: "Sara Khan", stage: "Offered", recruiter: "Sanjana M." },
+            { pos: "UI Designer", name: "Vikram Rai", stage: "Screening", recruiter: "Vikram Patel" },
+            { pos: "Data Scientist", name: "Anish Kumar", stage: "Technical Round", recruiter: "Vikram Patel" }
+        ];
+
+        function getStageBadge(stage) {
+            const styles = {
+                'Screening': 'background: #f1f2f6; color: #636e72;',
+                'Technical Round': 'background: #eff3ff; color: #3498db;',
+                'Final Interview': 'background: #fff9e6; color: #f39c12;',
+                'Offered': 'background: #e8f9f5; color: #00b894;'
+            };
+            return `<span style="font-size: 10px; padding: 4px 10px; border-radius: 20px; font-weight: 700; ${styles[stage] || ''}">${stage}</span>`;
+        }
+
+        function renderPipelineTable() {
+            const tbody = document.getElementById('pipelineBody');
+            if (!tbody) return;
+            tbody.innerHTML = pipelineData.map(c => `
+                    <tr>
+                        <td style="font-weight: 700; font-size: 13px;">${c.pos}</td>
+                        <td style="font-size: 13px;">${c.name}</td>
+                        <td>${getStageBadge(c.stage)}</td>
+                        <td style="font-size: 12px; font-weight: 600; color: #636e72;">${c.recruiter}</td>
+                    </tr>
+                `).join('');
+        }
+
+        function closeMovementModal() {
+            document.getElementById('movementModalOverlay').classList.remove('active');
+        }
+
+        function calculateDuration(startTimeISO) {
+            const now = new Date();
+            const start = new Date(startTimeISO);
+            const diffMs = now - start;
+
+            if (diffMs < 0) return "Just Started";
+
+            const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
+            const diffDays = Math.floor(diffHrs / 24);
+            const remainingHrs = diffHrs % 24;
+
+            if (diffDays > 0) {
+                return `${diffDays} Days, ${remainingHrs} Hours`;
+            }
+            return `${diffHrs} Hours`;
+        }
+
+        function showMovementDetails(id) {
+            const mov = movementData.find(m => m.id === id);
+            if (!mov) return;
+
+            document.getElementById('modalMovementId').innerText = `REF: ${mov.id}`;
+            document.getElementById('modalOriginalName').innerText = mov.original.name;
+            document.getElementById('modalReplacementName').innerText = mov.replacement.name;
+            document.getElementById('modalSiteFrom').innerText = mov.path.from;
+            document.getElementById('modalSiteTo').innerText = mov.path.to;
+            document.getElementById('modalStatus').innerText = mov.status;
+            document.getElementById('modalReason').innerText = mov.reason;
+            document.getElementById('modalApprovedBy').innerText = mov.approvedBy || "Admin";
+            document.getElementById('modalApproverInitials').innerText = getInitials(mov.approvedBy || "Admin");
+            document.getElementById('modalDocumentName').innerText = mov.documentName || "Not Available";
+            document.getElementById('modalDurationCalculation').innerText = calculateDuration(mov.startTime || new Date());
+
+            document.getElementById('movementModalOverlay').classList.add('active');
+        }
+
+        // --- Performance Logic --- //
+
+        const performanceData = [
+            { id: "EMP001", name: "Rahul Sharma", dept: "Engineering", rating: 4.8, attendance: 98, progress: 95 },
+            { id: "EMP008", name: "Sneha Reddy", dept: "Engineering", rating: 4.5, attendance: 92, progress: 88 },
+            { id: "EMP011", name: "Neha Gupta", dept: "Marketing", rating: 4.9, attendance: 99, progress: 100 },
+            { id: "EMP015", name: "Ravi Shankar", dept: "Sales", rating: 3.2, attendance: 85, progress: 65 },
+            { id: "EMP021", name: "Priya Singh", dept: "Design", rating: 4.2, attendance: 91, progress: 82 },
+            { id: "EMP033", name: "Amit Kumar", dept: "Analytics", rating: 3.8, attendance: 88, progress: 74 },
+            { id: "EMP045", name: "Vikram Patel", dept: "IT Support", rating: 4.0, attendance: 94, progress: 81 },
+            { id: "EMP052", name: "Simran Kaur", dept: "Engineering", rating: 3.5, attendance: 78, progress: 60 }
+        ];
+
+        function getStarRating(rating) {
+            let stars = '';
+            const fullStars = Math.floor(rating);
+            const halfStar = rating % 1 >= 0.5;
+
+            for (let i = 0; i < 5; i++) {
+                if (i < fullStars) {
+                    stars += '<i class="fas fa-star"></i>';
+                } else if (i === fullStars && halfStar) {
+                    stars += '<i class="fas fa-star-half-alt"></i>';
+                } else {
+                    stars += '<i class="far fa-star"></i>';
+                }
+            }
+            return `<div class="star-rating">${stars} <span style="color:#636e72; font-size:11px; margin-left:5px;">(${rating})</span></div>`;
+        }
+
+        function renderPerformanceTable() {
+            const tbody = document.getElementById('performanceBody');
+            if (!tbody) return;
+
+            tbody.innerHTML = performanceData.map(emp => {
+                const attColor = emp.attendance >= 90 ? 'good' : (emp.attendance >= 80 ? 'avg' : 'poor');
+                const progColor = emp.progress >= 85 ? '#00b894' : (emp.progress >= 70 ? '#f39c12' : '#ff7675');
+
+                return `
+                    <tr>
+                        <td>
+                            <div class="staff-profile-pill">
+                                <div class="staff-avatar" style="background-color: #f1f2f6; color: #636e72;">${getInitials(emp.name)}</div>
+                                <div>
+                                    <div class="staff-name">${emp.name}</div>
+                                    <div class="staff-role">${emp.id}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td style="font-size: 13px; font-weight: 600; color: #636e72;">${emp.dept}</td>
+                        <td>${getStarRating(emp.rating)}</td>
+                        <td>
+                            <span class="attendance-pill ${attColor}">${emp.attendance}%</span>
+                        </td>
+                        <td>
+                            <div style="font-size: 11px; font-weight: 700; color: #2d3436; margin-bottom: 3px;">${emp.progress}%</div>
+                            <div class="progress-container">
+                                <div class="progress-bar" style="width: ${emp.progress}%; background-color: ${progColor};"></div>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+
+        let hiringChartsInitialized = false;
+        function initHiringCharts() {
+            if (hiringChartsInitialized) return;
+
+            // Hiring vs Attrition Chart
+            const ctxHiring = document.getElementById('hiringAttritionChart').getContext('2d');
+            new Chart(ctxHiring, {
+                type: 'bar',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+                    datasets: [
+                        {
+                            label: 'New Joinings',
+                            data: [15, 20, 25, 22, 30, 28],
+                            backgroundColor: '#00b894',
+                            borderRadius: 4
+                        },
+                        {
+                            label: 'Exits',
+                            data: [5, 8, 4, 10, 6, 7],
+                            backgroundColor: '#ff7675',
+                            borderRadius: 4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'top', labels: { font: { family: 'Inter', weight: 600 } } } },
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+
+            // Dept-wise Hiring Pie Chart
+            const ctxDept = document.getElementById('deptHiringChart').getContext('2d');
+            new Chart(ctxDept, {
+                type: 'doughnut',
+                data: {
+                    labels: ['IT', 'HR', 'Sales', 'Product', 'Design'],
+                    datasets: [{
+                        data: [40, 10, 20, 20, 10],
+                        backgroundColor: ['#3498db', '#9b59b6', '#f1c40f', '#e67e22', '#1abc9c'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { boxWidth: 10, font: { family: 'Inter', size: 10, weight: 600 } } }
+                    },
+                    cutout: '70%'
+                }
+            });
+
+            hiringChartsInitialized = true;
+        }
+    </script>
+</body>
+
+</html>

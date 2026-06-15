@@ -1,0 +1,173 @@
+/**
+ * LETTER STATUS BADGE STYLES
+ * Professional, accessible styling for status indicators
+ */
+
+.letter-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.letter-status-badge:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.letter-status-badge:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Status Colors */
+.status-draft {
+    background-color: #f3f4f6;
+    color: #6b7280;
+    border: 1px solid #d1d5db;
+}
+
+.status-generated {
+    background-color: #dbeafe;
+    color: #1e40af;
+    border: 1px solid #93c5fd;
+}
+
+.status-assigned {
+    background-color: #ddd6fe;
+    color: #5b21b6;
+    border: 1px solid #c4b5fd;
+}
+
+.status-viewed {
+    background-color: #dcfce7;
+    color: #15803d;
+    border: 1px solid #86efac;
+}
+
+.status-downloaded {
+    background-color: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fcd34d;
+}
+
+.status-revoked {
+    background-color: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+    animation: pulse-revoked 2s infinite;
+}
+
+@keyframes pulse-revoked {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.8; }
+}
+
+.status-expired {
+    background-color: #fed7aa;
+    color: #92400e;
+    border: 1px solid #fdba74;
+}
+
+/* Badge Elements */
+.status-icon {
+    font-size: 16px;
+    display: inline-block;
+}
+
+.status-label {
+    font-weight: 600;
+}
+
+.status-reason {
+    font-size: 12px;
+    margin-left: 4px;
+    opacity: 0.8;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+    .letter-status-badge {
+        padding: 4px 8px;
+        font-size: 12px;
+        gap: 4px;
+    }
+
+    .status-icon {
+        font-size: 14px;
+    }
+}
+
+/* Accessibility */
+@media (prefers-reduced-motion: reduce) {
+    .letter-status-badge {
+        transition: none;
+    }
+
+    .letter-status-badge:hover {
+        transform: none;
+    }
+
+    .status-revoked {
+        animation: none;
+        opacity: 1;
+    }
+}
+
+/* Focus state (keyboard navigation) */
+.letter-status-badge:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    .status-draft {
+        background-color: #374151;
+        color: #d1d5db;
+        border-color: #4b5563;
+    }
+
+    .status-generated {
+        background-color: #1e3a8a;
+        color: #dbeafe;
+        border-color: #3b82f6;
+    }
+
+    .status-assigned {
+        background-color: #3f1d5c;
+        color: #e9d5ff;
+        border-color: #9333ea;
+    }
+
+    .status-viewed {
+        background-color: #1d3d1f;
+        color: #bbf7d0;
+        border-color: #22c55e;
+    }
+
+    .status-downloaded {
+        background-color: #3d2e1f;
+        color: #fef08a;
+        border-color: #facc15;
+    }
+
+    .status-revoked {
+        background-color: #3f1f1f;
+        color: #fca5a5;
+        border-color: #ef4444;
+    }
+
+    .status-expired {
+        background-color: #3d2817;
+        color: #fed7aa;
+        border-color: #f97316;
+    }
+}

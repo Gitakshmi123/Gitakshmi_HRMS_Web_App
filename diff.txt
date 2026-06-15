@@ -1,0 +1,150 @@
+﻿diff --git a/server/services/payroll.service.js b/server/services/payroll.service.js
+index 229db4c..894dd27 100644
+--- a/server/services/payroll.service.js
++++ b/server/services/payroll.service.js
+@@ -76,7 +76,7 @@ async function runPayroll(db, tenantId, month, year, initiatedBy) {
+ 
+     // Apply filters if provided
+     if (payrollRun.isFiltered && payrollRun.filters) {
+-        const { department, designation, employeeTypes, workModes } = payrollRun.filters;
++        const { department, designation, employeeType, workMode, employeeTypes, workModes } = payrollRun.filters;
+ 
+         if (department && department !== 'All Departments') {
+             filter.department = department;
+@@ -86,12 +86,15 @@ async function runPayroll(db, tenantId, month, year, initiatedBy) {
+             filter.designation = designation;
+         }
+ 
+-        if (employeeTypes && employeeTypes.length > 0) {
+-            filter.employeeType = { $in: employeeTypes };
++        // Support both singular (frontend) and plural (old service) keys
++        const types = employeeType || employeeTypes;
++        if (types && types.length > 0) {
++            filter.employeeType = { $in: Array.isArray(types) ? types : [types] };
+         }
+ 
+-        if (workModes && workModes.length > 0) {
+-            filter.workMode = { $in: workModes };
++        const modes = workMode || workModes;
++        if (modes && modes.length > 0) {
++            filter.workMode = { $in: Array.isArray(modes) ? modes : [modes] };
+         }
+     }
+ 
+@@ -105,10 +108,10 @@ async function runPayroll(db, tenantId, month, year, initiatedBy) {
+     payrollRun.totalDeductions = 0;
+     payrollRun.totalNetPay = 0;
+ 
+-    // Date range for the month
+-    const startDate = new Date(year, month - 1, 1);
+-    const endDate = new Date(year, month, 0); // Last day of month
+-    const daysInMonth = endDate.getDate();
++    // Define the exact payroll period (UTC explicitly)
++    const startDate = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0));
++    const endDate = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
++    const daysInMonth = new Date(year, month, 0).getDate(); // Safe to get local count since it's just the day count
+ 
+     // Get holidays for the month
+     const holidays = await Holiday.find({
+@@ -257,9 +260,36 @@ async function calculateEmployeePayroll(
+     if (!comp) {
+         console.warn(`⚠️ [PAYROLL] Active compensation not found for ${employee.firstName}. Checking legacy fallbacks...`);
+ 
+-        // 1️⃣ Find Applicant linked to this employee (if applicable)
++        // 2️⃣ Find direct EmployeeSalarySnapshot
++        if (!comp) {
++            const EmployeeSalarySnapshot = db.model('EmployeeSalarySnapshot');
++            let snapshot = null;
++            if (employee.currentSalarySnapshotId || employee.salarySnapshotId) {
++                snapshot = await EmployeeSalarySnapshot.findById(employee.currentSalarySnapshotId || employee.salarySnapshotId).lean();
++            }
++            if (!snapshot) {
++                snapshot = await EmployeeSalarySnapshot.findOne({ employee: employee._id }).sort({ createdAt: -1 }).lean();
++            }
++            if (snapshot) {
++                console.log(`✅ [PAYROLL] Fallback: Using direct EmployeeSalarySnapshot for ${employee.firstName}`);
++                comp = {
++                    _id: snapshot._id,
++                    totalCTC: snapshot.ctc || snapshot.totalCTC || 0,
++                    grossA: (snapshot.breakdown?.totalEarnings || snapshot.summary?.grossEarnings) || 0,
++                    components: [
++                        ...(snapshot.earnings || []).map(e => ({ ...e, type: 'EARNING' })),
++                        ...(snapshot.employeeDeductions || snapshot.deductions || []).map(d => ({ ...d, type: 'DEDUCTION' })),
++                        ...(snapshot.benefits || snapshot.employerBenefits || []).map(b => ({ ...b, type: 'BENEFIT' }))
++                    ]
++                };
++            }
++        }
++
++        // 3️⃣ Find Applicant linked to this employee (if applicable)
+         const fullName = `${employee.firstName || ''} ${employee.lastName || ''}`.trim();
+-        let linkedApplicant = await Applicant.findOne({
++        let linkedApplicant = null;
++        if (!comp) {
++            linkedApplicant = await Applicant.findOne({
+             $or: [
+                 { employeeId: employee._id },
+                 { _id: employee._id },
+@@ -271,8 +301,8 @@ async function calculateEmployeePayroll(
+         if (linkedApplicant) {
+             console.log(`🔍 [PAYROLL] Found linked applicant: ${linkedApplicant._id}`);
+ 
+-            // 2️⃣ Check for EmployeeSalarySnapshot (via salarySnapshotId)
+-            if (linkedApplicant.salarySnapshotId) {
++            // 4️⃣ Check for Applicant EmployeeSalarySnapshot (via salarySnapshotId)
++            if (linkedApplicant && linkedApplicant.salarySnapshotId) {
+                 const EmployeeSalarySnapshot = db.model('EmployeeSalarySnapshot');
+                 const snapshot = await EmployeeSalarySnapshot.findById(linkedApplicant.salarySnapshotId).lean();
+                 if (snapshot) {
+@@ -290,8 +320,8 @@ async function calculateEmployeePayroll(
+                 }
+             }
+ 
+-            // 3️⃣ Check for Applicant.salarySnapshot (Legacy fallback)
+-            if (!comp && linkedApplicant.salarySnapshot) {
++            // 5️⃣ Check for Applicant.salarySnapshot (Legacy fallback)
++            if (!comp && linkedApplicant && linkedApplicant.salarySnapshot) {
+                 console.log(`✅ [PAYROLL] Fallback: Using Applicant.salarySnapshot for ${employee.firstName}`);
+                 const snap = linkedApplicant.salarySnapshot;
+                 comp = {
+@@ -729,6 +759,8 @@ function calculateAttendanceSummary(attendanceRecords, daysInMonth, holidayDates
+ 
+         if (holidayDates.has(dateStr)) {
+             holidayDays++;
++            // Holidays are paid days
++            presentDays += 1;
+         } else if (isPresent || status === 'half_day' || isWFH || isOnDuty) {
+             // STRICT DAY-WISE CALCULATION: Ignore hours, use purely day status
+             const dayWeight = status === 'half_day' ? 0.5 : 1;
+@@ -736,13 +768,13 @@ function calculateAttendanceSummary(attendanceRecords, daysInMonth, holidayDates
+         } else if (status === 'leave') {
+             // Check if paid leave or unpaid (LOP)
+             // If it's a paid leave, it should count towards present days for salary purposes
+-            if (record.leaveType && record.leaveType.toLowerCase().includes('lop')) {
++            if (record.leaveType && (record.leaveType.toLowerCase().includes('lop') || record.leaveType.toLowerCase().includes('unpaid'))) {
+                 // It's unpaid, count as LOP
+                 if (!record.lopDays) {
+                     lopDays++;
+                 }
+             } else {
+-                // It's a PAId leave, count towards present/payable days!
++                // It's a PAID leave, count towards present/payable days!
+                 leaveDays++;
+                 presentDays += 1; // Paid leaves count as payable days in day-wise calculation
+             }
+@@ -753,6 +785,15 @@ function calculateAttendanceSummary(attendanceRecords, daysInMonth, holidayDates
+         }
+     });
+ 
++    // 🛡️ RECOVERY: For monthly fixed salary, we assume days with NO records are PAID (Weekends/Working days without punch)
++    // unless they were explicitly marked as Absent/LOP.
++    // However, if the count is still low, we adjust it to (ActualDaysInMonth - LOPDays)
++    const calculatedPayableDays = actualDaysInMonth - lopDays;
++    if (presentDays < calculatedPayableDays) {
++        console.log(`ℹ️ [ATTENDANCE] Adjusting payable days from ${presentDays} to ${calculatedPayableDays} (Actual - LOP)`);
++        presentDays = calculatedPayableDays;
++    }
++
+     console.log(`\n✅ [ATTENDANCE SUMMARY] Results:`);
+     console.log(`   - Total Days: ${actualDaysInMonth}`);
+     console.log(`   - Present Days: ${presentDays}`);

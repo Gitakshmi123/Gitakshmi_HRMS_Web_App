@@ -1,0 +1,1089 @@
+Connected to DB
+Tenant ID: new ObjectId('69e7cc21e1bb34e2e53190d8')
+Found 3 users for tenant GIT001
+- dharmikjethwani777@gmail.com (Role: employee)
+  Permissions: [
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "overview.dashboard",
+    "section": "General",
+    "_id": "69e805233573cdb23212835c"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "configuration.access",
+    "section": "General",
+    "_id": "69e805233573cdb23212835d"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "people.employees",
+    "section": "General",
+    "_id": "69e805233573cdb23212835e"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "people.departments",
+    "section": "General",
+    "_id": "69e805233573cdb23212835f"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "people.org",
+    "section": "General",
+    "_id": "69e805233573cdb232128360"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "people.users",
+    "section": "General",
+    "_id": "69e805233573cdb232128361"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "attendance.dashboard",
+    "section": "General",
+    "_id": "69e805233573cdb232128362"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "attendance.calendar",
+    "section": "General",
+    "_id": "69e805233573cdb232128363"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "attendance.face",
+    "section": "General",
+    "_id": "69e805233573cdb232128364"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "leave.requests",
+    "section": "General",
+    "_id": "69e805233573cdb232128365"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "leave.policies",
+    "section": "General",
+    "_id": "69e805233573cdb232128366"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "payroll.stats",
+    "section": "General",
+    "_id": "69e805233573cdb232128367"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "payroll.salary",
+    "section": "General",
+    "_id": "69e805233573cdb232128368"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "payroll.compensation",
+    "section": "General",
+    "_id": "69e805233573cdb232128369"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "payroll.process",
+    "section": "General",
+    "_id": "69e805233573cdb23212836a"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "payroll.run",
+    "section": "General",
+    "_id": "69e805233573cdb23212836b"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "payroll.payslips",
+    "section": "General",
+    "_id": "69e805233573cdb23212836c"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "payroll.templates",
+    "section": "General",
+    "_id": "69e805233573cdb23212836d"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "hiring.jobList",
+    "section": "General",
+    "_id": "69e805233573cdb23212836e"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "hiring.createReq",
+    "section": "General",
+    "_id": "69e805233573cdb23212836f"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "hiring.external",
+    "section": "General",
+    "_id": "69e805233573cdb232128370"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "hiring.internal",
+    "section": "General",
+    "_id": "69e805233573cdb232128371"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "hiring.tracker",
+    "section": "General",
+    "_id": "69e805233573cdb232128372"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "hiring.offerTemplates",
+    "section": "General",
+    "_id": "69e805233573cdb232128373"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "onboarding.dashboard",
+    "section": "General",
+    "_id": "69e805233573cdb232128374"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "bgv.caseMaster",
+    "section": "General",
+    "_id": "69e805233573cdb232128375"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "bgv.emailLogs",
+    "section": "General",
+    "_id": "69e805233573cdb232128376"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "offboarding.exit",
+    "section": "General",
+    "_id": "69e805233573cdb232128377"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "support.tickets",
+    "section": "General",
+    "_id": "69e805233573cdb232128378"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "socialMedia.dashboard",
+    "section": "General",
+    "_id": "69e805233573cdb232128379"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "socialMedia.accounts",
+    "section": "General",
+    "_id": "69e805233573cdb23212837a"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "socialMedia.create",
+    "section": "General",
+    "_id": "69e805233573cdb23212837b"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "socialMedia.history",
+    "section": "General",
+    "_id": "69e805233573cdb23212837c"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "portals.careerPage",
+    "section": "General",
+    "_id": "69e805233573cdb23212837d"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "portals.applyPage",
+    "section": "General",
+    "_id": "69e805233573cdb23212837e"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "reports.staffing",
+    "section": "General",
+    "_id": "69e805233573cdb23212837f"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "reports.movements",
+    "section": "General",
+    "_id": "69e805233573cdb232128380"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "reports.trends",
+    "section": "General",
+    "_id": "69e805233573cdb232128381"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "reports.performance",
+    "section": "General",
+    "_id": "69e805233573cdb232128382"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "configuration.company",
+    "section": "General",
+    "_id": "69e805233573cdb232128383"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "configuration.sequences",
+    "section": "General",
+    "_id": "69e805233573cdb232128384"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "company.subCompanies",
+    "section": "General",
+    "_id": "69e805233573cdb232128385"
+  },
+  {
+    "actions": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true
+    },
+    "module": "employee.dashboard",
+    "section": "General",
+    "_id": "69e805233573cdb232128386"
+  },
+  {
+    "actions": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true
+    },
+    "module": "employee.attendance",
+    "section": "General",
+    "_id": "69e805233573cdb232128387"
+  },
+  {
+    "actions": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true
+    },
+    "module": "employee.payslips",
+    "section": "General",
+    "_id": "69e805233573cdb232128388"
+  },
+  {
+    "actions": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true
+    },
+    "module": "employee.documents",
+    "section": "General",
+    "_id": "69e805233573cdb232128389"
+  },
+  {
+    "actions": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true
+    },
+    "module": "employee.jobs",
+    "section": "General",
+    "_id": "69e805233573cdb23212838a"
+  },
+  {
+    "actions": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true
+    },
+    "module": "employee.tickets",
+    "section": "General",
+    "_id": "69e805233573cdb23212838b"
+  },
+  {
+    "actions": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true
+    },
+    "module": "employee.exit",
+    "section": "General",
+    "_id": "69e805233573cdb23212838c"
+  }
+]
+- v91859224@gmail.com (Role: employee)
+  Permissions: []
+- tech99779@gmail.com (Role: employee)
+  Permissions: [
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "overview.dashboard",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce28"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "configuration.access",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce29"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "people.employees",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce2a"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "people.departments",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce2b"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "people.org",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce2c"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "people.users",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce2d"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "attendance.dashboard",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce2e"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "attendance.calendar",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce2f"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "attendance.face",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce30"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "leave.requests",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce31"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "leave.policies",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce32"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "payroll.stats",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce33"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "payroll.salary",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce34"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "payroll.compensation",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce35"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "payroll.process",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce36"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "payroll.run",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce37"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "payroll.payslips",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce38"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "payroll.templates",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce39"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "hiring.jobList",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce3a"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "hiring.createReq",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce3b"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "hiring.external",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce3c"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "hiring.internal",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce3d"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "hiring.tracker",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce3e"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "hiring.offerTemplates",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce3f"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "onboarding.dashboard",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce40"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "bgv.caseMaster",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce41"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "bgv.emailLogs",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce42"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "offboarding.exit",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce43"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "support.tickets",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce44"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "socialMedia.dashboard",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce45"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "socialMedia.accounts",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce46"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "socialMedia.create",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce47"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "socialMedia.history",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce48"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "portals.careerPage",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce49"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "portals.applyPage",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce4a"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "reports.staffing",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce4b"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "reports.movements",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce4c"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "reports.trends",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce4d"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "reports.performance",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce4e"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "configuration.company",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce4f"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "configuration.sequences",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce50"
+  },
+  {
+    "actions": {
+      "view": false,
+      "create": false,
+      "edit": false,
+      "delete": false
+    },
+    "module": "company.subCompanies",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce51"
+  },
+  {
+    "actions": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true
+    },
+    "module": "employee.dashboard",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce52"
+  },
+  {
+    "actions": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true
+    },
+    "module": "employee.attendance",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce53"
+  },
+  {
+    "actions": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true
+    },
+    "module": "employee.payslips",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce54"
+  },
+  {
+    "actions": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true
+    },
+    "module": "employee.documents",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce55"
+  },
+  {
+    "actions": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true
+    },
+    "module": "employee.jobs",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce56"
+  },
+  {
+    "actions": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true
+    },
+    "module": "employee.tickets",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce57"
+  },
+  {
+    "actions": {
+      "view": true,
+      "create": true,
+      "edit": true,
+      "delete": true
+    },
+    "module": "employee.exit",
+    "section": "General",
+    "_id": "69e9b028b86399c41321ce58"
+  }
+]

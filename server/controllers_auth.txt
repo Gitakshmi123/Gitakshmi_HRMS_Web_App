@@ -1,0 +1,305 @@
+const jwt = require("jsonwebtoken");
+const mongoose = require("mongoose");
+const Tenant = require("../models/Tenant");
+const getTenantDB = require('../utils/tenantDB');
+const bcrypt = require("bcryptjs");
+
+/* ---------------------------------------------------
+   SUPER ADMIN LOGIN
+--------------------------------------------------- */
+const SUPER_ADMIN = {
+  email: "superadmin@hrms.com",
+  password: "admin123",
+  role: "psa",
+  name: "Super Admin",
+};
+
+exports.loginController = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (email !== SUPER_ADMIN.email || password !== SUPER_ADMIN.password) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    const token = jwt.sign(
+      { id: 'psa_admin', email: SUPER_ADMIN.email, role: SUPER_ADMIN.role },
+      process.env.JWT_SECRET || "hrms_secret_key_123",
+      { expiresIn: "1d" }
+    );
+
+
+    return res.json({
+      token,
+      user: {
+        name: SUPER_ADMIN.name,
+        email: SUPER_ADMIN.email,
+        role: SUPER_ADMIN.role,
+      },
+      enabledModules: {
+        hr: true,
+        payroll: true,
+        attendance: true,
+        recruitment: true,
+        employeePortal: true,
+        reports: true
+      }
+    });
+  } catch (err) {
+    console.error("Login error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+exports.verifyPsaPassword = async (req, res) => {
+  try {
+    const { password } = req.body;
+    if (!password) {
+      return res.status(400).json({ success: false, message: "Password is required" });
+    }
+
+    if (password === SUPER_ADMIN.password) {
+      return res.json({ success: true, message: "Password verified" });
+    }
+
+    return res.status(401).json({ success: false, message: "Invalid password" });
+  } catch (err) {
+    console.error("Verify PSA password error:", err);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+/* ---------------------------------------------------
+   HR LOGIN (PER TENANT)
+--------------------------------------------------- */
+exports.loginHrController = async (req, res) => {
+  try {
+    const { companyCode, email, password } = req.body;
+    const finalEmail = String(email || '').trim().toLowerCase();
+    const finalCode = String(companyCode || '').trim();
+
+    if (!finalCode || !finalEmail || !password) {
+      return res.status(400).json({ message: "companyCode_email_password_required" });
+    }
+
+    const tenant = await Tenant.findOne({ code: finalCode });
+    if (!tenant) return res.status(404).json({ message: "tenant_not_found" });
+    if (tenant.status !== "active") return res.status(403).json({ message: "tenant_not_active" });
+
+    // 2. Locate Admin account in the main database (MUST be hr/admin role, NOT employee)
+    let adminAccount = null;
+    try {
+      if (mongoose.models['User'] || mongoose.modelNames().includes('User')) {
+        const User = mongoose.model('User');
+        adminAccount = await User.findOne({
+          email: finalEmail,
+          tenant: tenant._id,
+          role: { $in: ['hr', 'admin', 'company_admin', 'psa'] }
+        }).lean();
+      }
+    } catch (dbErr) {
+      console.warn("[Login] Auth Error or Users collection missing:", dbErr.message);
+    }
+
+    let ok = false;
+    if (adminAccount) {
+      ok = await bcrypt.compare(password, adminAccount.password);
+    } else {
+      // 3. Falling back to legacy meta-based login
+      const meta = tenant.meta || {};
+      const storedEmails = [meta.email, meta.primaryEmail, tenant.adminEmail].map(e => String(e || '').trim().toLowerCase()).filter(Boolean);
+      const isEmailMatch = storedEmails.includes(finalEmail);
+      const storedPassword = String(meta.adminPassword || '').trim();
+      ok = (isEmailMatch && storedPassword === password.trim());
+      if (!ok && isEmailMatch && tenant.password) {
+        ok = await bcrypt.compare(password, tenant.password);
+      }
+    }
+
+    if (!ok) {
+      return res.status(401).json({ message: 'invalid_credentials' });
+    }
+
+    const token = jwt.sign(
+      {
+        id: adminAccount?._id || tenant._id,
+        email: finalEmail,
+        role: adminAccount?.role || "hr",
+        permissions: adminAccount?.permissions || [],
+        companyCode: tenant.code,
+        tenantId: tenant._id,
+      },
+      process.env.JWT_SECRET || "hrms_secret_key_123",
+      { expiresIn: "1d" }
+    );
+
+    return res.json({
+      token,
+      user: {
+        id: adminAccount?._id || tenant._id,
+        name: adminAccount?.name || (tenant.ownerName || tenant.name || "Tenant Admin"),
+        email: finalEmail,
+        role: adminAccount?.role || "hr",
+        permissions: adminAccount?.permissions || [],
+        companyCode: tenant.code,
+        tenantId: tenant._id,
+      },
+      company: tenant,
+      enabledModules: tenant.enabledModules || {}
+    });
+  } catch (err) {
+    console.error("HR login error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+/* ---------------------------------------------------
+   EMPLOYEE LOGIN (PER TENANT DATABASE)
+--------------------------------------------------- */
+exports.loginEmployeeController = async (req, res) => {
+  try {
+    const cleanCode = String(req.body.companyCode || '').trim();
+    const cleanEmpId = String(req.body.employeeId || '').trim();
+    const { password } = req.body;
+
+    console.log('🔍 [EMPLOYEE LOGIN] Incoming request (Sanitized):', {
+      companyCode: cleanCode,
+      employeeId: cleanEmpId,
+      passwordLength: password ? password.length : 0
+    });
+
+    if (!cleanCode || !cleanEmpId || !password)
+      return res.status(400).json({ message: "companyCode_employeeId_password_required" });
+
+    // 1) Find tenant by company code
+    const tenant = await Tenant.findOne({ code: cleanCode });
+    if (!tenant) return res.status(404).json({ message: "tenant_not_found" });
+
+    // 2) Load tenant database
+    const db = await getTenantDB(tenant._id);
+    const Employee = db.model("Employee");
+
+    // 3) Find employee inside THIS tenant only
+    const emp = await Employee.findOne({
+      employeeId: new RegExp(`^${cleanEmpId}$`, "i"),
+      tenant: tenant._id
+    });
+
+    if (!emp) {
+      console.log('❌ Employee not found:', { companyCode, employeeId, tenantId: tenant._id });
+      return res.status(404).json({ message: "employee_not_found" });
+    }
+
+    console.log('✅ Employee found:', {
+      employeeId: emp.employeeId,
+      hasPassword: !!emp.password,
+      passwordLength: emp.password ? emp.password.length : 0,
+      passwordPrefix: emp.password ? emp.password.substring(0, 10) : 'none'
+    });
+
+    // 4) Compare password
+    const stored = emp.password || "";
+    let ok = false;
+
+    if (stored.startsWith("$2")) {
+      console.log('🔐 Comparing bcrypt password...');
+      ok = await bcrypt.compare(password, stored);
+      console.log('🔐 Bcrypt comparison result:', ok);
+    } else {
+      console.log('🔐 Comparing plain text password...');
+      ok = String(stored) === String(password);
+      console.log('🔐 Plain text comparison result:', ok);
+    }
+
+    if (!ok) {
+      console.log('❌ Password mismatch:', {
+        providedPassword: password,
+        storedPasswordType: stored.startsWith("$2") ? 'bcrypt' : 'plain',
+        storedPasswordLength: stored.length
+      });
+      return res.status(401).json({ message: "invalid_credentials" });
+    }
+
+    // 4b) Block deactivated / exited employees from logging in
+    const isDeactivated =
+      emp.isActive === false ||
+      ['INACTIVE', 'Inactive', 'Exited', 'Deactivated'].includes(emp.status) ||
+      ['INACTIVE', 'Inactive', 'Exited', 'Deactivated'].includes(emp.employmentStatus);
+
+    if (isDeactivated) {
+      console.warn(`⛔ [EMPLOYEE LOGIN] Blocked — account deactivated: ${emp.employeeId}`);
+      return res.status(403).json({
+        message: 'account_deactivated',
+        reason:  'Your account has been deactivated. Please contact HR for further assistance.'
+      });
+    }
+
+    // 5) Issue token
+    // Normalize role to lower case and ensure "Admin" maps to "admin"
+    const finalRole = (emp.role || "employee").toLowerCase();
+
+    // 5) Fetch Direct User Permissions from Main DB
+    const User = mongoose.model('User');
+    const empUser = await User.findOne({ email: emp.email.toLowerCase().trim(), tenant: tenant._id });
+    const finalPermissions = empUser?.permissions || [];
+    const userIdForToken = empUser?._id || emp._id;
+
+    const token = jwt.sign(
+      {
+        id: userIdForToken,
+        email: emp.email,
+        role: finalRole,
+        permissions: finalPermissions,
+        companyCode: tenant.code,
+        tenantId: tenant._id,
+      },
+      process.env.JWT_SECRET || "hrms_secret_key_123",
+      { expiresIn: "10d" }
+    );
+
+    return res.json({
+      token,
+      user: {
+        id: userIdForToken,
+        name: `${emp.firstName || ""} ${emp.lastName || ""}`.trim() || emp.email,
+        email: emp.email,
+        role: finalRole,
+        permissions: finalPermissions,
+        companyCode: tenant.code,
+        tenantId: tenant._id,
+      },
+      company: tenant,
+      enabledModules: tenant.enabledModules || {}
+    });
+  } catch (err) {
+    console.error("Employee login error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+/**
+ * GET /me - Returns current user + fresh permissions
+ * (Used for real-time permission synchronization)
+ */
+exports.getMe = async (req, res) => {
+  try {
+    const User = mongoose.model('User');
+    const user = await User.findById(req.user.id).select('-password');
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    return res.json({
+      success: true,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        permissions: user.permissions || [],
+        tenantId: user.tenant
+      }
+    });
+  } catch (err) {
+    console.error("Sync getMe error:", err);
+    return res.status(500).json({ message: "Sync error" });
+  }
+};

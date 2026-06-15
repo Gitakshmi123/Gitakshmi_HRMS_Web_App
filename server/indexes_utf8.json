@@ -1,0 +1,101 @@
+{
+  "collections": [
+    "feedbacktemplates",
+    "documenttypes",
+    "bgv_cases",
+    "replacementrequests",
+    "users",
+    "careersections",
+    "socialaccounts",
+    "leaverequests",
+    "stagefeedbacks",
+    "requirements",
+    "careerseos",
+    "socialposts",
+    "bgv_checks",
+    "documentcounters",
+    "tenants",
+    "notifications",
+    "regularizations",
+    "generatedletters",
+    "publishedcareerpages",
+    "candidatestatuslogs",
+    "counters",
+    "careerlayouts",
+    "employees",
+    "applicants",
+    "bgv_reports",
+    "positions",
+    "companysettings",
+    "interviews",
+    "companyidconfigs",
+    "candidates",
+    "bgv_documents",
+    "bgv_timeline",
+    "payroll_adjustments",
+    "trackercandidates",
+    "lettertemplates",
+    "hiringstages",
+    "salarystructures"
+  ],
+  "requirementdrafts": "NOT_FOUND",
+  "requirements": [
+    {
+      "v": 2,
+      "key": {
+        "_id": 1
+      },
+      "name": "_id_"
+    },
+    {
+      "v": 2,
+      "key": {
+        "tenant": 1
+      },
+      "name": "tenant_1",
+      "background": true
+    },
+    {
+      "v": 2,
+      "key": {
+        "jobOpeningId": 1
+      },
+      "name": "jobOpeningId_1",
+      "background": true
+    },
+    {
+      "v": 2,
+      "key": {
+        "positionId": 1
+      },
+      "name": "positionId_1",
+      "background": true
+    }
+  ],
+  "positions": [
+    {
+      "v": 2,
+      "key": {
+        "_id": 1
+      },
+      "name": "_id_"
+    },
+    {
+      "v": 2,
+      "key": {
+        "tenant": 1
+      },
+      "name": "tenant_1",
+      "background": true
+    },
+    {
+      "v": 2,
+      "key": {
+        "positionId": 1
+      },
+      "name": "positionId_1",
+      "background": true,
+      "unique": true
+    }
+  ]
+}
