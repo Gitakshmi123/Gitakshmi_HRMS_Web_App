@@ -76,6 +76,37 @@ app.use((req, res, next) => {
 
 app.set("trust proxy", shouldTrustProxy() ? 1 : false);
 
+// Clean req.ip by stripping port numbers (specifically on Windows / IIS environments / reverse proxies)
+app.use((req, res, next) => {
+    let rawIp = req.ip;
+    if (!rawIp) {
+        rawIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+    }
+    if (rawIp && typeof rawIp === 'string') {
+        let cleanedIp = rawIp.trim();
+        // If there's a list of IPs in x-forwarded-for, take the first one
+        if (cleanedIp.includes(',')) {
+            cleanedIp = cleanedIp.split(',')[0].trim();
+        }
+        if (cleanedIp.includes(':')) {
+            const parts = cleanedIp.split(':');
+            if (parts.length === 2) {
+                // IPv4 with port, e.g. 106.214.112.200:63323
+                cleanedIp = parts[0];
+            } else if (cleanedIp.startsWith('[') && cleanedIp.includes(']:')) {
+                // IPv6 with port, e.g. [::1]:63323
+                cleanedIp = cleanedIp.slice(1, cleanedIp.lastIndexOf(']'));
+            }
+        }
+        Object.defineProperty(req, 'ip', {
+            value: cleanedIp,
+            writable: true,
+            configurable: true
+        });
+    }
+    next();
+});
+
 // Security Middleware Module
 const setupSecurity = require('./middleware/security.middleware');
 const isProduction = process.env.NODE_ENV === 'production';

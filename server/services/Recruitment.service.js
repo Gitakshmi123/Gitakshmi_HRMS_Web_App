@@ -609,13 +609,17 @@ class RecruitmentService {
                         console.log(`[Migration] Hydrating pipelineStages for Requirement ${req._id}`);
                         req.pipelineStages = req.workflow
                             .filter(stage => !['Applied', 'Finalized', 'Rejected'].includes(stage))
-                            .map((stage, idx) => ({
-                                stageName: stage,
-                                stageType: stage.toLowerCase().includes('interview') ? 'Interview' : 'Round',
-                                order: idx + 1,
-                                durationMinutes: 30,
-                                mode: 'In-person'
-                            }));
+                            .map((stage, idx) => {
+                                const stageName = String(stage || '').trim();
+                                return {
+                                    stageId: `stage_${idx + 1}_${stageName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+                                    stageName,
+                                    stageType: stageName.toLowerCase().includes('interview') ? 'Interview' : 'Round',
+                                    orderIndex: idx + 1,
+                                    durationMinutes: 30,
+                                    mode: 'In-person'
+                                };
+                            });
                         changed = true;
                     }
 

@@ -198,7 +198,7 @@ function resolveSofficePath() {
     for (const c of candidates) if (fs.existsSync(c)) return c;
 
     try {
-        const out = execSync('where soffice', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+        const out = execSync('where soffice', { stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true }).toString().trim();
         const first = out.split(/\r?\n/).find(Boolean);
         if (first && fs.existsSync(first)) return first;
     } catch { /* ignore */ }
@@ -211,8 +211,8 @@ async function killLibreOfficeProcessesBestEffort() {
     // On Windows, LibreOffice is notoriously bad with parallel runs or stale locks.
     try {
         if (os.platform() === 'win32') {
-            execSync('taskkill /F /IM soffice.exe /T', { stdio: 'ignore' });
-            execSync('taskkill /F /IM soffice.bin /T', { stdio: 'ignore' });
+            execSync('taskkill /F /IM soffice.exe /T', { stdio: 'ignore', windowsHide: true });
+            execSync('taskkill /F /IM soffice.bin /T', { stdio: 'ignore', windowsHide: true });
         }
     } catch {
         // ignore errors (like process not found)
@@ -231,8 +231,8 @@ class LibreOfficeService {
         // [STABILITY] Clean up any stale LibreOffice processes left behind by previous server crashes or restarts
         try {
             if (os.platform() === 'win32') {
-                execSync('taskkill /F /IM soffice.exe /T', { stdio: 'ignore' });
-                execSync('taskkill /F /IM soffice.bin /T', { stdio: 'ignore' });
+                execSync('taskkill /F /IM soffice.exe /T', { stdio: 'ignore', windowsHide: true });
+                execSync('taskkill /F /IM soffice.bin /T', { stdio: 'ignore', windowsHide: true });
             }
         } catch (_) {
             // ignore
@@ -353,7 +353,7 @@ class LibreOfficeService {
                     const t = setTimeout(async () => {
                         try {
                             if (os.platform() === 'win32') {
-                                execSync(`taskkill /F /PID ${child.pid} /T`, { stdio: 'ignore' });
+                                execSync(`taskkill /F /PID ${child.pid} /T`, { stdio: 'ignore', windowsHide: true });
                             } else {
                                 child.kill('SIGKILL');
                             }
