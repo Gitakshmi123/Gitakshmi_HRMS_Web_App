@@ -742,7 +742,7 @@ exports.createPost = async (req, res) => {
         const finalMainImage = imageUrl || (finalImageUrls.length > 0 ? finalImageUrls[0] : null);
 
         // Convert relative paths to absolute public URLs
-        const backendUrl = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 5006}`;
+        const backendUrl = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 5003}`;
         const convertToPublicUrl = (url) => {
             if (!url) return null;
             if (url.startsWith('http://') || url.startsWith('https://')) return url;

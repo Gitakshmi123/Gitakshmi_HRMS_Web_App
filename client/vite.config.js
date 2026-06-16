@@ -17,7 +17,7 @@ export default defineConfig(({ mode }) => {
     '';
   const normalizeBackendUrl = (value) =>
     String(value || '').trim().replace(/\/+$/, '').replace(/\/api$/i, '');
-  const BACKEND_URL = normalizeBackendUrl(rawAppBaseUrl) || 'http://localhost:5006';
+  const BACKEND_URL = normalizeBackendUrl(rawAppBaseUrl) || 'http://localhost:5003';
   const HMR_PROTOCOL = env.VITE_HMR_PROTOCOL || 'ws';
   const HMR_HOST = env.VITE_HMR_HOST;
   const HMR_PORT = env.VITE_HMR_PORT ? Number(env.VITE_HMR_PORT) : DEV_PORT;
