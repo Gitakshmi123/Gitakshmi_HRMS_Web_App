@@ -54,7 +54,7 @@ const ApprovalDetailsModal = ({ approval, onClose, onAction, canProcess = false 
                       <p className="text-xs text-indigo-700">Reference: {details.entity.offerRefCode || details.entity.generatedVariables?.refNo || 'N/A'}</p>
                     </div>
                     <a
-                      href={`${APP_CONFIG.HRMS_API_ROOT || 'http://localhost:5006'}/api/public/letters/${details.entity._id}/view-pdf?tenantId=${details.tenantId}`}
+                      href={`${APP_CONFIG.HRMS_API_ROOT || 'http://localhost:5003'}/api/public/letters/${details.entity._id}/view-pdf?tenantId=${details.tenantId}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-lg shadow-md transition-colors text-center"

@@ -29,8 +29,7 @@ const joinUrl = (base = '', path = '') => {
   if (!normalizedPath) return normalizedBase;
   return `${normalizedBase}/${normalizedPath.replace(/^\/+/, '')}`;
 };
-const getBrowserOrigin = () =>
-  typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
+const getBrowserOrigin = () => '';
 
 const PRIMARY_APP_BASE_URL = stripApiSuffix(
   import.meta.env.VITE_APP_BASE_URL ||
@@ -44,7 +43,7 @@ const EXPLICIT_SSO_BASE_URL = stripApiSuffix(import.meta.env.VITE_SSO_BASE_URL |
 const EXPLICIT_TMS_BASE_URL = stripApiSuffix(import.meta.env.VITE_TMS_BASE_URL || import.meta.env.VITE_TMS_URL);
 
 const LOCAL_DEFAULTS = {
-  APP_BASE_URL: PRIMARY_APP_BASE_URL || 'http://localhost:5006',
+  APP_BASE_URL: PRIMARY_APP_BASE_URL || 'http://localhost:5003',
 };
 
 const PRODUCTION_DEFAULTS = {

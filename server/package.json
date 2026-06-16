@@ -8,6 +8,8 @@
     "start": "node server.js",
     "dev": "powershell -NoProfile -Command \"$port = (Get-Content .env -ErrorAction SilentlyContinue | Select-String '^PORT=(\\d+)' | ForEach-Object { $_.Matches.Groups[1].Value }); if (-not $port) { $port = 5006 }; $p = (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue).OwningProcess; if ($p) { Write-Host 'Killing PID' $p 'on port' $port; Stop-Process -Id $p -Force }; $env:PORT = $port; nodemon server.js\"",
     "start:dev": "powershell -NoProfile -Command \"$port = (Get-Content .env -ErrorAction SilentlyContinue | Select-String '^PORT=(\\d+)' | ForEach-Object { $_.Matches.Groups[1].Value }); if (-not $port) { $port = 5006 }; $p = (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue).OwningProcess; if ($p) { Write-Host 'Killing PID' $p 'on port' $port; Stop-Process -Id $p -Force }; $env:PORT = $port; $env:NODE_ENV = 'development'; nodemon server.js\"",
+    "dev": "nodemon server.js",
+    "start:dev": "set NODE_ENV=development&& nodemon server.js",
     "employee:check-login": "node scripts/checkEmployeeLogin.js",
     "employee:reset-password": "node scripts/resetEmployeePassword.js",
     "seed:onboarding": "node seed/onboarding.seed.js",

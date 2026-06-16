@@ -2,7 +2,7 @@ const axios = require("axios");
 
 const GTONE_API_BASE_URL = String(process.env.GTONE_API_BASE_URL || "http://localhost:5004/api").replace(/\/+$/, "");
 const GTONE_APP_KEY = String(process.env.GTONE_APP_KEY || "hrms").trim();
-const GTONE_REDIRECT_URI = String(process.env.GTONE_REDIRECT_URI || "http://localhost:5006/api/auth/sso/callback").trim();
+const GTONE_REDIRECT_URI = String(process.env.GTONE_REDIRECT_URI || "http://localhost:5003/api/auth/sso/callback").trim();
 const GTONE_CLIENT_SECRET = String(process.env.GTONE_CLIENT_SECRET || "").trim();
 const FRONTEND_URL = String(process.env.FRONTEND_URL || "http://localhost:5176").replace(/\/+$/, "");
 
