@@ -6,8 +6,8 @@
   "type": "commonjs",
   "scripts": {
     "start": "node server.js",
-    "dev": "powershell -NoProfile -Command \"$env:PORT=5006; $p=(Get-NetTCPConnection -LocalPort 5006 -State Listen -ErrorAction SilentlyContinue).OwningProcess; if($p) { Write-Host 'Killing PID $p on port 5006'; Stop-Process -Id $p -Force }; nodemon server.js\"",
-    "start:dev": "powershell -NoProfile -Command \"$env:PORT=5006; $env:NODE_ENV='development'; $p=(Get-NetTCPConnection -LocalPort 5006 -State Listen -ErrorAction SilentlyContinue).OwningProcess; if($p) { Write-Host 'Killing PID $p on port 5006'; Stop-Process -Id $p -Force }; nodemon server.js\"",
+    "dev": "nodemon server.js",
+    "start:dev": "set NODE_ENV=development&& nodemon server.js",
     "employee:check-login": "node scripts/checkEmployeeLogin.js",
     "employee:reset-password": "node scripts/resetEmployeePassword.js",
     "seed:onboarding": "node seed/onboarding.seed.js",

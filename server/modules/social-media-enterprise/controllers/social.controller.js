@@ -51,7 +51,7 @@ const getRedirectUri = (req, platform) => {
     // 2. Dynamic Fallback (Multi-environment safe)
     const protocol = req.protocol;
     const host = req.get('host');
-    const baseUrl = process.env.BACKEND_URL || `${protocol}://${host.includes(':') ? host : host + ':5006'}`;
+    const baseUrl = process.env.BACKEND_URL || `${protocol}://${host.includes(':') ? host : host + ':' + (process.env.PORT || 5003)}`;
     if (platform === 'linkedin') {
         return `${baseUrl}/api/social-media-enterprise/oauth/linkedin/callback`;
     }
