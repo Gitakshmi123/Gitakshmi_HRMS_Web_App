@@ -8,7 +8,7 @@ const BACKEND_URL = API_ROOT || '';
 
 // Validation rules for required columns
 const REQUIRED_COLUMNS = ['First Name', 'Last Name', 'Email', 'Joining Date'];
-const OPTIONAL_COLUMNS = ['Employee ID', 'Middle Name', 'Contact No', 'Gender', 'Date of Birth', 'Department', 'Role', 'Job Type', 'Password'];
+const OPTIONAL_COLUMNS = ['Employee ID', 'Middle Name', 'Contact No', 'Gender', 'Date of Birth', 'Department', 'Role', 'Job Type', 'Password', 'PAN No', 'Aadhar No'];
 
 // Validation patterns
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -39,87 +39,143 @@ export default function EmployeeExcelUploadModal({ isOpen, onClose, onSuccess })
       .replace(/[^a-z0-9]/g, '');
   };
 
+  const parseFlexibleDate = (dateVal) => {
+    if (!dateVal) return null;
+    if (dateVal instanceof Date) return dateVal;
+    
+    // Check if it's a number (Excel date serial number)
+    if (typeof dateVal === 'number' || (!isNaN(dateVal) && !isNaN(parseFloat(dateVal)))) {
+      const serial = parseFloat(dateVal);
+      const d = new Date((serial - 25569) * 86400 * 1000);
+      if (!isNaN(d.getTime())) return d;
+    }
+    
+    const dateStr = String(dateVal).trim();
+    if (!dateStr) return null;
+    
+    // Try YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      const d = new Date(dateStr + 'T00:00:00Z');
+      if (!isNaN(d.getTime())) return d;
+    }
+    
+    // Try DD.MM.YYYY or DD/MM/YYYY or DD-MM-YYYY
+    const matchDmy = dateStr.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
+    if (matchDmy) {
+      const day = parseInt(matchDmy[1], 10);
+      const month = parseInt(matchDmy[2], 10) - 1; // 0-indexed month
+      const year = parseInt(matchDmy[3], 10);
+      const d = new Date(Date.UTC(year, month, day));
+      if (!isNaN(d.getTime())) return d;
+    }
+    
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) return d;
+    
+    return null;
+  };
+
   // Validate individual row data
   const validateRow = (row, rowIndex) => {
     const errors = [];
     const warnings = [];
 
-    // Extract values with flexible column matching
-    let empId = '';
-    let firstName = '';
-    let lastName = '';
-    let email = '';
-    let joiningDate = null;
-
     // Field pattern definitions - must match validateFileStructure patterns
     const fieldPatterns = [
-      { field: 'empId', patterns: ['employeeid', 'empid'] },
+      { field: 'empId', patterns: ['employeeid', 'empid', 'employeecode', 'empcode'] },
       { field: 'firstName', patterns: ['firstname', 'first'] },
+      { field: 'middleName', patterns: ['middlename', 'middle'] },
       { field: 'lastName', patterns: ['lastname', 'last'] },
-      { field: 'email', patterns: ['email', 'emailaddress'] },
-      { field: 'joiningDate', patterns: ['joiningdate', 'doj'] }
+      { field: 'fullName', patterns: ['name', 'employeename', 'fullname', 'empname'] },
+      { field: 'email', patterns: ['email', 'emailaddress', 'companymailid', 'personalemailid', 'mailid'] },
+      { field: 'joiningDate', patterns: ['joiningdate', 'doj', 'dateofjoining', 'dateofjoin', 'dojdate', 'joining'] }
     ];
 
-    // Find values from row with flexible matching
+    const rowValues = {};
     for (const key of Object.keys(row)) {
       const normKey = normalizeColumnName(key);
       const val = row[key];
 
-      // Check each field pattern
       for (const { field, patterns } of fieldPatterns) {
-        // Use includes for flexible matching - checks if normalized key contains any pattern
-        if (patterns.some(p => normKey.includes(p) || normKey === p)) {
-          if (field === 'empId') empId = val ? val.toString().trim() : '';
-          else if (field === 'firstName') firstName = val ? val.toString().trim() : '';
-          else if (field === 'lastName') lastName = val ? val.toString().trim() : '';
-          else if (field === 'email') email = val ? val.toString().trim().toLowerCase() : '';
-          else if (field === 'joiningDate') joiningDate = val;
-          break; // Found match for this key, move to next key
+        if (patterns.includes(normKey)) {
+          if (!rowValues[field]) rowValues[field] = [];
+          rowValues[field].push({ key: normKey, value: val });
         }
       }
     }
 
+    let empId = '';
+    if (rowValues['empId']) empId = rowValues['empId'][0].value ? rowValues['empId'][0].value.toString().trim() : '';
+
+    let firstName = '';
+    let middleName = '';
+    let lastName = '';
+    if (rowValues['firstName']) firstName = rowValues['firstName'][0].value ? rowValues['firstName'][0].value.toString().trim() : '';
+    if (rowValues['middleName']) middleName = rowValues['middleName'][0].value ? rowValues['middleName'][0].value.toString().trim() : '';
+    if (rowValues['lastName']) lastName = rowValues['lastName'][0].value ? rowValues['lastName'][0].value.toString().trim() : '';
+
+    // Handle full name column split if needed
+    if ((!firstName || !lastName) && rowValues['fullName']) {
+      const fullName = rowValues['fullName'][0].value ? rowValues['fullName'][0].value.toString().trim() : '';
+      if (fullName) {
+        const parts = fullName.split(/\s+/).filter(Boolean);
+        if (parts.length >= 3) {
+          firstName = parts[0];
+          middleName = parts[1];
+          lastName = parts.slice(2).join(' ');
+        } else if (parts.length === 2) {
+          firstName = parts[0];
+          lastName = parts[1];
+        } else if (parts.length === 1) {
+          firstName = parts[0];
+          lastName = 'Doe';
+        }
+      }
+    }
+
+    let email = '';
+    if (rowValues['email']) {
+      const companyEmail = rowValues['email'].find(m => (m.key.includes('company') || m.key.includes('work')) && String(m.value || '').trim() !== '');
+      const chosenEmail = companyEmail || rowValues['email'].find(m => String(m.value || '').trim() !== '');
+      email = chosenEmail && chosenEmail.value ? chosenEmail.value.toString().trim().toLowerCase() : '';
+    }
+
+    let joiningDate = null;
+    if (rowValues['joiningDate']) joiningDate = rowValues['joiningDate'][0].value;
+
     // Employee ID validation (optional - will be auto-generated if missing)
     if (empId && !EMPLOYEE_ID_REGEX.test(empId)) {
-      errors.push('Employee ID format invalid (alphanumeric, dash, underscore only)');
+      warnings.push('Employee ID format invalid (alphanumeric, dash, underscore only) - will be auto-corrected');
     }
 
     // First Name validation
     if (!firstName) {
-      errors.push('First Name is required');
+      warnings.push('First Name is missing (will be auto-filled)');
     } else if (firstName.length < 2) {
       warnings.push('First Name should be at least 2 characters');
     }
 
     // Last Name validation
     if (!lastName) {
-      errors.push('Last Name is required');
+      warnings.push('Last Name is missing (will be auto-filled)');
     } else if (lastName.length < 2) {
       warnings.push('Last Name should be at least 2 characters');
     }
 
     // Email validation
     if (!email) {
-      errors.push('Email is required');
+      warnings.push('Email is missing (will be auto-generated)');
     } else if (!EMAIL_REGEX.test(email)) {
-      errors.push('Invalid email format');
+      warnings.push('Invalid email format (will be auto-corrected)');
     }
 
     // Joining Date validation
-    if (!joiningDate) {
-      errors.push('Joining Date is required');
+    const parsedJoinDate = parseFlexibleDate(joiningDate);
+    if (!parsedJoinDate) {
+      warnings.push('Joining Date is missing or has invalid format (will default to today)');
     } else {
-      const joinDate = joiningDate;
-      const dateStr = joinDate instanceof Date ? joinDate.toISOString().split('T')[0] : joinDate.toString().trim();
-      if (!DATE_REGEX.test(dateStr)) {
-        errors.push('Joining Date format must be YYYY-MM-DD');
-      } else {
-        const date = new Date(dateStr);
-        if (isNaN(date.getTime())) {
-          errors.push('Invalid Joining Date');
-        } else if (date > new Date()) {
-          warnings.push('Joining Date is in the future');
-        }
+      if (parsedJoinDate > new Date()) {
+        warnings.push('Joining Date is in the future');
       }
     }
 
@@ -141,16 +197,25 @@ export default function EmployeeExcelUploadModal({ isOpen, onClose, onSuccess })
     const availableColumns = Object.keys(firstRow || {}).filter((col) => col !== undefined && col !== null && String(col).trim() !== '');
     const normalizedAvailable = availableColumns.map((col) => normalizeColumnName(col)).filter(Boolean);
 
-    // Required columns with their normalizations (Employee ID is now optional)
+    // Check if full name column exists
+    const hasFullNameCol = normalizedAvailable.some((norm) => 
+      ['name', 'employeename', 'fullname', 'empname'].includes(norm)
+    );
+
+    // Required columns (Employee ID is optional)
     const requiredChecks = [
       { display: 'First Name', patterns: ['firstname', 'first'] },
       { display: 'Last Name', patterns: ['lastname', 'last'] },
-      { display: 'Email', patterns: ['email', 'emailaddress'] },
-      { display: 'Joining Date', patterns: ['joiningdate', 'doj'] }
+      { display: 'Email', patterns: ['email', 'emailaddress', 'companymailid', 'personalemailid', 'mailid'] },
+      { display: 'Joining Date', patterns: ['joiningdate', 'doj', 'dateofjoining', 'dateofjoin', 'dojdate', 'joining'] }
     ];
 
     requiredChecks.forEach(({ display, patterns }) => {
-      const found = normalizedAvailable.some((norm) => patterns.some((p) => norm.includes(p) || norm === p));
+      // If full name column exists, it satisfies both First Name and Last Name
+      if (hasFullNameCol && (display === 'First Name' || display === 'Last Name')) {
+        return;
+      }
+      const found = normalizedAvailable.some((norm) => patterns.includes(norm));
       if (!found) {
         errors.push(`Missing required column: ${display}`);
       }
@@ -234,7 +299,28 @@ export default function EmployeeExcelUploadModal({ isOpen, onClose, onSuccess })
         const workbook = XLSX.read(data, { type: 'array', cellDates: true });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+        const rawData = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+        // Filter out blank/non-employee rows (e.g. rows with only a serial number or blank padding)
+        const jsonData = rawData.filter(row => {
+          if (!row || typeof row !== 'object') return false;
+          const identityPatterns = [
+            'name', 'employeename', 'fullname', 'empname', 
+            'firstname', 'lastname', 'email', 'emailaddress', 
+            'companymailid', 'personalemailid', 'mailid'
+          ];
+          for (const key of Object.keys(row)) {
+            const normKey = String(key)
+              .replace(/\([^)]*\)/g, '')
+              .trim()
+              .toLowerCase()
+              .replace(/\s/g, '')
+              .replace(/[^a-z0-9]/g, '');
+            if (identityPatterns.includes(normKey)) {
+              if (String(row[key] || '').trim()) return true;
+            }
+          }
+          return false;
+        });
 
         if (jsonData.length === 0) {
           setUploadErrors(['Excel file is empty. Please add employee records.']);
@@ -698,7 +784,7 @@ export default function EmployeeExcelUploadModal({ isOpen, onClose, onSuccess })
               <div className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2 md:col-span-2">
                 <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-200 mb-1">Other Optional Columns</p>
                 <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
-                  Middle Name, Contact No, Gender, DOB, Department, Role, Marital Status, Bank Details, Address.
+                  Middle Name, Contact No, Gender, DOB, Department, Role, Marital Status, Bank Details, Address (Current & Permanent), PAN No, Aadhar No, Personal Email ID, Qualification, Year of passing, CGPA/Percentage, Last Compant, from, To, Last CTC, Anniversary Date, and Repeating Family Details.
                 </p>
               </div>
             </div>

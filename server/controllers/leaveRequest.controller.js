@@ -447,39 +447,66 @@ exports.applyLeave = async (req, res) => {
 
         if (!isHR) {
             try {
-                workflowStartResult = await workflowEngine.startWorkflow({
-                    req,
-                    tenantDB: req.tenantDB,
+                const Automation = req.tenantDB.model('Automation');
+                const hasAutomation = await Automation.findOne({
                     tenantId: req.tenantId,
-                    moduleKey: 'leave',
-                    entityType: 'LeaveRequest',
-                    entityId: leaveRequest._id,
-                    requesterEmployeeId: employeeId,
-                    requesterUserId: req.user.id,
-                    contextSnapshot: {
-                        employeeId,
-                        leaveType,
-                        startDate: start,
-                        endDate: end,
-                        leaveDays: days,
-                        daysCount: days,
-                        paidLeaveDays: paidDays,
-                        unpaidLeaveDays: unpaidDays,
-                        departmentId: employeeDoc?.departmentId,
-                        branchId: employeeDoc?.branchId,
-                        divisionId: employeeDoc?.divisionId,
-                        designationId: employeeDoc?.designationId,
-                        gradeId: employeeDoc?.gradeId,
-                        employeeType: employeeDoc?.employeeType,
-                    },
-                });
+                    triggerEvent: 'LEAVE_REQUESTED',
+                    isActive: true
+                }).lean();
 
-                leaveRequest.meta = {
-                    ...(leaveRequest.meta || {}),
-                    workflowInstanceId: workflowStartResult?.instance?._id,
-                    workflowStartStatus: workflowStartResult?.started ? 'STARTED' : workflowStartResult?.reason,
+                const contextSnapshot = {
+                    employeeId,
+                    leaveType,
+                    startDate: start,
+                    endDate: end,
+                    leaveDays: days,
+                    daysCount: days,
+                    paidLeaveDays: paidDays,
+                    unpaidLeaveDays: unpaidDays,
+                    departmentId: employeeDoc?.departmentId,
+                    branchId: employeeDoc?.branchId,
+                    divisionId: employeeDoc?.divisionId,
+                    designationId: employeeDoc?.designationId,
+                    gradeId: employeeDoc?.gradeId,
+                    employeeType: employeeDoc?.employeeType,
                 };
-                await leaveRequest.save();
+
+                if (hasAutomation) {
+                    const { dispatchEvent } = require('../services/automationEngine.service');
+                    console.log(`[LeaveRequestController] Found active LEAVE_REQUESTED automation for tenant: ${req.tenantId}. Dispatching...`);
+                    await dispatchEvent(req.tenantId, 'LEAVE_REQUESTED', {
+                        ...(leaveRequest.toObject ? leaveRequest.toObject() : leaveRequest),
+                        ...contextSnapshot
+                    });
+
+                    // Refresh leave request to retrieve updated metadata from database
+                    const refreshedRequest = await LeaveRequest.findById(leaveRequest._id);
+                    if (refreshedRequest && refreshedRequest.meta?.workflowInstanceId) {
+                        workflowStartResult = { started: true, instance: { _id: refreshedRequest.meta.workflowInstanceId } };
+                        leaveRequest.meta = refreshedRequest.meta;
+                    } else {
+                        workflowStartResult = { started: false, reason: 'automation_executed' };
+                    }
+                } else {
+                    workflowStartResult = await workflowEngine.startWorkflow({
+                        req,
+                        tenantDB: req.tenantDB,
+                        tenantId: req.tenantId,
+                        moduleKey: 'leave',
+                        entityType: 'LeaveRequest',
+                        entityId: leaveRequest._id,
+                        requesterEmployeeId: employeeId,
+                        requesterUserId: req.user.id,
+                        contextSnapshot,
+                    });
+
+                    leaveRequest.meta = {
+                        ...(leaveRequest.meta || {}),
+                        workflowInstanceId: workflowStartResult?.instance?._id,
+                        workflowStartStatus: workflowStartResult?.started ? 'STARTED' : workflowStartResult?.reason,
+                    };
+                    await leaveRequest.save();
+                }
             } catch (workflowError) {
                 workflowStartResult = { started: false, reason: 'start_error' };
                 leaveRequest.meta = {
@@ -650,6 +677,13 @@ exports.approveLeave = async (req, res) => {
         // Re-sync to attendance with new dates
         await syncLeaveToAttendance(req, request);
 
+        try {
+            const { dispatchEvent } = require('../services/automationEngine.service');
+            await dispatchEvent(req.tenantId, 'LEAVE_APPROVED', request.toObject ? request.toObject() : request);
+        } catch (dispatchErr) {
+            console.error('[approveLeave] LEAVE_APPROVED dispatch error:', dispatchErr);
+        }
+
         res.json({ success: true, message: "Leave approved successfully", data: request });
 
     } catch (err) {
@@ -738,6 +772,13 @@ exports.rejectLeave = async (req, res) => {
         request.actionBy = actorEmployeeId;
         request.rejectionReason = rejectionReason || 'Rejected';
         await request.save();
+
+        try {
+            const { dispatchEvent } = require('../services/automationEngine.service');
+            await dispatchEvent(req.tenantId, 'LEAVE_REJECTED', request.toObject ? request.toObject() : request);
+        } catch (dispatchErr) {
+            console.error('[rejectLeave] LEAVE_REJECTED dispatch error:', dispatchErr);
+        }
 
         res.json({ success: true, message: "Leave rejected successfully", data: request });
 

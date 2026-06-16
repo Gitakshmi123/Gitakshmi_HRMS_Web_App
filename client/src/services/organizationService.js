@@ -4,14 +4,42 @@ const data = (response) => response.data;
 
 export const orgService = {
   getSubCompanies: () => api.get('/organization/sub-companies').then(data),
-  getBranches: (subCompanyId) => api.get(`/organization/branches?subCompanyId=${encodeURIComponent(subCompanyId)}`).then(data),
-  getDivisions: (branchId) => api.get(`/organization/divisions?branchId=${encodeURIComponent(branchId)}`).then(data),
-  getDepartments: (divisionId) => api.get(`/organization/departments?divisionId=${encodeURIComponent(divisionId)}`).then(data),
-  getDesignations: (departmentId) => api.get(`/organization/designations?departmentId=${encodeURIComponent(departmentId)}`).then(data),
+  getBranches: (subCompanyId) => {
+    const url = (subCompanyId && subCompanyId !== 'undefined' && subCompanyId !== 'null')
+      ? `/organization/branches?subCompanyId=${encodeURIComponent(subCompanyId)}`
+      : '/organization/branches';
+    return api.get(url).then(data);
+  },
+  getDivisions: (branchId) => {
+    const url = (branchId && branchId !== 'undefined' && branchId !== 'null')
+      ? `/organization/divisions?branchId=${encodeURIComponent(branchId)}`
+      : '/organization/divisions';
+    return api.get(url).then(data);
+  },
+  getDepartments: (divisionId) => {
+    const url = (divisionId && divisionId !== 'undefined' && divisionId !== 'null')
+      ? `/organization/departments?divisionId=${encodeURIComponent(divisionId)}`
+      : '/organization/departments';
+    return api.get(url).then(data);
+  },
+  getDesignations: (departmentId) => {
+    const url = (departmentId && departmentId !== 'undefined' && departmentId !== 'null')
+      ? `/organization/designations?departmentId=${encodeURIComponent(departmentId)}`
+      : '/organization/designations';
+    return api.get(url).then(data);
+  },
   getEmployees: (departmentId, designationId) => {
-    let url = `/organization/employees?`;
-    if (designationId) url += `designationId=${encodeURIComponent(designationId)}`;
-    else url += `departmentId=${encodeURIComponent(departmentId)}`;
+    let url = `/organization/employees`;
+    const parts = [];
+    if (designationId && designationId !== 'undefined' && designationId !== 'null') {
+      parts.push(`designationId=${encodeURIComponent(designationId)}`);
+    }
+    if (departmentId && departmentId !== 'undefined' && departmentId !== 'null') {
+      parts.push(`departmentId=${encodeURIComponent(departmentId)}`);
+    }
+    if (parts.length > 0) {
+      url += `?${parts.join('&')}`;
+    }
     return api.get(url).then(data);
   },
   getAssignableEmployees: (designationId, search = '') => api.get('/organization/assignable-employees', {

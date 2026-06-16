@@ -72,12 +72,26 @@ function resolveUploadedLetterPath(letter) {
 }
 
 function buildOfferApprovalUrl(req, letterId, tenantId) {
-    const baseUrl = String(
-        process.env.FRONTEND_URL ||
-        process.env.CLIENT_URL ||
-        process.env.FRONTEND_BASE_URL ||
-        `${req.protocol || 'http'}://${req.get?.('host') || 'localhost:5176'}`.replace(/:5006$/, ':5176')
-    ).replace(/\/+$/, '');
+    let baseUrl = process.env.FRONTEND_URL || process.env.CLIENT_URL || process.env.FRONTEND_BASE_URL;
+    
+    if (!baseUrl) {
+        const host = req.get?.('host') || 'localhost:5176';
+        const protocol = req.protocol || 'http';
+        baseUrl = `${protocol}://${host}`;
+        
+        const backendPort = process.env.PORT || '5006';
+        let frontendPort = '5176';
+        if (process.env.FRONTEND_URL) {
+            try {
+                const u = new URL(process.env.FRONTEND_URL);
+                if (u.port) frontendPort = u.port;
+            } catch (_) {}
+        }
+        
+        baseUrl = baseUrl.replace(new RegExp(`:${backendPort}$`), `:${frontendPort}`);
+    }
+    
+    baseUrl = String(baseUrl).replace(/\/+$/, '');
     return `${baseUrl}/public/offer-approval/${letterId}?tenantId=${tenantId}`;
 }
 

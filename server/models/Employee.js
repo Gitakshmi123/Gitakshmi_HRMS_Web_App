@@ -25,6 +25,7 @@ const EmployeeSchema = new mongoose.Schema({
     trim: true,
     // required: function() { return this.status === 'Active'; } // Removed as per user request 
   },
+  personalEmail: { type: String, trim: true },
   customFields: [{
     label: { type: String, trim: true },
     value: { type: String, trim: true }
@@ -256,8 +257,16 @@ const EmployeeSchema = new mongoose.Schema({
     bankProofUrl: { type: String, trim: true } // Cancelled check or passbook
   },
 
+  highestQualification: { type: String, trim: true },
+  marriageDate: { type: Date },
+
   education: {
-    type: { type: String, enum: ['Diploma', 'Bachelor'], trim: true },
+    type: { type: String, trim: true },
+    university: { type: String, trim: true },
+    class10Marks: { type: String, trim: true },
+    class12Marks: { type: String, trim: true },
+    yearOfPassing: { type: String, trim: true },
+    cgpaOrPercentage: { type: String, trim: true },
     class10Marksheet: { type: String, trim: true }, // URL
     class12Marksheet: { type: String, trim: true }, // URL (Bachelor only)
     diplomaCertificate: { type: String, trim: true }, // URL (Diploma only)

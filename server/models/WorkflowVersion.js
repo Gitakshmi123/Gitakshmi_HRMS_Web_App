@@ -31,6 +31,7 @@ const WorkflowVersionSchema = new mongoose.Schema({
         value: { type: mongoose.Schema.Types.Mixed, default: null },
       },
       conditions: { type: [mongoose.Schema.Types.Mixed], default: [] },
+      notification: { type: mongoose.Schema.Types.Mixed, default: {} },
     }],
     rules: { type: [mongoose.Schema.Types.Mixed], default: [] },
     settings: {

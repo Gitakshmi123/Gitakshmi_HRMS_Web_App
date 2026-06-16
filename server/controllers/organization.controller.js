@@ -153,7 +153,8 @@ function getBasePrefix(code) {
 
 exports.previewCode = async (req, res) => {
   try {
-    const { type, name, parentId } = req.query;
+    let { type, name, parentId } = req.query;
+    if (parentId === 'undefined' || parentId === 'null') parentId = null;
     if (!type || !name) return fail(res, 400, 'Type and name are required');
 
     let parentCode = '';
@@ -318,7 +319,9 @@ exports.getSubCompanies = async (req, res) => {
 
 exports.getBranches = async (req, res) => {
   try {
-    const sub = await validateSubCompany(req, req.query.subCompanyId || req.user?.subCompanyId);
+    let subCompanyId = req.query.subCompanyId || req.user?.subCompanyId;
+    if (subCompanyId === 'undefined' || subCompanyId === 'null') subCompanyId = null;
+    const sub = await validateSubCompany(req, subCompanyId);
     if (!sub) return fail(res, 403, 'Invalid sub company scope');
     const Branch = getModel(req, 'Branch');
     const Division = getModel(req, 'Division');
@@ -352,7 +355,9 @@ exports.getBranches = async (req, res) => {
 
 exports.getDivisions = async (req, res) => {
   try {
-    const branch = await validateBranch(req, req.query.branchId || req.user?.branchId);
+    let branchId = req.query.branchId || req.user?.branchId;
+    if (branchId === 'undefined' || branchId === 'null') branchId = null;
+    const branch = await validateBranch(req, branchId);
     if (!branch) return fail(res, 403, 'Invalid branch scope');
     const Division = getModel(req, 'Division');
     const Department = getModel(req, 'Department');
@@ -386,7 +391,8 @@ exports.getDivisions = async (req, res) => {
 
 exports.getDepartments = async (req, res) => {
   try {
-    const divisionId = req.query.divisionId || req.user?.divisionId;
+    let divisionId = req.query.divisionId || req.user?.divisionId;
+    if (divisionId === 'undefined' || divisionId === 'null') divisionId = null;
     let division = null;
     if (divisionId) {
       division = await validateDivision(req, divisionId);
@@ -394,7 +400,7 @@ exports.getDepartments = async (req, res) => {
     }
     const Department = getModel(req, 'Department');
     const Designation = getModel(req, 'Designation');
-    const User = getModel(req, 'User');
+    const Employee = getModel(req, 'Employee');
     
     const filter = { mainCompanyId: mainCompanyIdOf(req), isDeleted: { $ne: true } };
     if (division) filter.divisionId = division._id;
@@ -416,7 +422,7 @@ exports.getDepartments = async (req, res) => {
         headName: head?.name || 'Not Assigned',
         headEmail: head?.email,
         designationCount: await Designation.countDocuments({ mainCompanyId: mainCompanyIdOf(req), departmentId: department._id, isDeleted: { $ne: true } }),
-        employeeCount: await User.countDocuments({ mainCompanyId: mainCompanyIdOf(req), departmentId: department._id, role: 'EMPLOYEE', isActive: { $ne: false } })
+        employeeCount: await Employee.countDocuments({ mainCompanyId: mainCompanyIdOf(req), departmentId: department._id, isActive: { $ne: false }, isDeleted: { $ne: true } })
       };
     }));
     return ok(res, data);
@@ -427,20 +433,48 @@ exports.getDepartments = async (req, res) => {
 
 exports.getDesignations = async (req, res) => {
   try {
-    const department = await validateDepartment(req, req.query.departmentId || req.user?.departmentId);
+    let departmentId = req.query.departmentId || req.user?.departmentId;
+    if (departmentId === 'undefined' || departmentId === 'null') departmentId = null;
+    const department = await validateDepartment(req, departmentId);
     if (!department) return fail(res, 403, 'Invalid department scope');
     const Designation = getModel(req, 'Designation');
-    const User = getModel(req, 'User');
+    const Employee = getModel(req, 'Employee');
     
-    const designations = await Designation.find({ mainCompanyId: mainCompanyIdOf(req), departmentId: department._id, isDeleted: { $ne: true } }).lean();
-    const data = await Promise.all(designations.map(async (designation) => {
-      return {
+    // Fetch all database designations
+    const dbDesignations = await Designation.find({ mainCompanyId: mainCompanyIdOf(req), departmentId: department._id, isDeleted: { $ne: true } }).lean();
+    
+    // Fetch all active employees under this department
+    const employees = await Employee.find({ mainCompanyId: mainCompanyIdOf(req), departmentId: department._id, isActive: { $ne: false }, isDeleted: { $ne: true } }).lean();
+    
+    // Group employees by designation strings for which there is no real designationId in the DB
+    const dbDesignationIds = new Set(dbDesignations.map(d => String(d._id)));
+    const virtualDesignationNames = new Set();
+    employees.forEach(emp => {
+      if (emp.designation && (!emp.designationId || !dbDesignationIds.has(String(emp.designationId)))) {
+        virtualDesignationNames.add(emp.designation.trim());
+      }
+    });
+
+    const virtualDesignations = Array.from(virtualDesignationNames).map(name => ({
+      _id: `virtual_designation_${encodeURIComponent(name)}`,
+      name: name,
+      title: name,
+      isVirtual: true,
+      code: 'VIRTUAL',
+      departmentId: department._id,
+      employeeCount: employees.filter(emp => emp.designation && emp.designation.trim() === name).length
+    }));
+
+    const data = [
+      ...dbDesignations.map(designation => ({
         ...designation,
         title: designation.title || designation.name,
         code: designation.designationCode || designation.code || designation.entityCode,
-        employeeCount: await User.countDocuments({ mainCompanyId: mainCompanyIdOf(req), designationId: designation._id, role: 'EMPLOYEE', isActive: { $ne: false } })
-      };
-    }));
+        employeeCount: employees.filter(emp => String(emp.designationId) === String(designation._id)).length
+      })),
+      ...virtualDesignations
+    ];
+    
     return ok(res, data);
   } catch (err) {
     return fail(res, 500, err.message);
@@ -449,23 +483,45 @@ exports.getDesignations = async (req, res) => {
 
 exports.getEmployees = async (req, res) => {
   try {
-    const User = getModel(req, 'User');
-    const filter = { mainCompanyId: mainCompanyIdOf(req), role: 'EMPLOYEE', isActive: { $ne: false } };
+    let designationId = req.query.designationId;
+    if (designationId === 'undefined' || designationId === 'null') designationId = null;
+    
+    const Employee = getModel(req, 'Employee');
+    const filter = { mainCompanyId: mainCompanyIdOf(req), isActive: { $ne: false }, isDeleted: { $ne: true } };
 
-    if (req.query.designationId) {
-      filter.designationId = req.query.designationId;
+    if (designationId) {
+      if (String(designationId).startsWith('virtual_designation_')) {
+        const designationName = decodeURIComponent(String(designationId).replace('virtual_designation_', ''));
+        filter.designation = designationName;
+        // Also apply departmentId filter if passed
+        let departmentId = req.query.departmentId || req.user?.departmentId;
+        if (departmentId === 'undefined' || departmentId === 'null') departmentId = null;
+        if (departmentId) {
+          filter.departmentId = departmentId;
+        }
+      } else {
+        filter.designationId = designationId;
+      }
     } else {
-      const department = await validateDepartment(req, req.query.departmentId || req.user?.departmentId);
+      let departmentId = req.query.departmentId || req.user?.departmentId;
+      if (departmentId === 'undefined' || departmentId === 'null') departmentId = null;
+      const department = await validateDepartment(req, departmentId);
       if (!department) return fail(res, 403, 'Invalid department scope');
       filter.departmentId = department._id;
     }
 
     const Designation = getModel(req, 'Designation');
-    const users = await User.find(filter).select('-password').lean();
-    const designationIds = [...new Set(users.map((user) => String(user.designationId || '')).filter(Boolean))];
+    const employees = await Employee.find(filter).select('-password').lean();
+    const designationIds = [...new Set(employees.map((emp) => String(emp.designationId || '')))].filter(Boolean);
     const designations = await Designation.find({ _id: { $in: designationIds } }).select('title name').lean();
     const titleById = new Map(designations.map((designation) => [String(designation._id), designation.title || designation.name]));
-    return ok(res, users.map((user) => ({ ...user, designationTitle: titleById.get(String(user.designationId || '')) || '' })));
+    
+    const formatted = employees.map((emp) => ({
+      ...emp,
+      name: formatEmployeeName(emp),
+      designationTitle: titleById.get(String(emp.designationId || '')) || emp.designation || ''
+    }));
+    return ok(res, formatted);
   } catch (err) {
     return fail(res, 500, err.message);
   }

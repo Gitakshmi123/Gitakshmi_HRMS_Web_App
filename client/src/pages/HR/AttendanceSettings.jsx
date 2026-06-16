@@ -1233,15 +1233,118 @@ const EMPTY_SHIFT_FORM = {
 };
 
 // ── Small reusable primitives ──────────────────────────────────────────────
+function parse24to12(timeStr) {
+  if (!timeStr) return { hour: 9, minute: "00", period: "AM" };
+  const [hStr, mStr] = timeStr.split(':');
+  let h = parseInt(hStr, 10);
+  const m = mStr || "00";
+  if (isNaN(h)) h = 9;
+  
+  let period = "AM";
+  if (h >= 12) {
+    period = "PM";
+  }
+  
+  let hour = h % 12;
+  if (hour === 0) {
+    hour = 12;
+  }
+  
+  return { hour, minute: m.padStart(2, '0').slice(0, 2), period };
+}
+
+function format12to24(hour, minute, period) {
+  let h = parseInt(hour, 10);
+  if (isNaN(h)) h = 9;
+  
+  if (period === "PM" && h < 12) {
+    h += 12;
+  } else if (period === "AM" && h === 12) {
+    h = 0;
+  }
+  
+  const hStr = h.toString().padStart(2, '0');
+  const mStr = minute.toString().padStart(2, '0');
+  return `${hStr}:${mStr}`;
+}
+
+const TimePicker12Hr = ({ value, onChange, isLarge }) => {
+  const { hour, minute, period } = React.useMemo(() => parse24to12(value), [value]);
+
+  const hoursOptions = Array.from({ length: 12 }, (_, i) => i + 1);
+  const minutesOptions = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
+
+  const triggerChange = (h, m, p) => {
+    const nextVal = format12to24(h, m, p);
+    if (onChange) {
+      onChange({ target: { value: nextVal } });
+    }
+  };
+
+  const selectClass = isLarge
+    ? "flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm font-bold outline-none focus:border-indigo-500 transition"
+    : "flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-2 rounded-xl text-[13px] font-medium outline-none focus:border-slate-500 transition";
+
+  const periodClass = isLarge
+    ? "bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl text-sm font-black outline-none focus:border-indigo-500 transition text-slate-800 dark:text-white"
+    : "bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 p-2 rounded-xl text-[13px] font-black outline-none focus:border-slate-500 transition text-slate-800 dark:text-white";
+
+  return (
+    <div className="flex gap-2 items-center">
+      <select
+        value={hour}
+        onChange={(e) => triggerChange(parseInt(e.target.value, 10), minute, period)}
+        className={selectClass}
+      >
+        {hoursOptions.map((h) => (
+          <option key={h} value={h}>
+            {h.toString().padStart(2, '0')}
+          </option>
+        ))}
+      </select>
+      <span className="font-bold text-slate-400">:</span>
+      <select
+        value={minute}
+        onChange={(e) => triggerChange(hour, e.target.value, period)}
+        className={selectClass}
+      >
+        {minutesOptions.map((m) => (
+          <option key={m} value={m}>
+            {m}
+          </option>
+        ))}
+      </select>
+      <select
+        value={period}
+        onChange={(e) => triggerChange(hour, minute, e.target.value)}
+        className={periodClass}
+      >
+        <option value="AM">AM</option>
+        <option value="PM">PM</option>
+      </select>
+    </div>
+  );
+};
+
 const SLabel = ({ children }) => (
     <label className="block text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-1">{children}</label>
 );
-const SInput = ({ label, ...props }) => (
-    <div className="space-y-1">
-        {label && <SLabel>{label}</SLabel>}
-        <input {...props} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-2 rounded-xl text-[13px] font-medium outline-none focus:border-slate-500 transition" />
-    </div>
-);
+const SInput = ({ label, ...props }) => {
+    if (props.type === 'time') {
+        return (
+            <div className="space-y-1">
+                {label && <SLabel>{label}</SLabel>}
+                <TimePicker12Hr value={props.value} onChange={props.onChange} isLarge={false} />
+            </div>
+        );
+    }
+    return (
+        <div className="space-y-1">
+            {label && <SLabel>{label}</SLabel>}
+            <input {...props} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-2 rounded-xl text-[13px] font-medium outline-none focus:border-slate-500 transition" />
+        </div>
+    );
+};
 const SToggle = ({ label, desc, value, onChange }) => (
     <div className="flex items-center justify-between gap-3 py-2">
         <div>
@@ -1808,6 +1911,14 @@ function ShiftsSection({ onStateChange, hasEditAccess }) {
 
 
 function InputGroup({ label, ...props }) {
+    if (props.type === 'time') {
+        return (
+            <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">{label}</label>
+                <TimePicker12Hr value={props.value} onChange={props.onChange} isLarge={true} />
+            </div>
+        );
+    }
     return (
         <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">{label}</label>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Tree, TreeNode } from 'react-organizational-chart';
 import useOrgStructure from '../../hooks/useOrgStructure';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -23,6 +23,10 @@ export default function OrgStructure() {
     const location = useLocation();
     const [roots, setRoots] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [zoom, setZoom] = useState(1);
+
+    const wrapperRef = useRef(null);
+    const contentRef = useRef(null);
 
     // States for dynamic manager editing
     const [employeesList, setEmployeesList] = useState([]);
@@ -35,6 +39,44 @@ export default function OrgStructure() {
     const [draggedEmployeeData, setDraggedEmployeeData] = useState(null);
     const [targetManagerData, setTargetManagerData] = useState(null);
     const [isDragOverId, setIsDragOverId] = useState(null);
+
+    const handleZoomIn = () => {
+        setZoom(prev => Math.min(prev + 0.1, 1.5));
+    };
+
+    const handleZoomOut = () => {
+        setZoom(prev => Math.max(prev - 0.1, 0.4));
+    };
+
+    const handleZoomReset = () => {
+        setZoom(1);
+    };
+
+    const handleFitScreen = () => {
+        if (wrapperRef.current) {
+            const tableEl = wrapperRef.current.querySelector('.react-organizational-chart table');
+            const wrapperWidth = wrapperRef.current.clientWidth;
+            if (tableEl && wrapperWidth) {
+                // Get original table width before scaling
+                const tableWidth = tableEl.getBoundingClientRect().width / zoom;
+                if (tableWidth > 0) {
+                    const fitScale = (wrapperWidth - 32) / tableWidth;
+                    const clampedScale = Math.min(Math.max(fitScale, 0.35), 1.1);
+                    setZoom(clampedScale);
+                }
+            }
+        }
+    };
+
+    // Auto-fit tree on initial render and window resize
+    useEffect(() => {
+        if (roots.length > 0) {
+            const timer = setTimeout(() => {
+                handleFitScreen();
+            }, 300);
+            return () => clearTimeout(timer);
+        }
+    }, [roots]);
 
     const handleOpenManagerModal = async (emp) => {
         setSelectedEmp(emp);
@@ -89,7 +131,9 @@ export default function OrgStructure() {
         const nestedChildren = employee?.subordinates || employee?.reports || employee?.children || [];
         return {
             ...employee,
-            isExpanded: false,
+            isExpanded: employee.isExpanded !== undefined 
+                ? employee.isExpanded 
+                : (employee.type === 'company' || employee.type === 'department' || nestedChildren.length > 0),
             loaded: nestedChildren.length > 0,
             children: nestedChildren.map(toOrgNode)
         };
@@ -194,6 +238,8 @@ export default function OrgStructure() {
         const densityClass = getDensityClass();
 
         if (employee.type === 'company' || employee.type === 'department') {
+            const isCompany = employee.type === 'company';
+            const name = employee.firstName || employee.name || employee.department || 'General';
             return (
                 <div
                     className={`org-node inline-flex flex-col items-center relative group transition-all duration-300 ${densityClass} cursor-pointer`}
@@ -205,16 +251,18 @@ export default function OrgStructure() {
                     }}
                 >
                     <div className={`
-                        px-6 py-3 rounded-lg shadow-lg border-2 transition-all duration-300 transform group-hover:scale-105
-                        ${employee.type === 'company' 
+                        px-4 py-2 rounded-md shadow-md border transition-all duration-300 transform group-hover:scale-105
+                        ${isCompany 
                             ? 'bg-slate-800 border-slate-900 text-white dark:bg-slate-100 dark:border-white dark:text-slate-900' 
-                            : 'bg-indigo-500 border-indigo-600 text-white'}
+                            : 'bg-gradient-to-r from-blue-600 to-indigo-600 border-indigo-700 text-white dark:from-blue-700 dark:to-indigo-700 dark:border-indigo-800'}
                     `}>
-                        <div className="font-black tracking-widest text-sm uppercase whitespace-nowrap">
-                            {employee.firstName}
+                        <div className="font-extrabold tracking-wider text-[11px] uppercase whitespace-nowrap px-1">
+                            {name}
                         </div>
-                        {employee.type === 'company' && (
-                            <div className="text-[10px] font-bold opacity-70 mt-1 uppercase tracking-widest">Organization</div>
+                        {isCompany ? (
+                            <div className="text-[9px] font-bold opacity-70 mt-0.5 uppercase tracking-widest">Organization</div>
+                        ) : (
+                            <div className="text-[8px] font-bold opacity-80 mt-0.5 uppercase tracking-widest text-blue-100">Department</div>
                         )}
                     </div>
 
@@ -294,9 +342,9 @@ export default function OrgStructure() {
                             icon={<UserOutlined />}
                             className="node-avatar border-2 border-slate-200 dark:border-slate-800 shadow-lg transition-all duration-300"
                             style={{
-                                width: 'clamp(44px, 5.5vw, 68px)',
-                                height: 'clamp(44px, 5.5vw, 68px)',
-                                fontSize: 'clamp(18px, 2.8vw, 26px)'
+                                width: 'clamp(36px, 4vw, 52px)',
+                                height: 'clamp(36px, 4vw, 52px)',
+                                fontSize: 'clamp(14px, 2vw, 20px)'
                             }}
                         />
 
@@ -313,10 +361,10 @@ export default function OrgStructure() {
                         style={{ fontSize: 'clamp(9px, 1.1vw, 13px)' }}>
                         {employee.firstName} {employee.lastName}
                     </div>
-                    <div className="node-label font-bold text-indigo-500 uppercase tracking-[0.15em] mt-0.5 opacity-70 truncate max-w-[120px]"
-                        style={{ fontSize: 'clamp(7px, 0.7vw, 9px)' }}>
+                    <span className="node-label font-bold text-blue-600 bg-blue-50/80 border border-blue-100 rounded-full px-2 py-0.5 uppercase tracking-wide mt-1.5 truncate max-w-[130px] dark:bg-blue-950/40 dark:border-blue-900/40 dark:text-blue-400"
+                        style={{ fontSize: 'clamp(7px, 0.7vw, 8.5px)' }}>
                         {employee.department || 'General'}
-                    </div>
+                    </span>
                 </div>
 
                 {/* Hover-Revealed Expansion Arrow - Strictly Scoped Toggle */}
@@ -412,6 +460,60 @@ export default function OrgStructure() {
 
     return (
         <div className="space-y-6 pb-12 org-structure-page select-none">
+            {/* Zoom Control Toolbar */}
+            <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-3 bg-white border border-slate-100 rounded-xl shadow-sm">
+                <div className="flex items-center gap-2">
+                    <span className="text-xs font-extrabold text-slate-500 uppercase tracking-widest">
+                        Zoom & Navigation
+                    </span>
+                </div>
+                <div className="flex items-center gap-3">
+                    <Button 
+                        size="small"
+                        onClick={handleZoomOut} 
+                        disabled={zoom <= 0.4}
+                        className="flex items-center justify-center border-slate-200 hover:border-blue-500 text-slate-600 hover:text-blue-600 rounded-lg text-xs"
+                    >
+                        Zoom -
+                    </Button>
+                    <input 
+                        type="range" 
+                        min="40" 
+                        max="150" 
+                        value={Math.round(zoom * 100)} 
+                        onChange={(e) => setZoom(Number(e.target.value) / 100)}
+                        className="w-24 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                    />
+                    <span className="text-xs font-black text-blue-600 min-w-[45px] text-center">
+                        {Math.round(zoom * 100)}%
+                    </span>
+                    <Button 
+                        size="small"
+                        onClick={handleZoomIn} 
+                        disabled={zoom >= 1.5}
+                        className="flex items-center justify-center border-slate-200 hover:border-blue-500 text-slate-600 hover:text-blue-600 rounded-lg text-xs"
+                    >
+                        Zoom +
+                    </Button>
+                    <div className="h-4 w-[1px] bg-slate-200 mx-1" />
+                    <Button 
+                        size="small"
+                        type="primary"
+                        onClick={handleFitScreen}
+                        className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs"
+                    >
+                        Fit to Screen
+                    </Button>
+                    <Button 
+                        size="small"
+                        onClick={handleZoomReset}
+                        className="border-slate-200 hover:border-slate-400 text-slate-600 rounded-lg text-xs"
+                    >
+                        Reset (100%)
+                    </Button>
+                </div>
+            </div>
+
             {/* Tree Canvas Container */}
             <div className="overflow-hidden flex flex-col min-h-[75vh] relative pt-2">
                 {roots.length === 0 ? (
@@ -419,22 +521,35 @@ export default function OrgStructure() {
                         <Empty description="No Records Found" />
                     </div>
                 ) : (
-                    <div className="org-tree-wrapper w-full flex-1 flex flex-col items-center overflow-auto no-scrollbar pb-10">
-                        <Tree
-                            lineWidth={'1.5px'}
-                            lineColor={'#cbd5e1'}
-                            lineHeight={'40px'}
-                            lineBorderRadius={'12px'}
-                            label={
-                                <div className="mb-8">
-                                    <div className="inline-block px-5 py-2 bg-[#4F46E5] text-white rounded-lg text-sm font-bold shadow-md">
-                                        Executive Root
-                                    </div>
-                                </div>
-                            }
+                    <div 
+                        ref={wrapperRef}
+                        className="org-tree-wrapper w-full flex-1 flex flex-col items-center overflow-auto no-scrollbar pb-10"
+                    >
+                        <div 
+                            ref={contentRef}
+                            className="transition-transform duration-300 ease-out origin-top flex flex-col items-center"
+                            style={{ 
+                                transform: `scale(${zoom})`,
+                                width: 'max-content',
+                                minWidth: '100%',
+                            }}
                         >
-                            {renderRecursive(roots)}
-                        </Tree>
+                            <Tree
+                                lineWidth={'1.5px'}
+                                lineColor={'#cbd5e1'}
+                                lineHeight={'40px'}
+                                lineBorderRadius={'12px'}
+                                label={
+                                    <div className="mb-8">
+                                        <div className="inline-block px-5 py-2 bg-[#4F46E5] text-white rounded-lg text-sm font-bold shadow-md">
+                                            Executive Root
+                                        </div>
+                                    </div>
+                                }
+                            >
+                                {renderRecursive(roots)}
+                            </Tree>
+                        </div>
                     </div>
                 )}
             </div>
@@ -556,18 +671,19 @@ export default function OrgStructure() {
                     justify-content: center !important;
                     align-items: flex-start !important;
                 }
-                .org-structure-page .react-organizational-chart table {
-                    width: 100% !important;
-                    table-layout: fixed !important;
-                    margin: 0 auto !important;
-                }
-                .org-structure-page .react-organizational-chart .node-content { 
-                    display: block !important; 
-                    width: 100% !important;
-                }
-                .org-structure-page .react-organizational-chart .tree-node {
-                    padding-top: 15px;
-                }
+                 .org-structure-page .react-organizational-chart table {
+                     width: auto !important;
+                     margin: 0 auto !important;
+                     border-collapse: separate !important;
+                     border-spacing: clamp(2px, 1.2vw, 12px) 0 !important;
+                 }
+                 .org-structure-page .react-organizational-chart .node-content { 
+                     display: block !important; 
+                     width: 100% !important;
+                 }
+                 .org-structure-page .react-organizational-chart .tree-node {
+                     padding-top: 12px;
+                 }
 
                 /* Node Scaling Engine - Absolute Fluidity */
                 .org-structure-page .org-node .node-avatar {

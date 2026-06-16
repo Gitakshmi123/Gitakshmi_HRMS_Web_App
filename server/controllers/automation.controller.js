@@ -15,7 +15,7 @@ exports.getAutomations = async (req, res) => {
 exports.createAutomation = async (req, res) => {
   try {
     const tenantId = req.tenantId || req.user?.tenantId;
-    const { name, description, triggerEvent, isActive, conditions, actions } = req.body;
+    const { name, description, triggerEvent, isActive, conditions, actions, visualLayout } = req.body;
     
     const automation = new Automation({
       tenantId,
@@ -25,6 +25,7 @@ exports.createAutomation = async (req, res) => {
       isActive,
       conditions,
       actions,
+      visualLayout,
       createdBy: req.user?._id
     });
     

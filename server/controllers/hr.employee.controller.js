@@ -11,6 +11,7 @@ const UserSchema = require('../models/User');
 const { sanitizeEmployee } = require('../utils/apiSanitizer');
 const companyIdConfigController = require('./companyIdConfig.controller');
 const salarySnapshotCanonicalSync = require('../services/salarySnapshotCanonicalSync.service');
+const employeeHierarchyService = require('../services/employeeHierarchy.service');
 
 // Global counter model (stored in main connection, not tenant databases)
 let GlobalCounter;
@@ -1094,6 +1095,7 @@ exports.create = async (req, res) => {
       console.warn('[EMPLOYEE_CREATE] Global login sync warning:', syncErr.message);
     }
 
+    _invalidateOrgCache(tenantId);
     await emp.populate('gradeId', GRADE_PUBLIC_SELECT);
     res.json({ success: true, data: sanitizeEmployee(emp) });
 
@@ -1475,6 +1477,7 @@ exports.update = async (req, res) => {
       });
     }
 
+    _invalidateOrgCache(tenantId);
     if (!res.headersSent) {
       return res.json({ success: true, data: sanitizeEmployee(emp) });
     }
@@ -1535,6 +1538,7 @@ exports.remove = async (req, res) => {
     if (!emp)
       return res.status(404).json({ error: "not_found" });
 
+    _invalidateOrgCache(tenantId);
     res.json({ success: true });
 
   } catch (err) {
@@ -1549,7 +1553,10 @@ exports.remove = async (req, res) => {
 const _orgTreeCache = new Map(); // tenantId → { payload, expiresAt }
 const ORG_TREE_TTL_MS = 2 * 60 * 1000; // 2 minutes
 function _invalidateOrgCache(tenantId) {
-  if (tenantId) _orgTreeCache.delete(String(tenantId));
+  if (tenantId) {
+    _orgTreeCache.delete(String(tenantId));
+    _orgTreeCache.delete(String(tenantId) + '_structural');
+  }
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -2146,55 +2153,58 @@ exports.companyOrgTree = async (req, res) => {
       });
     }
 
-    // --- STRUCTURAL BUILDER ---
+    // --- STRUCTURAL BUILDER (Organization -> Departments -> Employees) ---
+    const departmentEmployees = new Map();
     const employeeMap = new Map();
-    const departmentMap = new Map();
-    const topRoots = []; // CEOs
 
     allEmployees.forEach(emp => {
-      employeeMap.set(String(emp._id), normalizeOrgEmployee(emp));
+      const normalized = normalizeOrgEmployee(emp);
+      employeeMap.set(String(emp._id), normalized);
+
+      const deptName = normalized.department || 'General';
+      if (!departmentEmployees.has(deptName)) {
+        departmentEmployees.set(deptName, []);
+      }
+      departmentEmployees.get(deptName).push(normalized);
     });
 
-    employeeMap.forEach(emp => {
-      if (!emp.manager || !employeeMap.has(String(emp.manager)) || String(emp.role).toUpperCase() === 'CEO') {
-        topRoots.push(emp);
-      }
-      
-      const deptName = emp.department || 'General';
-      if (!departmentMap.has(deptName)) {
-        departmentMap.set(deptName, {
-          _id: 'dept-' + deptName.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase(),
-          type: 'department',
-          isDepartment: true,
-          firstName: deptName,
-          lastName: 'Department',
-          role: 'Department',
-          department: deptName,
-          subordinates: [],
-          isExpanded: true
-        });
-      }
-    });
+    const departmentNodes = [];
 
-    employeeMap.forEach(emp => {
-      const deptName = emp.department || 'General';
-      const deptNode = departmentMap.get(deptName);
+    departmentEmployees.forEach((employeesInDept, deptName) => {
+      const deptId = 'dept-' + deptName.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
+      const deptEmpMap = new Map();
       
-      if (topRoots.includes(emp)) return;
+      employeesInDept.forEach(emp => {
+        deptEmpMap.set(String(emp._id), emp);
+      });
 
-      if (emp.manager && employeeMap.has(String(emp.manager))) {
-        const mgr = employeeMap.get(String(emp.manager));
-        if ((mgr.department || 'General') === deptName && !topRoots.includes(mgr)) {
-          mgr.subordinates.push(emp);
+      const deptRoots = [];
+
+      employeesInDept.forEach(emp => {
+        const managerId = emp.manager;
+        if (managerId && deptEmpMap.has(String(managerId))) {
+          const managerNode = deptEmpMap.get(String(managerId));
+          managerNode.subordinates.push(emp);
         } else {
-          deptNode.subordinates.push(emp);
+          deptRoots.push(emp);
         }
-      } else {
-        deptNode.subordinates.push(emp);
-      }
+      });
+
+      departmentNodes.push({
+        _id: deptId,
+        type: 'department',
+        isDepartment: true,
+        firstName: deptName,
+        lastName: 'Department',
+        role: 'Department',
+        department: deptName,
+        subordinates: deptRoots,
+        isExpanded: true
+      });
     });
 
-    const activeDepartments = Array.from(departmentMap.values()).filter(d => d.subordinates.length > 0);
+    // Sort departments alphabetically
+    departmentNodes.sort((a, b) => a.firstName.localeCompare(b.firstName));
 
     const companyNode = {
       _id: 'company-root',
@@ -2203,16 +2213,9 @@ exports.companyOrgTree = async (req, res) => {
       firstName: tenant.companyName || 'Company',
       lastName: '',
       role: 'Organization',
-      subordinates: [],
+      subordinates: departmentNodes,
       isExpanded: true
     };
-
-    if (topRoots.length > 0) {
-      companyNode.subordinates.push(...topRoots);
-      topRoots[0].subordinates.push(...activeDepartments);
-    } else {
-      companyNode.subordinates.push(...activeDepartments);
-    }
 
     const payload = {
       root: companyNode,
@@ -2998,25 +3001,37 @@ exports.bulkUploadEmployees = async (req, res) => {
       return emailRegex.test(email);
     };
 
-    // Helper: Validate date
+    // Helper: Validate and parse date flexibly
     const validateDate = (dateVal) => {
       if (!dateVal) return null;
       let dateObj;
 
       if (dateVal instanceof Date) {
         dateObj = dateVal;
+      } else if (typeof dateVal === 'number' || (!isNaN(dateVal) && !isNaN(parseFloat(dateVal)))) {
+        const serial = parseFloat(dateVal);
+        dateObj = new Date((serial - 25569) * 86400 * 1000);
       } else {
         const dateStr = dateVal.toString().trim();
         // Try parsing YYYY-MM-DD format
-        const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-        if (match) {
-          dateObj = new Date(`${match[1]}-${match[2]}-${match[3]}T00:00:00Z`);
+        const matchYmd = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (matchYmd) {
+          dateObj = new Date(`${matchYmd[1]}-${matchYmd[2]}-${matchYmd[3]}T00:00:00Z`);
         } else {
-          dateObj = new Date(dateStr);
+          // Try DD.MM.YYYY or DD/MM/YYYY or DD-MM-YYYY
+          const matchDmy = dateStr.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
+          if (matchDmy) {
+            const day = parseInt(matchDmy[1], 10);
+            const month = parseInt(matchDmy[2], 10) - 1; // 0-indexed month
+            const year = parseInt(matchDmy[3], 10);
+            dateObj = new Date(Date.UTC(year, month, day));
+          } else {
+            dateObj = new Date(dateStr);
+          }
         }
       }
 
-      if (isNaN(dateObj.getTime())) {
+      if (!dateObj || isNaN(dateObj.getTime())) {
         throw new Error(`Invalid date format: ${dateVal}`);
       }
       return dateObj;
@@ -3038,7 +3053,7 @@ exports.bulkUploadEmployees = async (req, res) => {
     const processedEmpIds = new Set();
 
     // Pre-cache departments
-    const allDepts = await Department.find({ tenant: tenantId }).select('_id name').lean();
+    const allDepts = await Department.find({ mainCompanyId: tenantId }).select('_id name').lean();
     allDepts.forEach(d => {
       const deptName = d?.name ? d.name.toLowerCase().trim() : '';
       if (deptName) {
@@ -3079,6 +3094,26 @@ exports.bulkUploadEmployees = async (req, res) => {
       const row = records[i] && typeof records[i] === 'object' ? records[i] : {};
       const rowIdx = i + 2; // 1-indexed + header row
 
+      // Skip completely blank or non-employee placeholder rows (like rows with only a serial number)
+      const identityFields = [
+        'name', 'employeename', 'fullname', 'empname', 
+        'firstname', 'lastname', 'email', 'emailaddress', 
+        'companymailid', 'personalemailid', 'mailid'
+      ];
+      let hasCoreInfo = false;
+      for (const key of Object.keys(row)) {
+        const normKey = normalize(key);
+        if (identityFields.includes(normKey)) {
+          if (String(row[key] || '').trim()) {
+            hasCoreInfo = true;
+            break;
+          }
+        }
+      }
+      if (!hasCoreInfo) {
+        continue;
+      }
+
       try {
         // ====== EXTRACT FIELDS ======
         let empId = '';
@@ -3110,64 +3145,53 @@ exports.bulkUploadEmployees = async (req, res) => {
         let tempAddr = {};
         let permAddr = {};
 
-        // Parse row data
+        const fieldPatterns = [
+          { field: 'empId', patterns: ['employeeid', 'empid', 'employeecode', 'empcode'] },
+          { field: 'firstName', patterns: ['firstname', 'first'] },
+          { field: 'middleName', patterns: ['middlename', 'middle'] },
+          { field: 'lastName', patterns: ['lastname', 'last'] },
+          { field: 'fullName', patterns: ['name', 'employeename', 'fullname', 'empname'] },
+          { field: 'email', patterns: ['email', 'emailaddress', 'companymailid', 'companyemail', 'workemail', 'mailid'] },
+          { field: 'personalEmail', patterns: ['personalemailid', 'personalemail', 'personalmailid'] },
+          { field: 'contactNo', patterns: ['contactno', 'phone', 'mobile', 'mobileno', 'phoneno'] },
+          { field: 'gender', patterns: ['gender'] },
+          { field: 'dob', patterns: ['dob', 'dateofbirth'] },
+          { field: 'joiningDate', patterns: ['joiningdate', 'doj', 'dateofjoining', 'dateofjoin', 'dojdate', 'joining'] },
+          { field: 'departmentName', patterns: ['department', 'dept', 'departmentname', 'deptname', 'department_name', 'dept_name'] },
+          { field: 'role', patterns: ['role', 'designation', 'designationrole', 'roledesignation'] },
+          { field: 'jobType', patterns: ['jobtype', 'employeetype', 'employmenttype', 'type'] },
+          { field: 'maritalStatus', patterns: ['maritalstatus', 'marritalstatus'] },
+          { field: 'nationality', patterns: ['nationality'] },
+          { field: 'bloodGroup', patterns: ['bloodgroup'] },
+          { field: 'fatherName', patterns: ['fathername'] },
+          { field: 'motherName', patterns: ['mothername'] },
+          { field: 'emergencyContactName', patterns: ['emergencycontactname', 'emergencycontactpersonname', 'emergencycontactperson', 'emergencycontact'] },
+          { field: 'emergencyContactNumber', patterns: ['emergencycontactnumber', 'contactnumber', 'emergencymobile', 'emergencycontactno', 'emergencyphone'] },
+          { field: 'bankName', patterns: ['bankname', 'bank'] },
+          { field: 'accountNumber', patterns: ['accountnumber', 'acnumber', 'accno', 'accountno'] },
+          { field: 'ifscCode', patterns: ['ifscode', 'ifsc', 'ifsiccode', 'ifsciccode'] },
+          { field: 'branchName', patterns: ['branchname', 'branch'] },
+          { field: 'bankLocation', patterns: ['banklocation', 'bankaddress'] },
+          { field: 'policyName', patterns: ['leavepolicy'] },
+          { field: 'password', patterns: ['password'] },
+          { field: 'panNumber', patterns: ['pannumber', 'panno', 'pan'] },
+          { field: 'aadharNumber', patterns: ['aadhar', 'aadharno', 'aadharcard', 'aadharcardnumber', 'aadharnumber', 'aadhaar', 'aadhaarno', 'aadhaarnumber'] },
+          { field: 'manager', patterns: ['manager', 'reportingmanager', 'reportingto', 'managerid', 'employeemanager'] },
+          { field: 'qualification', patterns: ['qualification', 'highestqual', 'highestqualification', 'educationtype', 'degree'] },
+          { field: 'yearOfPassing', patterns: ['yearofpassing', 'passingyear', 'yop'] },
+          { field: 'cgpaOrPercentage', patterns: ['cgpapercentage', 'cgpa', 'percentage', 'marks'] }
+        ];
+
+        const rowValues = {};
+        let panNumber = '';
+        let aadharNumber = '';
+
         for (const key of Object.keys(row)) {
           const normKey = normalize(key);
           const val = row[key];
 
-          if (normKey.includes('employeeid') || normKey.includes('empid')) {
-            empId = val ? val.toString().trim() : '';
-          } else if (normKey === 'firstname' || normKey === 'first') {
-            firstName = val ? val.toString().trim() : '';
-          } else if (normKey === 'middlename' || normKey === 'middle') {
-            middleName = val ? val.toString().trim() : '';
-          } else if (normKey === 'lastname' || normKey === 'last') {
-            lastName = val ? val.toString().trim() : '';
-          } else if (normKey === 'email' || normKey.includes('emailaddress')) {
-            email = val ? val.toString().trim().toLowerCase() : '';
-          } else if (normKey === 'contactno' || normKey.includes('phone') || normKey.includes('mobile')) {
-            contactNo = val ? val.toString().trim() : '';
-          } else if (normKey === 'gender') {
-            gender = val ? val.toString().trim() : '';
-          } else if (normKey === 'dob' || normKey === 'dateofbirth') {
-            dob = val;
-          } else if (normKey === 'joiningdate' || normKey === 'doj') {
-            joiningDate = val;
-          } else if (normKey === 'department') {
-            departmentName = val ? val.toString().trim() : '';
-          } else if (normKey === 'role' || normKey === 'designation') {
-            role = val ? val.toString().trim() : '';
-          } else if (normKey === 'jobtype' || normKey === 'employeetype') {
-            jobType = val ? val.toString().trim() : '';
-          } else if (normKey === 'maritalstatus') {
-            maritalStatus = val ? val.toString().trim() : '';
-          } else if (normKey === 'nationality') {
-            nationality = val ? val.toString().trim() : '';
-          } else if (normKey === 'bloodgroup') {
-            bloodGroup = val ? val.toString().trim() : '';
-          } else if (normKey === 'fathername') {
-            fatherName = val ? val.toString().trim() : '';
-          } else if (normKey === 'mothername') {
-            motherName = val ? val.toString().trim() : '';
-          } else if (normKey === 'emergencycontactname') {
-            emergencyContactName = val ? val.toString().trim() : '';
-          } else if (normKey === 'emergencycontactnumber') {
-            emergencyContactNumber = val ? val.toString().trim() : '';
-          } else if (normKey === 'bankname') {
-            bankName = val ? val.toString().trim() : '';
-          } else if (normKey === 'accountnumber') {
-            accountNumber = val ? val.toString().trim() : '';
-          } else if (normKey === 'ifscode' || normKey === 'ifsc') {
-            ifscCode = val ? val.toString().trim() : '';
-          } else if (normKey === 'branchname') {
-            branchName = val ? val.toString().trim() : '';
-          } else if (normKey === 'banklocation') {
-            bankLocation = val ? val.toString().trim() : '';
-          } else if (normKey === 'leavepolicy') {
-            policyName = val ? val.toString().trim() : '';
-          } else if (normKey === 'password') {
-            password = val ? val.toString().trim() : '';
-          } else if (normKey.includes('tempaddressline1')) {
+          // Address matching - smart fallback for standard city/state/pincode/country columns
+          if (normKey.includes('tempaddressline1')) {
             tempAddr.line1 = val ? val.toString().trim() : '';
           } else if (normKey.includes('tempaddressline2')) {
             tempAddr.line2 = val ? val.toString().trim() : '';
@@ -3175,23 +3199,272 @@ exports.bulkUploadEmployees = async (req, res) => {
             tempAddr.city = val ? val.toString().trim() : '';
           } else if (normKey.includes('tempstate')) {
             tempAddr.state = val ? val.toString().trim() : '';
-          } else if (normKey.includes('temppincode')) {
+          } else if (normKey.includes('temppincode') || normKey.includes('temppin')) {
             tempAddr.pinCode = val ? val.toString().trim() : '';
           } else if (normKey.includes('tempcountry')) {
             tempAddr.country = val ? val.toString().trim() : '';
-          } else if (normKey.includes('permaddressline1')) {
+          } else if (normKey.includes('permaddressline1') || normKey === 'addressasperaadhar' || normKey === 'aadharaddress') {
             permAddr.line1 = val ? val.toString().trim() : '';
           } else if (normKey.includes('permaddressline2')) {
             permAddr.line2 = val ? val.toString().trim() : '';
-          } else if (normKey.includes('permcity')) {
+          } else if (normKey.includes('permcity') || normKey === 'city' || normKey === 'town' || normKey === 'district') {
             permAddr.city = val ? val.toString().trim() : '';
-          } else if (normKey.includes('permstate')) {
+          } else if (normKey.includes('permstate') || normKey === 'state') {
             permAddr.state = val ? val.toString().trim() : '';
-          } else if (normKey.includes('permpincode')) {
+          } else if (normKey.includes('permpincode') || normKey.includes('permpin') || normKey === 'pincode' || normKey === 'pin' || normKey === 'postalcode') {
             permAddr.pinCode = val ? val.toString().trim() : '';
-          } else if (normKey.includes('permcountry')) {
+          } else if (normKey.includes('permcountry') || normKey === 'country') {
             permAddr.country = val ? val.toString().trim() : '';
+          } else if (normKey === 'permanentaddress') {
+            if (permAddr.line1) {
+              tempAddr.line1 = val ? val.toString().trim() : '';
+            } else {
+              permAddr.line1 = val ? val.toString().trim() : '';
+            }
           }
+
+          for (const { field, patterns } of fieldPatterns) {
+            if (patterns.includes(normKey)) {
+              if (!rowValues[field]) rowValues[field] = [];
+              rowValues[field].push({ key: normKey, value: val });
+            }
+          }
+        }
+
+        // Hydrate variables
+        if (rowValues['empId']) empId = rowValues['empId'][0].value ? rowValues['empId'][0].value.toString().trim() : '';
+        if (rowValues['firstName']) firstName = rowValues['firstName'][0].value ? rowValues['firstName'][0].value.toString().trim() : '';
+        if (rowValues['middleName']) middleName = rowValues['middleName'][0].value ? rowValues['middleName'][0].value.toString().trim() : '';
+        if (rowValues['lastName']) lastName = rowValues['lastName'][0].value ? rowValues['lastName'][0].value.toString().trim() : '';
+        
+        // Handle full name column split if needed
+        if ((!firstName || !lastName) && rowValues['fullName']) {
+          const fullName = rowValues['fullName'][0].value ? rowValues['fullName'][0].value.toString().trim() : '';
+          if (fullName) {
+            const parts = fullName.split(/\s+/).filter(Boolean);
+            if (parts.length >= 3) {
+              firstName = parts[0];
+              middleName = parts[1];
+              lastName = parts.slice(2).join(' ');
+            } else if (parts.length === 2) {
+              firstName = parts[0];
+              lastName = parts[1];
+            } else if (parts.length === 1) {
+              firstName = parts[0];
+              lastName = 'Doe';
+            }
+          }
+        }
+
+        let personalEmail = '';
+        if (rowValues['personalEmail'] && rowValues['personalEmail'][0].value) {
+          personalEmail = rowValues['personalEmail'][0].value.toString().trim().toLowerCase();
+        }
+
+        if (rowValues['email']) {
+          const companyEmail = rowValues['email'].find(m => (m.key.includes('company') || m.key.includes('work')) && String(m.value || '').trim() !== '');
+          const chosenEmail = companyEmail || rowValues['email'].find(m => String(m.value || '').trim() !== '');
+          email = chosenEmail && chosenEmail.value ? chosenEmail.value.toString().trim().toLowerCase() : '';
+        }
+        if (!email && personalEmail) {
+          email = personalEmail;
+        }
+
+        if (rowValues['contactNo']) contactNo = rowValues['contactNo'][0].value ? rowValues['contactNo'][0].value.toString().trim() : '';
+        if (rowValues['gender']) gender = rowValues['gender'][0].value ? rowValues['gender'][0].value.toString().trim() : '';
+        if (rowValues['dob']) dob = rowValues['dob'][0].value;
+        if (rowValues['joiningDate']) joiningDate = rowValues['joiningDate'][0].value;
+        if (rowValues['departmentName']) departmentName = rowValues['departmentName'][0].value ? rowValues['departmentName'][0].value.toString().trim() : '';
+        if (rowValues['role']) role = rowValues['role'][0].value ? rowValues['role'][0].value.toString().trim() : '';
+        if (rowValues['jobType']) jobType = rowValues['jobType'][0].value ? rowValues['jobType'][0].value.toString().trim() : '';
+        if (rowValues['maritalStatus']) maritalStatus = rowValues['maritalStatus'][0].value ? rowValues['maritalStatus'][0].value.toString().trim() : '';
+        if (rowValues['nationality']) nationality = rowValues['nationality'][0].value ? rowValues['nationality'][0].value.toString().trim() : '';
+        if (rowValues['bloodGroup']) bloodGroup = rowValues['bloodGroup'][0].value ? rowValues['bloodGroup'][0].value.toString().trim() : '';
+        if (rowValues['fatherName']) fatherName = rowValues['fatherName'][0].value ? rowValues['fatherName'][0].value.toString().trim() : '';
+        if (rowValues['motherName']) motherName = rowValues['motherName'][0].value ? rowValues['motherName'][0].value.toString().trim() : '';
+        if (rowValues['emergencyContactName']) emergencyContactName = rowValues['emergencyContactName'][0].value ? rowValues['emergencyContactName'][0].value.toString().trim() : '';
+        if (rowValues['emergencyContactNumber']) emergencyContactNumber = rowValues['emergencyContactNumber'][0].value ? rowValues['emergencyContactNumber'][0].value.toString().trim() : '';
+        if (rowValues['bankName']) bankName = rowValues['bankName'][0].value ? rowValues['bankName'][0].value.toString().trim() : '';
+        if (rowValues['accountNumber']) accountNumber = rowValues['accountNumber'][0].value ? rowValues['accountNumber'][0].value.toString().trim() : '';
+        if (rowValues['ifscCode']) ifscCode = rowValues['ifscCode'][0].value ? rowValues['ifscCode'][0].value.toString().trim() : '';
+        if (rowValues['branchName']) branchName = rowValues['branchName'][0].value ? rowValues['branchName'][0].value.toString().trim() : '';
+        if (rowValues['bankLocation']) bankLocation = rowValues['bankLocation'][0].value ? rowValues['bankLocation'][0].value.toString().trim() : '';
+        if (rowValues['policyName']) policyName = rowValues['policyName'][0].value ? rowValues['policyName'][0].value.toString().trim() : '';
+        if (rowValues['password']) password = rowValues['password'][0].value ? rowValues['password'][0].value.toString().trim() : '';
+        if (rowValues['panNumber']) panNumber = rowValues['panNumber'][0].value ? rowValues['panNumber'][0].value.toString().trim() : '';
+        if (rowValues['aadharNumber']) aadharNumber = rowValues['aadharNumber'][0].value ? rowValues['aadharNumber'][0].value.toString().trim() : '';
+
+        // Hydrate qualifications and education fields
+        let highestQualification = '';
+        let yearOfPassing = '';
+        let cgpaOrPercentage = '';
+        if (rowValues['qualification'] && rowValues['qualification'][0].value) {
+          highestQualification = rowValues['qualification'][0].value.toString().trim();
+        }
+        if (rowValues['yearOfPassing'] && rowValues['yearOfPassing'][0].value) {
+          yearOfPassing = rowValues['yearOfPassing'][0].value.toString().trim();
+        }
+        if (rowValues['cgpaOrPercentage'] && rowValues['cgpaOrPercentage'][0].value) {
+          cgpaOrPercentage = rowValues['cgpaOrPercentage'][0].value.toString().trim();
+        }
+
+        // Hydrate marriageDate
+        let marriageDate = null;
+        let marriageDateVal = '';
+        for (const k of Object.keys(row)) {
+          if (normalize(k) === 'marriagedate' || normalize(k) === 'anniversarydate') {
+            marriageDateVal = row[k];
+            break;
+          }
+        }
+        if (marriageDateVal) {
+          try { marriageDate = validateDate(marriageDateVal); } catch(e) {}
+        }
+
+        // Hydrate manager
+        let managerId = null;
+        let managerVal = '';
+        if (rowValues['manager'] && rowValues['manager'][0].value) {
+          managerVal = rowValues['manager'][0].value.toString().trim();
+        }
+        if (managerVal) {
+          const escapeRegex = (value = '') => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const managerQuery = {
+            tenant: tenantId,
+            isDeleted: { $ne: true },
+            $or: [
+              { employeeId: managerVal },
+              { email: { $regex: new RegExp(`^${escapeRegex(managerVal)}$`, 'i') } },
+              { firstName: { $regex: new RegExp(`^${escapeRegex(managerVal)}$`, 'i') } },
+              {
+                $expr: {
+                  $eq: [
+                    { $concat: ["$firstName", " ", "$lastName"] },
+                    managerVal
+                  ]
+                }
+              }
+            ]
+          };
+          const resolvedManager = await Employee.findOne(managerQuery).select('_id').lean();
+          if (resolvedManager) {
+            managerId = resolvedManager._id;
+          } else {
+            results.warnings.push(`Row ${rowIdx}: Manager "${managerVal}" not found - reporting manager left blank`);
+          }
+        }
+
+        // Hydrate repeating family blocks
+        const familyMembers = [];
+        const children = [];
+        const brothers = [];
+        const sisters = [];
+        let spouseDetails = undefined;
+
+        for (let idxFamily = 0; idxFamily < 15; idxFamily++) {
+          const nameKey = idxFamily === 0 ? 'familymembername' : `familymembername${idxFamily}`;
+          const relationKey = idxFamily === 0 ? 'relation' : `relation${idxFamily}`;
+          const dobKey = `dob${idxFamily + 1}`;
+
+          let nameVal = '';
+          let relationVal = '';
+          let dobVal = null;
+
+          for (const k of Object.keys(row)) {
+            const normK = normalize(k);
+            if (normK === nameKey) nameVal = String(row[k] || '').trim();
+            if (normK === relationKey) relationVal = String(row[k] || '').trim();
+            if (normK === dobKey) dobVal = row[k];
+          }
+
+          if (nameVal || relationVal || dobVal) {
+            let parsedDob = null;
+            if (dobVal) {
+              try { parsedDob = validateDate(dobVal); } catch (e) {}
+            }
+            familyMembers.push({
+              name: nameVal,
+              relation: relationVal,
+              dob: parsedDob
+            });
+          }
+        }
+
+        familyMembers.forEach(f => {
+          const relationLower = String(f.relation || '').toLowerCase();
+          if (relationLower.includes('mother')) {
+            motherName = f.name;
+          } else if (relationLower.includes('father')) {
+            if (!fatherName) fatherName = f.name;
+          } else if (relationLower.includes('spouse') || relationLower.includes('wife') || relationLower.includes('husband')) {
+            spouseDetails = {
+              spouseName: f.name,
+              relation: f.relation,
+              dob: f.dob
+            };
+          } else if (relationLower.includes('child') || relationLower.includes('son') || relationLower.includes('daughter')) {
+            children.push({
+              name: f.name,
+              gender: relationLower.includes('son') ? 'Male' : (relationLower.includes('daughter') ? 'Female' : undefined),
+              dob: f.dob
+            });
+          } else if (relationLower.includes('brother')) {
+            brothers.push({
+              name: f.name,
+              dob: f.dob
+            });
+          } else if (relationLower.includes('sister')) {
+            sisters.push({
+              name: f.name,
+              dob: f.dob
+            });
+          }
+        });
+
+        // Hydrate repeating experience blocks
+        const experience = [];
+        for (let idxExp = 0; idxExp < 10; idxExp++) {
+          const companyKey = idxExp === 0 ? 'lastcompant' : `lastcompant${idxExp}`;
+          const fromKey = idxExp === 0 ? 'from' : `from${idxExp}`;
+          const toKey = idxExp === 0 ? 'to' : `to${idxExp}`;
+
+          let companyVal = '';
+          let fromVal = null;
+          let toVal = null;
+
+          for (const k of Object.keys(row)) {
+            const normK = normalize(k);
+            if (normK === companyKey) companyVal = String(row[k] || '').trim();
+            if (normK === fromKey) fromVal = row[k];
+            if (normK === toKey) toVal = row[k];
+          }
+
+          if (companyVal || fromVal || toVal) {
+            let parsedFrom = null;
+            let parsedTo = null;
+            if (fromVal) {
+              try { parsedFrom = validateDate(fromVal); } catch(e) {}
+            }
+            if (toVal) {
+              try { parsedTo = validateDate(toVal); } catch(e) {}
+            }
+            experience.push({
+              companyName: companyVal,
+              from: parsedFrom,
+              to: parsedTo
+            });
+          }
+        }
+
+        let lastCtcVal = '';
+        for (const k of Object.keys(row)) {
+          if (normalize(k) === 'lastctc') {
+            lastCtcVal = row[k];
+            break;
+          }
+        }
+        if (lastCtcVal && experience.length > 0) {
+          experience[0].lastDrawnSalary = parseFloat(String(lastCtcVal).replace(/[^0-9.]/g, '')) || undefined;
         }
 
         // ====== AUTO-GENERATE EMPLOYEE ID IF MISSING ======
@@ -3346,13 +3619,45 @@ exports.bulkUploadEmployees = async (req, res) => {
           validJobType = 'Full-Time';
         }
 
-        // Resolve Department
+        // Resolve Department (create if not exists)
         let departmentId = null;
         if (departmentName) {
           const deptLower = departmentName.toLowerCase().trim();
           departmentId = deptCache[deptLower];
           if (!departmentId) {
-            results.warnings.push(`Row ${rowIdx}: Department "${departmentName}" not found - will be left blank`);
+            try {
+              let deptCode = departmentName
+                .toUpperCase()
+                .replace(/[^A-Z0-9\s]/g, '')
+                .split(/\s+/)
+                .map(word => word[0])
+                .join('');
+              
+              if (!deptCode || deptCode.length < 2) {
+                deptCode = departmentName.slice(0, 3).toUpperCase();
+              }
+              
+              const existingDeptWithCode = await Department.findOne({
+                mainCompanyId: tenantId,
+                code: deptCode
+              });
+              if (existingDeptWithCode) {
+                deptCode = `${deptCode}${Math.floor(10 + Math.random() * 90)}`;
+              }
+
+              const newDept = await Department.create({
+                name: departmentName.trim(),
+                code: deptCode,
+                mainCompanyId: tenantId,
+                isActive: true
+              });
+
+              departmentId = newDept._id;
+              deptCache[deptLower] = departmentId;
+              results.warnings.push(`Row ${rowIdx}: Department "${departmentName}" not found - automatically created with code "${deptCode}"`);
+            } catch (deptErr) {
+              results.warnings.push(`Row ${rowIdx}: Failed to automatically create department "${departmentName}" (${deptErr.message}) - left blank`);
+            }
           }
         }
 
@@ -3404,10 +3709,12 @@ exports.bulkUploadEmployees = async (req, res) => {
           mainCompanyId: tenantId,
           tenant: tenantId,
           employeeId: empId,
+          employeeCode: empId,
           firstName,
           middleName: middleName || undefined,
           lastName,
           email,
+          personalEmail: personalEmail || undefined,
           password: hashedPassword,
           contactNo: contactNo || undefined,
           gender: validGender || undefined,
@@ -3416,12 +3723,29 @@ exports.bulkUploadEmployees = async (req, res) => {
           departmentId,
           department: departmentName || undefined,
           role: role || undefined,
+          designation: role || undefined,
           employeeType: validJobType,
           maritalStatus: maritalStatus || undefined,
           nationality: nationality || undefined,
           bloodGroup: bloodGroup || undefined,
           fatherName: fatherName || undefined,
           motherName: motherName || undefined,
+          marriageDate: marriageDate || undefined,
+          highestQualification: highestQualification || undefined,
+          education: {
+            type: highestQualification || undefined,
+            class10Marks: cgpaOrPercentage || undefined,
+            class12Marks: cgpaOrPercentage || undefined,
+            yearOfPassing: yearOfPassing || undefined,
+            cgpaOrPercentage: cgpaOrPercentage || undefined
+          },
+          manager: managerId || undefined,
+          reportingManagerId: managerId || undefined,
+          spouseDetails: spouseDetails || undefined,
+          children: children.length > 0 ? children : undefined,
+          brothers: brothers.length > 0 ? brothers : undefined,
+          sisters: sisters.length > 0 ? sisters : undefined,
+          experience: experience.length > 0 ? experience : undefined,
           emergencyContactName: emergencyContactName || undefined,
           emergencyContactNumber: emergencyContactNumber || undefined,
           leavePolicy: policyId,
@@ -3434,6 +3758,10 @@ exports.bulkUploadEmployees = async (req, res) => {
           } : undefined,
           tempAddress: Object.keys(tempAddr).length > 0 ? tempAddr : undefined,
           permAddress: Object.keys(permAddr).length > 0 ? permAddr : undefined,
+          documents: (panNumber || aadharNumber) ? {
+            panNumber: panNumber || undefined,
+            aadharNumber: aadharNumber || undefined
+          } : undefined,
           status: 'active',
           lastStep: 6 // Mark as completed
         });
@@ -3519,6 +3847,24 @@ exports.bulkUploadEmployees = async (req, res) => {
       }
     }
 
+    // ====== POST-PROCESS HIERARCHY REBUILD ======
+    // Rebuild hierarchies reactively for all successfully uploaded employees in this batch
+    for (const empId of results.processedIds) {
+      try {
+        const empDoc = await Employee.findOne({ tenant: tenantId, employeeId: empId }).select('_id').lean();
+        if (empDoc) {
+          await employeeHierarchyService.buildEmployeeHierarchy({
+            tenantDB: req.tenantDB,
+            tenantId,
+            employeeId: empDoc._id
+          });
+        }
+      } catch (postHierarchyErr) {
+        console.error(`Post-processing hierarchy build warning for employee ${empId}:`, postHierarchyErr.message);
+        results.warnings.push(`Post-process hierarchy build failed for employee ID ${empId}: ${postHierarchyErr.message}`);
+      }
+    }
+
     // Note: Counters are already synchronized by generateIdInternal call in the loop
 
     // ====== PREPARE RESPONSE ======
@@ -3540,6 +3886,7 @@ exports.bulkUploadEmployees = async (req, res) => {
       }
     }
 
+    _invalidateOrgCache(tenantId);
     res.json({
       success: !allFailed, // Only success if at least one record uploaded
       uploadedCount: results.uploadedCount,

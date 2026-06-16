@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const path = require('path');
 const emailService = require('./email.service');
+const { sendTemplatedEmail } = require('./template.service');
 
 function getWorkflowModels(tenantDB) {
   if (!tenantDB.models.Workflow) {
@@ -82,7 +83,41 @@ async function writeHistory({
   });
 }
 
-async function notifyAssignment({ tenantDB, tenantId, instance, assignment }) {
+function getByPath(source, pathValue) {
+  if (!source || !pathValue) return undefined;
+  return String(pathValue).split('.').reduce((value, part) => (value == null ? undefined : value[part]), source);
+}
+
+async function sendStepAssignmentEmail({ tenantDB, tenantId, instance, assignment, step, employee }) {
+  const notification = step?.notification || {};
+  if (!notification.enabled || !notification.triggerType) return;
+
+  const toEmail = notification.toEmailField
+    ? getByPath({ ...(instance.contextSnapshot || {}), assignee: employee }, notification.toEmailField)
+    : employee?.email;
+
+  if (!toEmail) return;
+
+  await sendTemplatedEmail(tenantId, notification.triggerType, {
+    ...(instance.contextSnapshot || {}),
+    assignee: employee,
+    approvalStep: {
+      key: step.key,
+      name: step.name,
+      order: step.order,
+      dueAt: assignment.dueAt,
+      assigneeEmployeeId: assignment.assigneeEmployeeId,
+    },
+    workflow: {
+      instanceId: instance._id,
+      moduleKey: instance.moduleKey,
+      entityType: instance.entityType,
+      entityId: instance.entityId,
+    },
+  }, toEmail);
+}
+
+async function notifyAssignment({ tenantDB, tenantId, instance, assignment, step = null }) {
   try {
     const { Notification, Employee } = getWorkflowModels(tenantDB);
     const employee = await Employee.findById(assignment.assigneeEmployeeId).select('firstName lastName name email role').lean();
@@ -100,6 +135,10 @@ async function notifyAssignment({ tenantDB, tenantId, instance, assignment }) {
 
     if (instance.entityType === 'GeneratedLetter' && employee?.email) {
       await notifyLetterApprovalByEmail({ tenantDB, tenantId, instance, assignment, employee });
+    }
+
+    if (employee?.email && step?.notification?.enabled) {
+      await sendStepAssignmentEmail({ tenantDB, tenantId, instance, assignment, step, employee });
     }
   } catch (_) {
     // Notifications should never block approval routing.

@@ -142,6 +142,14 @@ async function finalizeLeaveWorkflow({
     await leaveRequest.save();
     await syncLeaveToAttendance({ tenantDB, tenantId, leaveRequest });
     await notifyEmployee({ tenantDB, tenantId, leaveRequest, status, comment });
+
+    try {
+      const { dispatchEvent } = require('../automationEngine.service');
+      await dispatchEvent(tenantId, 'LEAVE_APPROVED', leaveRequest.toObject ? leaveRequest.toObject() : leaveRequest);
+    } catch (dispatchErr) {
+      console.error('[leaveWorkflow.adapter] LEAVE_APPROVED dispatch error:', dispatchErr);
+    }
+
     return leaveRequest;
   }
 
@@ -158,6 +166,14 @@ async function finalizeLeaveWorkflow({
     };
     await leaveRequest.save();
     await notifyEmployee({ tenantDB, tenantId, leaveRequest, status, comment });
+
+    try {
+      const { dispatchEvent } = require('../automationEngine.service');
+      await dispatchEvent(tenantId, 'LEAVE_REJECTED', leaveRequest.toObject ? leaveRequest.toObject() : leaveRequest);
+    } catch (dispatchErr) {
+      console.error('[leaveWorkflow.adapter] LEAVE_REJECTED dispatch error:', dispatchErr);
+    }
+
     return leaveRequest;
   }
 

@@ -33,24 +33,25 @@ export default function EmployeeProfile() {
         return;
       }
 
-      if (seededEmployeeMatchesRoute) {
-        if (!cancelled) {
-          setEmployee((current) => current || seededEmployee);
-          setLoading(false);
-        }
-        return;
+      if (seededEmployeeMatchesRoute && !employee) {
+        setEmployee(seededEmployee);
       }
 
-      setLoading(true);
+      // Only show loader if we have no employee data at all
+      setLoading(!employee && !seededEmployeeMatchesRoute);
       try {
         const res = await api.get(`/hr/employees/${employeeId}`);
         if (!cancelled) {
           setEmployee(res.data?.data || res.data || null);
         }
-      } catch {
+      } catch (err) {
         if (!cancelled) {
-          showToast('error', 'Error', 'Failed to load employee profile');
-          navigate(employeesPath, { replace: true });
+          if (!employee && !seededEmployeeMatchesRoute) {
+            showToast('error', 'Error', 'Failed to load employee profile');
+            navigate(employeesPath, { replace: true });
+          } else {
+            console.error("Failed to refresh employee details:", err);
+          }
         }
       } finally {
         if (!cancelled) {

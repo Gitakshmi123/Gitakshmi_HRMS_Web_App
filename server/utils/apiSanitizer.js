@@ -165,6 +165,9 @@ const EMPLOYEE_PUBLIC_FIELDS = new Set([
     'documents',
     'experience',
     'lastStep',
+    /* Missing details from excel bulk upload */
+    'personalEmail', 'highestQualification', 'marriageDate',
+    'spouseDetails', 'children', 'brothers', 'sisters',
 ]);
 
 const { stringifyId } = require('./idUtils');
