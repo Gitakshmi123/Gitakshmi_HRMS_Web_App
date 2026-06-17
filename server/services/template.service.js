@@ -53,7 +53,8 @@ async function sendTemplatedEmail(tenantId, triggerType, contextData, toEmail) {
             to: toEmail,
             subject: parsedSubject,
             html: parsedBodyHtml,
-            customSmtp
+            customSmtp,
+            tenantId
         });
 
         return true;

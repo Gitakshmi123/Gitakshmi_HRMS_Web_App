@@ -141,7 +141,9 @@ class BGVEmailService {
                 const result = await emailService.sendEmail(
                     toHeader,
                     subject,
-                    htmlBody
+                    htmlBody,
+                    [], // attachments
+                    tenantId
                 );
 
                 // Create the master email log entry (CRITICAL for Global Email History)

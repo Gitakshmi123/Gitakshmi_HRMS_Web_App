@@ -1107,7 +1107,8 @@ exports.applyJob = [
                 applicant.email,
                 applicant.name,
                 requirement.jobTitle,
-                companyName
+                companyName,
+                tenantId
               );
               // console.log(`✅ [APPLY_JOB] Notification sent to candidate: ${applicant.email}`);
             } catch (candidateEmailErr) {
@@ -1122,7 +1123,8 @@ exports.applyJob = [
                 companyEmail,
                 applicant.name,
                 requirement.jobTitle,
-                applicant._id
+                applicant._id,
+                tenantId
               );
               // console.log(`✅ [APPLY_JOB] Notification sent to company: ${companyEmail}`);
             } catch (companyEmailErr) {

@@ -508,7 +508,8 @@ router.post('/:token/action', async (req, res) => {
                     companyName,
                     pdfPath,
                     customHtml,
-                    applicant
+                    applicant,
+                    instance.tenantId
                 );
             }
 

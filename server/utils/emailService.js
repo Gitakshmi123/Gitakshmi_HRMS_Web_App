@@ -194,8 +194,23 @@ async function getTransporter() {
 }
 
 async function sendMail(options) {
-  const { to, subject, text, html, from, customSmtp, ...extra } = options || {};
-  const selectedSmtp = customSmtp || await getSavedDefaultSmtp();
+  const { to, subject, text, html, from, customSmtp, tenantId, ...extra } = options || {};
+  let selectedSmtp = customSmtp;
+  if (!selectedSmtp && tenantId) {
+    try {
+      const Tenant = mongoose.model('Tenant');
+      const tenantQuery = mongoose.Types.ObjectId.isValid(tenantId) ? { _id: tenantId } : { tenantId };
+      const tenant = await Tenant.findOne(tenantQuery).lean();
+      if (tenant && tenant.smtpConfig && tenant.smtpConfig.host && tenant.smtpConfig.user) {
+        selectedSmtp = tenant.smtpConfig;
+      }
+    } catch (err) {
+      console.warn('[emailService] Failed to load tenant SMTP:', err.message);
+    }
+  }
+  if (!selectedSmtp) {
+    selectedSmtp = await getSavedDefaultSmtp();
+  }
   const customTransport = await getCustomTransporter(selectedSmtp);
   const t = customTransport?.transporter || await getTransporter();
   const fromAddress = from || (customTransport ? getFromAddress(customTransport.config) : FROM_EMAIL);

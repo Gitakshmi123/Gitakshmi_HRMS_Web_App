@@ -27,6 +27,7 @@ const customLookup = (hostname, options, callback) => {
 
 class EmailService {
     constructor() {
+        this.transporterCache = new Map();
         const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
         const smtpPort = parseInt(process.env.SMTP_PORT || '587');
         const smtpSecure = process.env.SMTP_SECURE === 'true';
@@ -83,37 +84,162 @@ class EmailService {
 
 
 
+    async getTransporterAndSender(tenantId, customSmtp = null) {
+        let selectedSmtp = customSmtp;
+
+        if (!selectedSmtp && tenantId) {
+            try {
+                const mongoose = require('mongoose');
+                const Tenant = mongoose.model('Tenant');
+                const tenantQuery = mongoose.Types.ObjectId.isValid(tenantId) 
+                    ? { _id: tenantId } 
+                    : { tenantId: tenantId.toString() };
+                const tenant = await Tenant.findOne(tenantQuery).lean();
+                if (tenant && tenant.smtpConfig && tenant.smtpConfig.host && tenant.smtpConfig.user) {
+                    selectedSmtp = tenant.smtpConfig;
+                }
+            } catch (err) {
+                console.warn(`⚠️ [EmailService] Failed to load SMTP config for tenant ${tenantId}:`, err.message);
+            }
+        }
+
+        if (selectedSmtp && selectedSmtp.host && selectedSmtp.user) {
+            // Normalize SMTP configuration
+            const host = String(selectedSmtp.host || '').trim();
+            const port = Number(selectedSmtp.port || 587);
+            let secure = selectedSmtp.secure === true || String(selectedSmtp.secure).toLowerCase() === 'true';
+            if (port === 465) secure = true;
+            else if (port === 587) secure = false;
+
+            const user = selectedSmtp.user?.trim();
+            const rawPass = (selectedSmtp.pass ?? selectedSmtp.password ?? '').toString().trim();
+            const pass = (host.includes('gmail') && rawPass) ? rawPass.replace(/\s+/g, '') : rawPass;
+            const fromEmail = selectedSmtp.fromEmail?.trim();
+            const fromName = selectedSmtp.fromName?.trim();
+
+            const cacheKey = `${tenantId || 'custom'}_${host}_${port}_${user}_${secure}_${pass}_${fromEmail}_${fromName}`;
+
+            if (this.transporterCache.has(cacheKey)) {
+                return this.transporterCache.get(cacheKey);
+            }
+
+            // Clean up old transporter instances for the same tenant to prevent connection leaks
+            if (tenantId) {
+                for (const [key, cached] of this.transporterCache.entries()) {
+                    if (key.startsWith(`${tenantId}_`) && key !== cacheKey) {
+                        try {
+                            cached.transporter.close();
+                        } catch (e) {
+                            // ignore error
+                        }
+                        this.transporterCache.delete(key);
+                    }
+                }
+            }
+
+            console.log(`📡 [EmailService] Initializing tenant-specific SMTP: ${host}:${port} (User: ${user})`);
+
+            const transportConfig = {
+                host,
+                port,
+                secure,
+                auth: {
+                    user,
+                    pass
+                },
+                lookup: customLookup,
+                debug: false,
+                logger: false
+            };
+
+            if (host.includes('gmail.com') && !secure) {
+                delete transportConfig.host;
+                delete transportConfig.port;
+                transportConfig.service = 'gmail';
+            }
+
+            const transporter = nodemailer.createTransport(transportConfig);
+
+            // Resolve dynamic from address
+            let fromAddress = process.env.EMAIL_FROM || `"Gitakshmi HR Team" <${this.smtpUser}>`;
+            if (fromEmail) {
+                fromAddress = fromName ? `"${fromName}" <${fromEmail}>` : fromEmail;
+            }
+
+            const result = { transporter, from: fromAddress };
+            this.transporterCache.set(cacheKey, result);
+            return result;
+        }
+
+        // Fallback to default transporter
+        return {
+            transporter: this.transporter,
+            from: process.env.EMAIL_FROM || `"Gitakshmi HR Team" <${this.smtpUser}>`
+        };
+    }
+
+    /**
+     * Send an email with options (generic interface)
+     * @param {Object} options - Email options
+     * @returns {Promise<Object>}
+     */
+    async sendMail(options) {
+        const { to, subject, html, attachments = [], tenantId = null, customSmtp = null } = options || {};
+        try {
+            if (!to) {
+                throw new Error("Recipient email address is required.");
+            }
+            const { transporter, from } = await this.getTransporterAndSender(tenantId, customSmtp);
+            const mailOptions = {
+                from,
+                to,
+                subject,
+                html,
+                attachments
+            };
+            const info = await transporter.sendMail(mailOptions);
+            return { success: true, messageId: info.messageId };
+        } catch (error) {
+            console.error(`❌ [EmailService] sendMail failed to ${to}:`, error.message);
+            throw error;
+        }
+    }
+
     /**
      * Send an email to a specific recipient
      * @param {string} to - Recipient email address
      * @param {string} subject - Subject line
      * @param {string} html - HTML body content
+     * @param {Array} attachments - Optional attachments array
+     * @param {string} tenantId - Optional tenant ID for custom SMTP routing
      * @returns {Promise<Object>} - The result of the send operation
      */
-    async sendEmail(to, subject, html) {
+    async sendEmail(to, subject, html, attachments = [], tenantId = null) {
+        if (typeof attachments === 'string') {
+            tenantId = attachments;
+            attachments = [];
+        }
         try {
             if (!to) {
                 throw new Error("Recipient email address is required.");
             }
 
-            // console.log(`📧 [EmailService] Sending email to: ${to}`);
+            const { transporter, from } = await this.getTransporterAndSender(tenantId);
 
             const mailOptions = {
-                from: process.env.EMAIL_FROM || `"Gitakshmi HR Team" <${this.smtpUser}>`,
+                from,
                 to: to,
                 subject: subject,
                 html: html,
+                attachments
             };
 
-            const info = await this.transporter.sendMail(mailOptions);
-
-            // console.log(`✅ [EmailService] Email sent successfully. MessageID: ${info.messageId}`);
+            const info = await transporter.sendMail(mailOptions);
             return { success: true, messageId: info.messageId };
 
         } catch (error) {
             console.error(`❌ [EmailService] Failed to send email to ${to}:`, error.message);
 
-            // Make SMTP auth errors actionable (common with Gmail if password/app-password is wrong)
             if (error && (error.code === 'EAUTH' || error.responseCode === 535)) {
                 const err = new Error(
                     'SMTP authentication failed (535). Check SMTP_USER/SMTP_PASS. ' +
@@ -124,7 +250,6 @@ class EmailService {
                 throw err;
             }
 
-            // We throw the error so the calling controller handles it
             throw error;
         }
     }
@@ -140,7 +265,7 @@ class EmailService {
      * Send Status Update Email (Standardized Template)
      * ALIAS: sendStatusEmail (for backward compatibility)
      */
-    async sendApplicationStatusEmail(to, candidateName, jobTitle, applicationId, status, feedback = null, rating = null) {
+    async sendApplicationStatusEmail(to, candidateName, jobTitle, applicationId, status, feedback = null, rating = null, tenantId = null) {
         const subject = `Application Status Update - ${jobTitle}`;
 
         // Color coding for status
@@ -198,12 +323,12 @@ class EmailService {
             </div>
         `;
 
-        return this.sendEmail(to, subject, html);
+        return this.sendEmail(to, subject, html, [], tenantId);
     }
 
     // Alias for backward compatibility
-    async sendStatusEmail(to, candidateName, jobTitle, applicationId, status) {
-        return this.sendApplicationStatusEmail(to, candidateName, jobTitle, applicationId, status);
+    async sendStatusEmail(to, candidateName, jobTitle, applicationId, status, tenantId = null) {
+        return this.sendApplicationStatusEmail(to, candidateName, jobTitle, applicationId, status, null, null, tenantId);
     }
 
     /**
@@ -214,7 +339,7 @@ class EmailService {
      * @param {string} companyName - Company Name
      * @param {string} offerLetterPdfPath - Path to the generated PDF file
      */
-    async sendOfferLetterEmail(to, candidateName, jobTitle, companyName, offerLetterPdfPath, customHtml = null, applicant = null) {
+    async sendOfferLetterEmail(to, candidateName, jobTitle, companyName, offerLetterPdfPath, customHtml = null, applicant = null, tenantId = null) {
         const subject = `Offer Letter – ${companyName}`;
 
         let html = customHtml;
@@ -282,15 +407,16 @@ class EmailService {
         console.log(`📧 [EMAIL SERVICE] Sending Offer Letter to ${to} with attachment: ${offerLetterPdfPath}`);
 
         try {
+            const { transporter, from } = await this.getTransporterAndSender(tenantId);
             const mailOptions = {
-                from: process.env.EMAIL_FROM || `"Gitakshmi HR Team" <${this.smtpUser}>`,
+                from,
                 to: to,
                 subject: subject,
                 html: html,
                 attachments: attachments
             };
 
-            const info = await this.transporter.sendMail(mailOptions);
+            const info = await transporter.sendMail(mailOptions);
             console.log(`✅ [EMAIL SERVICE] Offer Letter sent successfully. MessageID: ${info.messageId}`);
             return { success: true, messageId: info.messageId };
         } catch (error) {
@@ -309,7 +435,7 @@ class EmailService {
      * @param {string} joiningDate - Joining Date (formatted)
      * @param {string} joiningLetterPdfPath - Path to the generated PDF file
      */
-    async sendJoiningLetterEmail(to, candidateName, jobTitle, companyName, joiningDate, joiningLetterPdfPath) {
+    async sendJoiningLetterEmail(to, candidateName, jobTitle, companyName, joiningDate, joiningLetterPdfPath, tenantId = null) {
         const subject = `Joining Letter – ${companyName}`;
 
         const html = `
@@ -357,15 +483,16 @@ class EmailService {
         console.log(`📧 [EMAIL SERVICE] Sending Joining Letter to ${to} with attachment: ${joiningLetterPdfPath}`);
 
         try {
+            const { transporter, from } = await this.getTransporterAndSender(tenantId);
             const mailOptions = {
-                from: process.env.EMAIL_FROM || `"Gitakshmi HR Team" <${this.smtpUser}>`,
+                from,
                 to: to,
                 subject: subject,
                 html: html,
                 attachments: attachments
             };
 
-            const info = await this.transporter.sendMail(mailOptions);
+            const info = await transporter.sendMail(mailOptions);
             console.log(`✅ [EMAIL SERVICE] Joining Letter sent successfully. MessageID: ${info.messageId}`);
             return { success: true, messageId: info.messageId };
         } catch (error) {
@@ -378,7 +505,7 @@ class EmailService {
     /**
      * Send Interview Scheduled Email
      */
-    async sendInterviewScheduledEmail(to, candidateName, jobTitle, interviewDetails, isForInterviewer = false) {
+    async sendInterviewScheduledEmail(to, candidateName, jobTitle, interviewDetails, isForInterviewer = false, tenantId = null) {
         const subject = `${isForInterviewer ? 'Interview Schedule Notification' : 'Interview Scheduled'} - ${jobTitle}`;
         const { date, time, mode, location, meetingLink, interviewerName, notes } = interviewDetails;
 
@@ -431,13 +558,13 @@ class EmailService {
                 </div>
             </div>
         `;
-        return this.sendEmail(to, subject, html);
+        return this.sendEmail(to, subject, html, [], tenantId);
     }
 
     /**
      * Send Interview Rescheduled Email
      */
-    async sendInterviewRescheduledEmail(to, candidateName, jobTitle, interviewDetails, isForInterviewer = false) {
+    async sendInterviewRescheduledEmail(to, candidateName, jobTitle, interviewDetails, isForInterviewer = false, tenantId = null) {
         const subject = `${isForInterviewer ? 'Interview Rescheduled Notification' : 'Interview Rescheduled'} - ${jobTitle}`;
         const { date, time, mode, location, meetingLink, interviewerName, notes } = interviewDetails;
 
@@ -489,12 +616,12 @@ class EmailService {
                 </div>
             </div>
         `;
-        return this.sendEmail(to, subject, html);
+        return this.sendEmail(to, subject, html, [], tenantId);
     }
     /**
      * Send Application Received Email to Candidate
      */
-    async sendCandidateAppliedEmail(to, candidateName, jobTitle, companyName) {
+    async sendCandidateAppliedEmail(to, candidateName, jobTitle, companyName, tenantId = null) {
         const subject = `Application Received - ${jobTitle}`;
         const html = `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 5px;">
@@ -518,13 +645,13 @@ class EmailService {
                 </div>
             </div>
         `;
-        return this.sendEmail(to, subject, html);
+        return this.sendEmail(to, subject, html, [], tenantId);
     }
 
     /**
      * Send New Application Notification to Company
      */
-    async sendCompanyNewApplicationEmail(to, candidateName, jobTitle, applicantId) {
+    async sendCompanyNewApplicationEmail(to, candidateName, jobTitle, applicantId, tenantId = null) {
         const subject = `New Candidate Applied: ${candidateName} - ${jobTitle}`;
         const html = `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 5px;">
@@ -547,7 +674,7 @@ class EmailService {
         `;
         // Only send if 'to' address is present
         if (to) {
-            return this.sendEmail(to, subject, html);
+            return this.sendEmail(to, subject, html, [], tenantId);
         }
         return Promise.resolve();
     }
@@ -555,7 +682,7 @@ class EmailService {
     /**
      * Send Offer Fully Signed Email
      */
-    async sendOfferFullySignedEmail(to, candidateName, jobTitle, companyName) {
+    async sendOfferFullySignedEmail(to, candidateName, jobTitle, companyName, tenantId = null) {
         const subject = `Offer Fully Signed – ${companyName}`;
         const html = `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 5px;">
@@ -580,7 +707,7 @@ class EmailService {
                 </div>
             </div>
         `;
-        return this.sendEmail(to, subject, html);
+        return this.sendEmail(to, subject, html, [], tenantId);
     }
 
     async sendOfferApprovalRequestEmail(to, candidateName, jobTitle, companyName, pdfPath, approvalUrl, assignmentId, details = {}, approverRole = '', tenantId = null, customTemplate = null) {
@@ -658,7 +785,7 @@ class EmailService {
             </div>
         `;
         }
-        return this.sendEmail(to, subject, html, attachments);
+        return this.sendEmail(to, subject, html, attachments, tenantId);
     }
 
     async sendJoiningApprovalRequestEmail(to, candidateName, jobTitle, companyName, pdfPath, approvalUrl, assignmentId, details = {}, approverRole = '', tenantId = null, customTemplate = null) {
@@ -727,13 +854,58 @@ class EmailService {
         `;
         }
 
-        return this.sendEmail(to, subject, html, attachments);
+        return this.sendEmail(to, subject, html, attachments, tenantId);
     }
 }
 
-function generateCTCBreakdownHtml(snapshot) {
-    if (!snapshot) return '<p style="color: #777;">No CTC breakdown available.</p>';
+function generateCTCBreakdownHtml(rawSnapshot) {
+    if (!rawSnapshot) return '<p style="color: #777;">No CTC breakdown available.</p>';
     
+    const snapObj = rawSnapshot.toObject ? rawSnapshot.toObject() : rawSnapshot;
+    
+    // Helper to clean and cast money values
+    const toMoneyVal = (v) => {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : 0;
+    };
+    
+    const normComp = (item) => ({
+        code: item.key || item.code || '',
+        name: item.label || item.name || 'Component',
+        monthlyAmount: toMoneyVal(item.monthly ?? item.monthlyAmount),
+        yearlyAmount: toMoneyVal(item.yearly ?? item.yearlyAmount ?? item.annualAmount ?? ((item.monthly ?? item.monthlyAmount ?? 0) * 12))
+    });
+
+    const earnings = (snapObj.earnings || []).map(normComp);
+    const employeeDeductions = (snapObj.deductions || snapObj.employeeDeductions || []).map(normComp);
+    const benefits = (snapObj.employerBenefits || snapObj.benefits || []).map(normComp);
+
+    const grossEarnings = toMoneyVal(snapObj.totals?.grossEarnings || earnings.reduce((sum, item) => sum + item.yearlyAmount, 0));
+    const totalDeductions = toMoneyVal(snapObj.totals?.totalDeductions || employeeDeductions.reduce((sum, item) => sum + item.yearlyAmount, 0));
+    const totalBenefits = toMoneyVal(snapObj.totals?.employerBenefits || benefits.reduce((sum, item) => sum + item.yearlyAmount, 0));
+    const ctc = toMoneyVal(snapObj.totals?.annualCTC || snapObj.ctc || snapObj.annualCTC || (grossEarnings + totalBenefits));
+    const netPay = toMoneyVal(snapObj.totals?.netSalary || snapObj.totals?.netPay || (grossEarnings - totalDeductions));
+
+    const snapshot = {
+        earnings,
+        employeeDeductions,
+        benefits,
+        ctc,
+        monthlyCTC: toMoneyVal(snapObj.totals?.monthlyCTC || ctc / 12),
+        breakdown: {
+            totalEarnings: grossEarnings,
+            totalDeductions,
+            totalBenefits,
+            netPay
+        },
+        summary: {
+            grossEarnings,
+            totalDeductions,
+            totalBenefits,
+            netPay
+        }
+    };
+
     const cur = (val) => Math.round(val || 0).toLocaleString('en-IN');
     
     let html = `

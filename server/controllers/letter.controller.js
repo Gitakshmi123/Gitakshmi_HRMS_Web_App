@@ -1092,6 +1092,59 @@ async function resolveLetterSalarySnapshot(req, { employeeId, applicantId, targe
 
     if (snapshot) return snapshot;
 
+    // 🔄 Fallback: if applicant/employee target document has salarySnapshot directly
+    if (target && target.salarySnapshot) {
+        const snapObj = target.salarySnapshot.toObject ? target.salarySnapshot.toObject() : target.salarySnapshot;
+        if (snapObj.totals || snapObj.earnings || snapObj.annualCTC || snapObj.ctc) {
+            // Helper to clean and cast money values
+            const toMoneyVal = (v) => {
+                const n = Number(v);
+                return Number.isFinite(n) ? n : 0;
+            };
+            const normComp = (item) => ({
+                code: item.key || item.code || '',
+                name: item.label || item.name || 'Component',
+                monthlyAmount: toMoneyVal(item.monthly ?? item.monthlyAmount),
+                yearlyAmount: toMoneyVal(item.yearly ?? item.yearlyAmount ?? item.annualAmount ?? ((item.monthly ?? item.monthlyAmount ?? 0) * 12))
+            });
+
+            const earnings = (snapObj.earnings || []).map(normComp);
+            const employeeDeductions = (snapObj.deductions || snapObj.employeeDeductions || []).map(normComp);
+            const benefits = (snapObj.employerBenefits || snapObj.benefits || []).map(normComp);
+
+            const grossEarnings = toMoneyVal(snapObj.totals?.grossEarnings || earnings.reduce((sum, item) => sum + item.yearlyAmount, 0));
+            const totalDeductions = toMoneyVal(snapObj.totals?.totalDeductions || employeeDeductions.reduce((sum, item) => sum + item.yearlyAmount, 0));
+            const totalBenefits = toMoneyVal(snapObj.totals?.employerBenefits || benefits.reduce((sum, item) => sum + item.yearlyAmount, 0));
+            const ctc = toMoneyVal(snapObj.totals?.annualCTC || snapObj.ctc || snapObj.annualCTC || (grossEarnings + totalBenefits));
+            const netPay = toMoneyVal(snapObj.totals?.netSalary || snapObj.totals?.netPay || (grossEarnings - totalDeductions));
+
+            return {
+                _id: snapObj._id || target._id,
+                applicant: applicantId,
+                employee: employeeId,
+                tenant: target.tenant || req.user?.tenantId || req.tenantId,
+                ctc,
+                monthlyCTC: toMoneyVal(snapObj.totals?.monthlyCTC || ctc / 12),
+                earnings,
+                employeeDeductions,
+                benefits,
+                breakdown: {
+                    totalEarnings: grossEarnings,
+                    totalDeductions,
+                    totalBenefits,
+                    netPay
+                },
+                summary: {
+                    grossEarnings,
+                    totalDeductions,
+                    totalBenefits,
+                    netPay
+                },
+                updatedAt: snapObj.calculatedAt || snapObj.generatedAt || target.updatedAt || new Date()
+            };
+        }
+    }
+
     const assignmentQuery = {
         tenantId: req.user?.tenantId || req.tenantId,
         ...(employeeId ? { employeeId } : { applicantId }),
@@ -3375,7 +3428,8 @@ exports.generateJoiningLetter = async (req, res) => {
                                 jobTitle,
                                 companyName,
                                 formattedJoiningDate,
-                                attachmentPath
+                                attachmentPath,
+                                req.user.tenantId
                             );
                         }
 
@@ -4558,7 +4612,9 @@ exports.generateOfferLetter = async (req, res) => {
                                     department: notificationPayload.department,
                                     joiningDate: notificationPayload.joiningDate,
                                     applicant: notificationPayload.applicant
-                                }
+                                },
+                                '', // approverRole
+                                notificationPayload.tenantId // tenantId
                             );
                         }
                     } else {
@@ -4568,7 +4624,10 @@ exports.generateOfferLetter = async (req, res) => {
                                 notificationPayload.name,
                                 notificationPayload.jobTitle,
                                 companyName,
-                                notificationPayload.attachmentPath
+                                notificationPayload.attachmentPath,
+                                null, // customHtml
+                                notificationPayload.applicant, // applicant
+                                notificationPayload.tenantId // tenantId
                             );
                         }
 
@@ -6684,7 +6743,8 @@ exports.approveCompanySignature = async (req, res) => {
                 applicant.email,
                 applicant.name,
                 applicant.requirementId?.jobTitle || 'the position',
-                companyName
+                companyName,
+                req.tenantId
             );
         } catch (emailErr) {
             console.error('⚠️ [APPROVE_COMPANY] Email notification failed:', emailErr.message);
@@ -7585,7 +7645,10 @@ exports.approveOfferPublic = async (req, res) => {
                         applicant.name,
                         jobTitle,
                         companyName,
-                        attachmentPath
+                        attachmentPath,
+                        null, // customHtml
+                        applicant, // applicant
+                        actualTenantId // tenantId
                     );
                 }
 

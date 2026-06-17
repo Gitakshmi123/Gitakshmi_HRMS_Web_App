@@ -125,10 +125,10 @@ async function createAuditLog({ models, tenantId, entity, entityId, action, perf
   }
 }
 
-async function sendEmailSafe({ to, subject, html, text }) {
+async function sendEmailSafe({ to, subject, html, text, tenantId }) {
   if (!to) return;
   try {
-    await sendMail({ to, subject, html, text });
+    await sendMail({ to, subject, html, text, tenantId });
   } catch (error) {
     console.warn('[onboarding] email failed:', error.message);
   }
@@ -274,6 +274,7 @@ async function notifyTaskAssignment({ models, tenantId, task, employee, assignee
       to: assignee.email,
       subject: title,
       text: message,
+      tenantId,
       html: `<p>${message}</p><p>Company: <strong>${companyName || 'HRMS'}</strong></p>`,
     });
   }

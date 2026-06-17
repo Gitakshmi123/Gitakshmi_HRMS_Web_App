@@ -15,6 +15,7 @@
  */
 
 const nodemailer = require('nodemailer');
+const emailService = require('./email.service');
 
 class EmailNotificationService {
     constructor(config = {}) {
@@ -124,20 +125,19 @@ class EmailNotificationService {
      */
     async sendEmailWithRetry(emailData, tenantId, retryCount = 0) {
         try {
-            if (!this.transporter) {
+            if (this.config.emailService === null) {
                 console.log(`📧 [EMAIL] Would send (no transporter): To=${emailData.to}, Subject=${emailData.subject}`);
                 return { success: true, method: 'logged', tenantId };
             }
 
             const html = this.renderEmailTemplate(emailData.template, emailData.context);
-            const mailOptions = {
-                from: this.config.fromEmail || 'noreply@company.com',
-                to: emailData.to,
-                subject: emailData.subject,
-                html
-            };
-
-            const result = await this.transporter.sendMail(mailOptions);
+            const result = await emailService.sendEmail(
+                emailData.to,
+                emailData.subject,
+                html,
+                [], // attachments
+                tenantId
+            );
             
             console.log(`✅ [EMAIL] Sent successfully to ${emailData.to}`);
             return {
@@ -161,7 +161,7 @@ class EmailNotificationService {
             console.error(`❌ [EMAIL] Failed after ${this.maxRetries} retries`);
             return {
                 success: false,
-                error: error.message,
+                error: error.error || error.message,
                 tenantId,
                 failedAt: new Date(),
                 retries: retryCount

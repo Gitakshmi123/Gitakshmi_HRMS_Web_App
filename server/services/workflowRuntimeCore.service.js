@@ -205,7 +205,9 @@ async function notifyLetterApprovalByEmail({ tenantDB, tenantId, instance, assig
         department: applicant.department || applicant.requirementId?.department,
         joiningDate: applicant.joiningDate,
         applicant: applicant
-      }
+      },
+      '',
+      tenantId
     );
 
     await Notification.create({

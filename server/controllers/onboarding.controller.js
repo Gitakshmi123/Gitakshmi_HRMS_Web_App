@@ -100,10 +100,10 @@ function getClientBaseUrl(req) {
 
 const EmailService = require('../services/email.service');
 
-async function sendEmailSafe({ to, subject, html, text }) {
+async function sendEmailSafe({ to, subject, html, text, tenantId }) {
   if (!to) return null;
   try {
-    return await EmailService.sendEmail(to, subject, html || text);
+    return await EmailService.sendEmail(to, subject, html || text, [], tenantId);
   } catch (error) {
     console.warn('[onboarding] email skipped:', error.message);
     return null;
@@ -1014,6 +1014,7 @@ exports.autoStartOnboardingForApplicant = async ({
       to: employee.email,
       subject: 'Welcome to the Team - Complete Your Onboarding',
       text: `Hello ${employeeName},\n\nYour joining letter has been finalized! You can now login to the Employee Portal to complete your onboarding formalities.\n\nLogin Link: ${loginLink}\nUsername: ${employee.email}\nTemporary Password: ${tempPassword}\n\nPlease change your password after your first login.`,
+      tenantId,
       html: `
         <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
           <h2 style="color: #4F46E5;">Welcome to the Team!</h2>
@@ -1380,6 +1381,7 @@ exports.inviteCandidate = async (req, res) => {
       to: employee.email,
       subject: 'Complete your employee onboarding',
       text: `Please complete your onboarding using this secure link: ${link}`,
+      tenantId,
       html: `<p>Hello ${employee.firstName || employee.email},</p><p>Your HR onboarding is ready.</p><p><a href="${link}">Open secure onboarding portal</a></p><p>This link expires on ${instance.onboardingTokenExpiresAt ? instance.onboardingTokenExpiresAt.toLocaleString() : 'the configured expiry date'}.</p>`,
     });
 
@@ -1780,6 +1782,7 @@ exports.activateOnboarding = async (req, res) => {
       text: oneTimePassword
         ? `Your HRMS employee account is active. Employee ID: ${employee.employeeId}. One-time password: ${oneTimePassword}. Please change it after login.`
         : `Your HRMS employee account is active. Employee ID: ${employee.employeeId}. Please use your existing password or contact HR for a reset.`,
+      tenantId,
       html: oneTimePassword
         ? `<p>Hello ${employee.firstName || employee.email},</p><p>Your HRMS employee account is now active.</p><p><strong>Employee ID:</strong> ${employee.employeeId}</p><p><strong>One-time password:</strong> ${oneTimePassword}</p><p>Please change this password after login.</p>`
         : `<p>Hello ${employee.firstName || employee.email},</p><p>Your HRMS employee account is now active.</p><p><strong>Employee ID:</strong> ${employee.employeeId}</p><p>Please use your existing password or contact HR for a reset.</p>`,

@@ -2084,7 +2084,7 @@ exports.sendForgotPasswordOtp = async (req, res) => {
             <p>This code will expire in 15 minutes. If you did not request a password reset, please ignore this email.</p>
         `;
         
-        await EmailService.sendEmail(email, "Password Reset Verification Code", html);
+        await EmailService.sendEmail(email, "Password Reset Verification Code", html, [], tenantId);
 
         res.json({ success: true, message: 'Verification code sent to your email.' });
     } catch (err) {

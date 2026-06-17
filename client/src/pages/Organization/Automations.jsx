@@ -507,7 +507,7 @@ export default function Automations() {
               <div className="flex items-center gap-4">
                 <button
                   onClick={closeVisualBuilder}
-                  className="text-slate-400 hover:text-white transition p-1.5 rounded-lg hover:bg-slate-700"
+                  className="text-slate-500 hover:text-slate-800 transition p-1.5 rounded-lg hover:bg-slate-200"
                 >
                   <ArrowLeft className="w-5 h-5" />
                 </button>
@@ -517,14 +517,14 @@ export default function Automations() {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="Workflow Name (e.g., Leave Approval Flow)"
-                    className="bg-transparent border-none outline-none font-bold text-lg text-white placeholder-slate-500 w-80 focus:ring-0 focus:border-b focus:border-slate-500 py-0"
+                    className="bg-transparent border-none outline-none font-bold text-lg text-slate-800 placeholder-slate-400 w-80 focus:ring-0 focus:border-b focus:border-slate-300 py-0"
                   />
                   <input
                     type="text"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="Short description of this automation..."
-                    className="bg-transparent border-none outline-none text-xs text-slate-400 placeholder-slate-600 w-96 py-0 mt-0.5 focus:ring-0"
+                    className="bg-transparent border-none outline-none text-xs text-slate-500 placeholder-slate-400 w-96 py-0 mt-0.5 focus:ring-0"
                   />
                 </div>
               </div>
@@ -814,9 +814,9 @@ export default function Automations() {
 
               {/* Right Panel: Parameters Inspector Drawer */}
               <div className="w-80 bg-slate-50 border-l border-slate-200 p-5 overflow-y-auto flex flex-col">
-                <div className="flex items-center gap-2 border-b border-slate-700/85 pb-4 mb-4">
-                  <Settings className="w-4.5 h-4.5 text-indigo-400" />
-                  <h3 className="font-bold text-white text-sm">Parameters Inspector</h3>
+                <div className="flex items-center gap-2 border-b border-slate-200 pb-4 mb-4">
+                  <Settings className="w-4.5 h-4.5 text-indigo-500" />
+                  <h3 className="font-bold text-slate-800 text-sm">Parameters Inspector</h3>
                 </div>
 
                 {selectedNode?.type === 'trigger' && (

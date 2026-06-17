@@ -129,7 +129,7 @@ exports.notifyInterviewerAssignment = async (req, res) => {
                 </div>
             `;
             try {
-                await emailService.sendEmail(targetEmail, subject, html);
+                await emailService.sendEmail(targetEmail, subject, html, [], tenantId);
                 emailSent = true;
             } catch (error) {
                 emailError = error.message || 'Email delivery failed.';

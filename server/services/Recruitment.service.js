@@ -461,7 +461,7 @@ class RecruitmentService {
 
             for (const recipient of hrAndManagers) {
                 try {
-                    await emailService.sendEmail(recipient.email, subject, html);
+                    await emailService.sendEmail(recipient.email, subject, html, [], tenantId);
                 } catch (emailErr) {
                     console.error(`Failed to send job publish email to ${recipient.email}:`, emailErr.message);
                 }

@@ -23,7 +23,8 @@ function generateMockTenantDb() {
         models: {},
         model: function(name, schema) {
             if (!this.models[name]) {
-                this.models[name] = mongoose.model(name + '_' + Date.now(), schema);
+                const s = schema || new mongoose.Schema({}, { strict: false });
+                this.models[name] = mongoose.model(name + '_' + Date.now(), s);
             }
             return this.models[name];
         }
@@ -41,6 +42,7 @@ describe('DocumentManagementService', () => {
 
     before(() => {
         tenantDb = generateMockTenantDb();
+        mongoose.Model.prototype.save = async function() { return this; };
     });
 
     describe('logAuditAction', () => {
@@ -137,7 +139,7 @@ describe('EmailNotificationService', () => {
             // Arrange
             const recipientData = {
                 email: 'test@example.com',
-                name: 'John Doe',
+                recipientName: 'John Doe',
                 positionTitle: 'Software Engineer',
                 companyName: 'Tech Corp',
                 ctcAmount: '10,00,000',
@@ -168,7 +170,7 @@ describe('EmailNotificationService', () => {
 
             // Assert
             assert(html.includes('<a href='), 'Email should contain link');
-            assert(html.includes('actionUrl'), 'Email should contain action URL');
+            assert(html.includes('https://example.com/offers/123'), 'Email should contain action URL');
         });
     });
 

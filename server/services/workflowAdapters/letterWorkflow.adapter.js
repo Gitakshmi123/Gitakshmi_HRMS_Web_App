@@ -25,7 +25,10 @@ async function notifyCandidate({ tenantDB, tenantId, letter, applicant, isOffer,
             applicant.name,
             jobTitle,
             companyName,
-            attachmentPath
+            attachmentPath,
+            null, // customHtml
+            applicant, // applicant
+            tenantId // tenantId
           );
         }
 
@@ -54,7 +57,8 @@ async function notifyCandidate({ tenantDB, tenantId, letter, applicant, isOffer,
             jobTitle,
             companyName,
             joiningDateStr,
-            attachmentPath
+            attachmentPath,
+            tenantId
           );
         }
 

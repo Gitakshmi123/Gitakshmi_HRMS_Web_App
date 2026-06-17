@@ -261,7 +261,8 @@ exports.updateApplicantStatus = async (req, res) => {
                     applicant._id,
                     status,
                     feedback,
-                    rating
+                    rating,
+                    req.tenantId
                 );
             } catch (emailErr) {
                 console.error("Email failed", emailErr.message);
@@ -361,7 +362,8 @@ exports.scheduleInterview = async (req, res) => {
                 applicant.name,
                 applicant.requirementId?.jobTitle || 'Job Role',
                 applicant.interview,
-                false
+                false,
+                req.tenantId
             );
 
             // Lookup Interviewer Email and Notify
@@ -393,7 +395,8 @@ exports.scheduleInterview = async (req, res) => {
                         applicant.name,
                         applicant.requirementId?.jobTitle || 'Job Role',
                         applicant.interview,
-                        true
+                        true,
+                        req.tenantId
                     );
                 }
             }
@@ -463,7 +466,8 @@ exports.rescheduleInterview = async (req, res) => {
                 applicant.name,
                 applicant.requirementId?.jobTitle || 'Job Role',
                 applicant.interview,
-                false
+                false,
+                req.tenantId
             );
 
             // Lookup Interviewer Email and Notify
@@ -495,7 +499,8 @@ exports.rescheduleInterview = async (req, res) => {
                         applicant.name,
                         applicant.requirementId?.jobTitle || 'Job Role',
                         applicant.interview,
-                        true
+                        true,
+                        req.tenantId
                     );
                 }
             }
