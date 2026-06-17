@@ -244,7 +244,35 @@ router.get('/candidate-pixel/:applicantId.png', async (req, res) => {
 router.get('/:token', async (req, res) => {
     try {
         const { assignment, instance, letter, applicant } = await getOfferBundle(req, req.params.token);
-        const documentAvailable = Boolean(resolveOfferDocumentPath(letter));
+        
+        let documentUrl = null;
+        let documentAvailable = false;
+        
+        const candidates = [
+            letter?.pdfPath,
+            letter?.generatedPdf,
+            letter?.pdfUrl,
+            letter?.htmlPath,
+            letter?.generatedHtml,
+            letter?.docxPath,
+            letter?.generatedDocx
+        ].filter(Boolean);
+
+        for (const rawPath of candidates) {
+            if (/^https?:\/\//i.test(rawPath)) {
+                documentUrl = rawPath;
+                documentAvailable = true;
+                break;
+            }
+        }
+        
+        if (!documentAvailable) {
+            const localPath = resolveOfferDocumentPath(letter);
+            if (localPath) {
+                documentUrl = `/api/public/offer/${req.params.token}/document`;
+                documentAvailable = true;
+            }
+        }
 
         res.json({
             success: true,
@@ -256,8 +284,8 @@ router.get('/:token', async (req, res) => {
             },
             offer: {
                 id: letter._id,
-                documentUrl: `/api/public/offer/${req.params.token}/document`,
-                pdfUrl: `/api/public/offer/${req.params.token}/document`,
+                documentUrl: documentUrl || `/api/public/offer/${req.params.token}/document`,
+                pdfUrl: documentUrl || `/api/public/offer/${req.params.token}/document`,
                 status: letter.approvalStatus,
                 workflowStatus: letter.workflowStatus,
                 generatedAt: letter.createdAt,

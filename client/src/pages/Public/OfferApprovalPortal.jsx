@@ -1,3 +1,4 @@
+// Offer approval portal
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -153,8 +154,8 @@ const OfferApprovalPortal = () => {
 
     const { candidate, offer, assignment } = data;
     const isPending = assignment.status === 'PENDING';
-    const documentUrl = `${API_URL}/public/offer/${token}/document`;
-    const documentUrlWithToolbar = `${documentUrl}#toolbar=0`;
+    const documentUrl = offer?.documentUrl ? offer.documentUrl : `${API_URL}/public/offer/${token}/document`;
+    const documentUrlWithToolbar = documentUrl.includes('?') ? `${documentUrl}&toolbar=0` : `${documentUrl}#toolbar=0`;
 
     return (
         <div className="min-h-screen bg-slate-50 font-sans text-slate-900 selection:bg-blue-500/30">
