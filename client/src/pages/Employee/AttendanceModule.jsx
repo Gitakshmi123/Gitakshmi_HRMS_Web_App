@@ -533,7 +533,14 @@ export default function AttendanceModule({
                               <span className="text-[18px] font-semibold leading-none">{dayjs(leave.startDate).format('DD')}</span>
                             </div>
                             <div>
-                              <h4 className="text-xs font-bold text-[#334155] mb-0.5">{leave.leaveType}</h4>
+                              <div className="flex items-center gap-2 mb-0.5">
+                                <h4 className="text-xs font-bold text-[#334155]">{leave.leaveType}</h4>
+                                {leave.isHalfDay && leave.halfDaySession && (
+                                  <span className="bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider">
+                                    {leave.halfDaySession}
+                                  </span>
+                                )}
+                              </div>
                               <div className="flex items-center gap-3 text-xs text-[#64748B]">
                                 <div className="flex items-center gap-2">
                                   <CalendarIcon size={12} className="opacity-40" />
