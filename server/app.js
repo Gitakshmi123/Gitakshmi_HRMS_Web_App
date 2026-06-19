@@ -110,9 +110,7 @@ app.use((req, res, next) => {
 // Security Middleware Module
 const setupSecurity = require('./middleware/security.middleware');
 const isProduction = process.env.NODE_ENV === 'production';
-const shouldServeClientDist = hasClientDist && (
-    isProduction || readBooleanEnv(process.env.SERVE_CLIENT_DIST, false)
-);
+const shouldServeClientDist = hasClientDist; // Always serve dist if it exists, even in dev mode if the user wants it.
 
 app.locals.clientDistDir = clientDistDir;
 app.locals.hasClientDist = hasClientDist;
@@ -729,18 +727,33 @@ if (shouldServeClientDist) {
     }));
 }
 
-// Catch-all for non-existent paths (ROOT)
-app.get('/', (_req, res) => {
+// Catch-all for non-existent paths (ROOT & IIS Fallback)
+app.get(['/', '/server.js'], (_req, res) => {
     if (shouldServeClientDist) {
         return res.sendFile(path.join(clientDistDir, 'index.html'));
     }
 
-    res.send('HRMS Backend Running (Refactored)');
+    if (process.env.NODE_ENV === 'production' || process.env.SERVE_CLIENT_DIST === 'true') {
+        return res.send(`
+            <div style="font-family: sans-serif; padding: 40px; text-align: center;">
+                <h2 style="color: #e11d48;">Frontend Dist Missing</h2>
+                <p>Backend is active. To serve the frontend UI on live, place the built <b>client/dist</b> folder inside the <b>server</b> directory.</p>
+                <p>Path should be: <code>${path.join(__dirname, 'dist')}</code></p>
+            </div>
+        `);
+    }
+
+    res.send('HRMS Backend Running (Refactored) - Dev Mode');
 });
 
 if (shouldServeClientDist) {
     app.get(/^\/(?!api(?:\/|$)|uploads(?:\/|$)|socket\.io(?:\/|$)).*/, (_req, res) => {
         res.sendFile(path.join(clientDistDir, 'index.html'));
+    });
+} else {
+    // Catch-all for any other frontend routes when dist is missing
+    app.get(/^\/(?!api(?:\/|$)|uploads(?:\/|$)|socket\.io(?:\/|$)).*/, (_req, res) => {
+        res.status(404).send('Frontend UI not found. Please deploy the dist folder.');
     });
 }
 

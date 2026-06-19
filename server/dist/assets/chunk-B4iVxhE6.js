@@ -1,0 +1,3 @@
+import{r as e}from"./chunk-mIdNL11e.js";import{R as a}from"./app-Cz2rRZ2m.js";function n(n){const r=e.useContext(a);if(!r)return{canView:!1,canCreate:!1,canEdit:!1,canDelete:!1,isPrivileged:!1,loading:!1};const{loading:i,hasPermission:o,user:t}=r,s=String(t?.roleName||(t?.role&&"object"==typeof t.role?t.role.name:t?.role)||"").toLowerCase(),c=["admin","super_admin","psa","company_super_admin","company_admin","hr","human_resource"].includes(s);return{canView:o(n,"view"),canCreate:o(n,"create"),canEdit:o(n,"edit"),canDelete:o(n,"delete"),isPrivileged:c,loading:i}}export{n as u};
+
+//# sourceMappingURL=chunk-B4iVxhE6.js.map
