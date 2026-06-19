@@ -58,7 +58,7 @@ function buildRateLimit(opts) {
 /** General API — 300 req / 15 min per IP */
 const generalApiLimiter = buildRateLimit({
   windowMs: 15 * 60 * 1000,
-  max: isProduction ? 300 : 10000,
+  max: isProduction ? 5000 : 10000,
   message: 'Too many requests from this IP. Please try again later.',
 });
 

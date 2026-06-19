@@ -1,0 +1,3 @@
+const e=(e,n)=>{const a=String(e||"").trim();return a?a.replace(/[^a-zA-Z0-9_-]/g,"_"):n},n=(n,a={})=>`${n}:${(({user:n,tenant:a})=>e(a?._id||a?.id||a?.tenantId||a?.companyId||n?.tenantId||n?.tenant||n?.companyId||n?.company||n?.companyCode,"tenant_global"))(a)}:${(({user:n})=>e(n?._id||n?.id||n?.userId||n?.employeeId||n?.email,"user_global"))(a)}${a.panel?`:${a.panel}`:""}`;export{n as g};
+
+//# sourceMappingURL=chunk-z17LDurq.js.map
