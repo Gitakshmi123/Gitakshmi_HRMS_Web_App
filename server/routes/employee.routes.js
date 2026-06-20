@@ -49,6 +49,15 @@ router.post('/leaves/early-return/:id', auth.authenticate, leaveCheck, checkPerm
 router.get('/leaves/history', auth.authenticate, leaveCheck, checkPermission('employee.attendance', 'view'), requestCtrl.getMyLeaves);
 router.get('/leaves/balances', auth.authenticate, leaveCheck, checkPermission('employee.attendance', 'view'), requestCtrl.getMyBalances);
 router.get('/leaves/approved-dates', auth.authenticate, leaveCheck, checkPermission('employee.attendance', 'view'), requestCtrl.getApprovedDates);
+router.post('/leaves/opening-balance', auth.authenticate, leaveCheck, auth.requireHr, requestCtrl.setOpeningBalance);
+router.get('/leaves/ledger', auth.authenticate, leaveCheck, requestCtrl.getLeaveLedger);
+
+// leave encashment (employee side)
+const encashmentCtrl = require('../controllers/leaveEncashment.controller');
+router.get('/leaves/encashment/config', auth.authenticate, leaveCheck, encashmentCtrl.getConfig);
+router.get('/leaves/encashment/requests', auth.authenticate, leaveCheck, checkPermission('employee.attendance', 'view'), encashmentCtrl.getMyRequests);
+router.post('/leaves/encashment/requests', auth.authenticate, leaveCheck, checkPermission('employee.attendance', 'view'), requireActiveEmployee, encashmentCtrl.applyRequest);
+router.post('/leaves/encashment/requests/:id/cancel', auth.authenticate, leaveCheck, checkPermission('employee.attendance', 'delete'), requireActiveEmployee, encashmentCtrl.cancelRequest);
 
 // leave policies applicable to the current employee
 router.get(['/leaves/policies', '/leave-policies'], auth.authenticate, leaveCheck, checkPermission('employee.attendance', 'view'), leavePolicyCtrl.getMyPolicies);

@@ -1,12 +1,53 @@
 const mongoose = require('mongoose');
 const notificationController = require('../controllers/notification.controller');
 const leaveManagementService = require('../services/leaveManagement.service');
+const gradeLeavePolicyService = require('../services/gradeLeavePolicy.service');
 const workflowEngine = require('../services/workflowEngine.service');
 const ShiftMasterSchema = require('../models/ShiftMaster');
 const ShiftPolicySchema = require('../models/ShiftPolicy');
 const { isWeeklyOffByShift } = require('../services/shiftPolicyEngine');
 const { translateShiftPolicyToLegacyConfig } = require('../utils/shiftRuntime');
 const { resolveAuthenticatedEmployee } = require('../utils/employeeAuthResolver');
+
+const logLeaveLedger = async (req, { employeeId, leaveType, year, actionType, days, remarks, referenceId, referenceModel }) => {
+    try {
+        const { LeaveLedger, LeaveBalance } = getModels(req);
+        const balanceObj = await LeaveBalance.findOne({ tenant: req.tenantId, employee: employeeId, leaveType: leaveType.toUpperCase(), year }).lean();
+        const newBalance = balanceObj ? balanceObj.available : 0;
+        const previousBalance = newBalance - days;
+        
+        let creatorName = 'System';
+        if (req && req.user) {
+            if (req.user.firstName || req.user.lastName) {
+                creatorName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim();
+            } else if (req.user.name) {
+                creatorName = req.user.name;
+            } else if (req.user.email) {
+                creatorName = req.user.email;
+            } else {
+                creatorName = req.user.role || 'System';
+            }
+        }
+        
+        await LeaveLedger.create({
+            tenant: req.tenantId,
+            employee: employeeId,
+            leaveType: leaveType.toUpperCase(),
+            year,
+            actionType,
+            days,
+            previousBalance,
+            newBalance,
+            remarks: remarks || `${actionType} leave transaction`,
+            referenceId,
+            referenceModel,
+            date: new Date(),
+            createdBy: creatorName
+        });
+    } catch (e) {
+        console.error('[LEAVE_LEDGER_ERROR] Failed to write ledger entry:', e);
+    }
+};
 
 const getModels = (req) => {
     if (!req.tenantDB) {
@@ -16,6 +57,7 @@ const getModels = (req) => {
         return {
             LeaveRequest: req.tenantDB.model('LeaveRequest'),
             LeaveBalance: req.tenantDB.model('LeaveBalance'),
+            LeaveLedger: req.tenantDB.model('LeaveLedger'),
             Employee: req.tenantDB.model('Employee'),
             LeavePolicy: req.tenantDB.model('LeavePolicy'),
             Notification: req.tenantDB.model('Notification'),
@@ -100,9 +142,23 @@ const calculateNetDays = async (req, startDate, endDate, employeeId = null) => {
 
     const holidays = await Holiday.find({
         tenant: req.tenantId,
-        date: { $gte: start, $lte: end }
+        date: { $lte: end },
+        $or: [
+            { endDate: { $exists: false } },
+            { endDate: null, date: { $gte: start } },
+            { endDate: { $gte: start } }
+        ]
     }).lean();
-    const holidaySet = new Set(holidays.map(h => new Date(h.date).toISOString().slice(0, 10)));
+    const holidaySet = new Set();
+    holidays.forEach(h => {
+        const s = new Date(h.date);
+        s.setHours(0, 0, 0, 0);
+        const e = h.endDate ? new Date(h.endDate) : s;
+        e.setHours(0, 0, 0, 0);
+        for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) {
+            holidaySet.add(d.toISOString().slice(0, 10));
+        }
+    });
 
     let count = 0;
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
@@ -145,11 +201,26 @@ const syncLeaveToAttendance = async (req, leaveRequest) => {
     const halfDayTargetDate = leaveRequest.halfDayTarget === 'End' ? new Date(end) : new Date(start);
     halfDayTargetDate.setHours(0, 0, 0, 0);
 
+    const fStart = new Date(start);
+    const fEnd = new Date(end);
+    fStart.setHours(0,0,0,0);
+    fEnd.setHours(0,0,0,0);
+    const isSingleDay = fStart.getTime() === fEnd.getTime();
+
     while (curr <= end) {
         const date = new Date(curr);
         date.setHours(0, 0, 0, 0);
 
-        const isHalf = leaveRequest.isHalfDay && date.getTime() === halfDayTargetDate.getTime();
+        let isHalf = false;
+        if (leaveRequest.isHalfDay) {
+            const custom = leaveRequest.meta?.customHalfDays;
+            if (custom && !isSingleDay) {
+                if (date.getTime() === fStart.getTime() && custom.firstDayHalf) isHalf = true;
+                if (date.getTime() === fEnd.getTime() && custom.lastDayHalf) isHalf = true;
+            } else {
+                isHalf = date.getTime() === halfDayTargetDate.getTime();
+            }
+        }
 
         await Attendance.findOneAndUpdate(
             { tenant: req.tenantId, employee: leaveRequest.employee, date },
@@ -197,9 +268,16 @@ exports.getMyBalances = async (req, res) => {
         const tenantIdStr = req.user?.tenantId || req.tenantId;
         if (!tenantIdStr) return res.status(400).json({ error: "tenant_missing" });
         const year = parseInt(req.query.year) || new Date().getFullYear();
-        let emp = await resolveAuthenticatedEmployee(req, {
-            select: '_id leavePolicy tenant joiningDate leaveBalanceYear employeeType role department departmentId grade gradeId designation jobType band'
-        });
+        const isHR = ['hr', 'admin', 'psa'].includes(req.user?.role);
+        let emp;
+        if (isHR && req.query.employeeId) {
+            const { Employee } = getModels(req);
+            emp = await Employee.findById(req.query.employeeId).select('_id leavePolicy tenant joiningDate leaveBalanceYear employeeType role department departmentId grade gradeId designation jobType band gender maritalStatus');
+        } else {
+            emp = await resolveAuthenticatedEmployee(req, {
+                select: '_id leavePolicy tenant joiningDate leaveBalanceYear employeeType role department departmentId grade gradeId designation jobType band gender maritalStatus'
+            });
+        }
 
         if (!emp) {
             console.warn(`[DEBUG_LEAVE_BALANCES] Employee could not be resolved from auth payload. Returning empty balances.`);
@@ -290,6 +368,26 @@ exports.getMyBalances = async (req, res) => {
             });
         }
 
+        // ── Maternity / Paternity eligibility filter ──────────────────────────────
+        // MATERNITY: Only Married Female employees
+        // PATERNITY: Only Married Male employees
+        const empGender = String(emp.gender || '').trim().toLowerCase();
+        const empMarital = String(emp.maritalStatus || '').trim().toLowerCase();
+        const isMarried = ['married', 'मेरेड', 'married'].includes(empMarital) || empMarital === 'married';
+
+        balances = balances.filter(b => {
+            const lt = String(b.leaveType || '').toUpperCase();
+            if (lt === 'MATERNITY') {
+                // Only show for married women
+                return empGender === 'female' && isMarried;
+            }
+            if (lt === 'PATERNITY') {
+                // Only show for married men
+                return empGender === 'male' && isMarried;
+            }
+            return true; // All other leave types shown normally
+        });
+
         // RETURN STRUCTURED OBJECT (Crucial for frontend detection)
         res.json({
             balances,
@@ -363,6 +461,88 @@ exports.applyLeave = async (req, res) => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
+        // Fetch employee doc and policy first
+        const employeeDoc = isHR
+            ? await Employee.findById(employeeId).select('leavePolicy leaveBalanceYear joiningDate tenant employeeType role department departmentId grade gradeId gender maritalStatus')
+            : actorEmployee;
+        if (!employeeDoc?.leavePolicy && !['LOP', 'Loss of Pay', 'Leave without Pay', 'Personal Leave'].includes(leaveType)) {
+            return res.status(400).json({ error: 'NO_ACTIVE_LEAVE_POLICY', message: 'No active leave policy assigned.' });
+        }
+
+        const effectivePolicy = employeeDoc?.leavePolicy ? await LeavePolicy.findById(employeeDoc.leavePolicy) : null;
+        const year = new Date(start).getFullYear();
+
+        // Resolve rule for this leave type
+        let activeRule = null;
+        if (effectivePolicy) {
+            const Grade = req.tenantDB.model('Grade');
+            const employeeGrade = await gradeLeavePolicyService.resolveEmployeeGrade({
+                employee: employeeDoc,
+                Grade,
+                tenantId: req.tenantId,
+                date: start
+            });
+            const resolvedRules = gradeLeavePolicyService.resolvePolicyRulesForEmployee({
+                policy: effectivePolicy,
+                employee: employeeDoc,
+                grade: employeeGrade
+            });
+            activeRule = resolvedRules.find(r => r.leaveType.toUpperCase() === leaveType.toUpperCase());
+        }
+
+        // ── Maternity / Paternity eligibility gate (backend enforcement) ─────────
+        const empGenderRaw = String((isHR ? employeeDoc?.gender : actorEmployee?.gender) || '').trim().toLowerCase();
+        const empMaritalRaw = String((isHR ? employeeDoc?.maritalStatus : actorEmployee?.maritalStatus) || '').trim().toLowerCase();
+        const empIsMarried = empMaritalRaw === 'married';
+        const leaveTypeUpper = String(leaveType || '').toUpperCase();
+
+        if (leaveTypeUpper === 'MATERNITY') {
+            if (empGenderRaw !== 'female') {
+                return res.status(400).json({ error: 'GENDER_INELIGIBLE', message: 'Maternity Leave is only applicable to female employees.' });
+            }
+            if (!empIsMarried) {
+                return res.status(400).json({ error: 'MARITAL_INELIGIBLE', message: 'Maternity Leave is only applicable to married female employees.' });
+            }
+        }
+
+        if (leaveTypeUpper === 'PATERNITY') {
+            if (empGenderRaw !== 'male') {
+                return res.status(400).json({ error: 'GENDER_INELIGIBLE', message: 'Paternity Leave is only applicable to male employees.' });
+            }
+            if (!empIsMarried) {
+                return res.status(400).json({ error: 'MARITAL_INELIGIBLE', message: 'Paternity Leave is only applicable to married male employees.' });
+            }
+        }
+
+        // 1. Notice Days / Post Facto Validations
+        if (!isHR && activeRule) {
+            if (start >= today) {
+                const diffTime = start.getTime() - today.getTime();
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                if (diffDays < activeRule.advanceNoticeDays) {
+                    return res.status(400).json({ error: `Advance notice of ${activeRule.advanceNoticeDays} days is required for ${leaveType} leave.` });
+                }
+            } else {
+                // Past date
+                if (!activeRule.postFactoAllowed) {
+                    return res.status(400).json({ error: "Past dates are not allowed for this leave type." });
+                }
+                if (activeRule.maxPostFactoCount > 0) {
+                    const yearStart = new Date(year, 0, 1);
+                    const yearEnd = new Date(year, 11, 31, 23, 59, 59);
+                    const postFactoCount = await LeaveRequest.countDocuments({
+                        tenant: req.tenantId,
+                        employee: employeeId,
+                        leaveType,
+                        $expr: { $lt: ["$startDate", "$createdAt"] },
+                        status: { $ne: 'Rejected' },
+                        createdAt: { $gte: yearStart, $lte: yearEnd }
+                    });
+                    if (postFactoCount >= activeRule.maxPostFactoCount) {
+                        return res.status(400).json({ error: `You have reached the maximum limit of ${activeRule.maxPostFactoCount} post-facto applications for ${leaveType} this year.` });
+                    }
+                }
+            }
         // 1. Dynamic Date & Policy Validations
         if (!isHR && activeRule) {
             // Check Advance Notice
@@ -419,7 +599,15 @@ exports.applyLeave = async (req, res) => {
         if (end < start) return res.status(400).json({ error: "End date precedes start date." });
         if (start.getDay() === 0 || end.getDay() === 0) return res.status(400).json({ error: "Leave cannot start/end on Sunday." });
 
-        const holidayCheck = await Holiday.findOne({ tenant: req.tenantId, date: { $in: [start, end] } });
+        const holidayCheck = await Holiday.findOne({
+            tenant: req.tenantId,
+            date: { $lte: end },
+            $or: [
+                { endDate: { $exists: false } },
+                { endDate: null, date: { $gte: start } },
+                { endDate: { $gte: start } }
+            ]
+        });
         if (holidayCheck) return res.status(400).json({ error: `Selected date is a public holiday: ${holidayCheck.name}` });
 
         // 2. Overlap Check
@@ -431,10 +619,32 @@ exports.applyLeave = async (req, res) => {
 
         // 3. Balance Validation & Paid/Unpaid Logic (Auto-Split)
         const daysCount = await calculateNetDays(req, startDate, endDate || startDate, employeeId);
-        const days = isHalfDay ? (daysCount - 0.5) : daysCount;
+        
+        const fStart = new Date(startDate);
+        const fEnd = new Date(endDate || startDate);
+        fStart.setHours(0,0,0,0);
+        fEnd.setHours(0,0,0,0);
+        const isSingleDay = fStart.getTime() === fEnd.getTime();
+        let sub = 0;
+        if (isHalfDay) {
+            const custom = req.body.meta?.customHalfDays;
+            if (custom && !isSingleDay) {
+                if (custom.firstDayHalf) sub += 0.5;
+                if (custom.lastDayHalf) sub += 0.5;
+            } else {
+                sub = 0.5;
+            }
+        }
+        const days = daysCount - sub;
 
         if (days <= 0) return res.status(400).json({ error: "Selected period contains no working days." });
 
+        // Medical certificate validation
+        if (!isHR && activeRule && activeRule.medicalCertRequiredAfterDays > 0 && days >= activeRule.medicalCertRequiredAfterDays) {
+            if (!req.body.medicalCertUrl) {
+                return res.status(400).json({ error: `Medical certificate is mandatory for ${leaveType} leave of ${activeRule.medicalCertRequiredAfterDays} days or more.` });
+            }
+        }
         const year = new Date(start).getFullYear();
 
         if (employeeDoc && effectivePolicy) {
@@ -480,16 +690,16 @@ exports.applyLeave = async (req, res) => {
             daysCount: days,
             paidLeaveDays: paidDays,
             unpaidLeaveDays: unpaidDays,
-            status: isHR ? 'Approved' : 'Pending', // HR applications are auto-approved? Or just Pending?
-            // Prompt: "Follow same rules". Usually HR applications skip manager approval or are special.
-            // I'll make it 'Approved' if HR applies, following "same rules" but as admin override.
+            status: isHR ? 'Approved' : 'Pending', 
             appliedBy: isHR ? 'HR' : 'Employee',
             hrComment: isHR ? (reason || 'Applied by HR') : undefined,
             isHalfDay: !!isHalfDay,
             halfDayTarget: isHalfDay ? (halfDayTarget || (endDate ? 'End' : 'Start')) : undefined,
             halfDaySession: isHalfDay ? halfDaySession : undefined,
             approvedBy: isHR ? actorEmployeeId : undefined,
-            approvedAt: isHR ? new Date() : undefined
+            approvedAt: isHR ? new Date() : undefined,
+            medicalCertUrl: req.body.medicalCertUrl || undefined,
+            meta: req.body.meta || {}
         });
 
         // Update Balance
@@ -504,6 +714,20 @@ exports.applyLeave = async (req, res) => {
         }
 
         await leaveRequest.save();
+
+        if (paidDays > 0) {
+            await logLeaveLedger(req, {
+                employeeId,
+                leaveType,
+                year,
+                actionType: 'Applied',
+                days: -paidDays,
+                remarks: `Leave applied: ${startDate} to ${endDate || startDate}`,
+                referenceId: leaveRequest._id,
+                referenceModel: 'LeaveRequest'
+            });
+        }
+
         let workflowStartResult = null;
 
         if (!isHR) {
@@ -631,6 +855,178 @@ exports.approveLeave = async (req, res) => {
 
         const request = await LeaveRequest.findOne({ _id: id, tenant: req.tenantId });
         if (!request) return res.status(404).json({ error: "Request not found" });
+
+        // Check for Early Return Request first
+        if (request.meta?.earlyReturnRequest?.status === 'Pending') {
+            // AUTHORIZATION CHECK
+            const targetEmp = await Employee.findOne({ 
+                _id: request.employee, 
+                $or: [{ mainCompanyId: req.tenantId }, { tenant: req.tenantId }] 
+            });
+
+            let userRole = (req.user.role || '').toLowerCase();
+            let isAuthorized = ['hr', 'admin', 'psa', 'company_admin', 'user'].includes(userRole);
+
+            if (!isAuthorized && userRole === 'employee') {
+                const dbRole = (actorEmployee?.role || '').toLowerCase();
+                if (['hr', 'admin', 'company_admin', 'user'].includes(dbRole)) {
+                    isAuthorized = true;
+                    userRole = dbRole;
+                }
+            }
+
+            const isManager = targetEmp && targetEmp.manager && actorEmployee?._id && targetEmp.manager.toString() === actorEmployee._id.toString();
+
+            if (!isAuthorized && !isManager) {
+                return res.status(403).json({ error: "Unauthorized: Only HR or direct manager can approve leaves." });
+            }
+
+            // PROCESS EARLY RETURN APPROVAL
+            const start = new Date(request.startDate);
+            const originalEnd = new Date(request.endDate);
+            const newEnd = new Date(request.meta.earlyReturnRequest.newEndDate);
+            const employeeId = request.employee;
+
+            start.setHours(0,0,0,0);
+            originalEnd.setHours(0,0,0,0);
+            newEnd.setHours(0,0,0,0);
+
+            if (newEnd < start) {
+                // Full cancellation
+                // Restore used balance
+                const balance = await LeaveBalance.findOne({ employee: employeeId, tenant: req.tenantId, leaveType: request.leaveType, year: start.getFullYear() });
+                const paidToRefund = request.paidLeaveDays || 0;
+                if (balance) {
+                    balance.used = Math.max(0, (balance.used || 0) - paidToRefund);
+                    if (typeof balance.available === 'number') {
+                        balance.available = Math.max(0, (balance.total || 0) - (balance.used || 0) - (balance.pending || 0));
+                    }
+                    await balance.save();
+                    await refreshEmployeeLeaveSnapshot(req, employeeId, start.getFullYear());
+                }
+
+                // Remove attendance
+                await Attendance.deleteMany({
+                    tenant: req.tenantId,
+                    employee: employeeId,
+                    date: { $gte: start, $lte: originalEnd },
+                    status: { $in: ['leave', 'half_day'] }
+                });
+
+                request.status = 'Cancelled';
+                request.cancelledAt = new Date();
+                request.actionBy = actorEmployeeId;
+                request.adminRemark = remark || 'Early Return Approved (Full Cancel)';
+                request.meta.earlyReturnRequest.status = 'Approved';
+                request.meta.earlyReturnRequest.approvedAt = new Date();
+                request.meta.earlyReturnRequest.actionBy = actorEmployeeId;
+                request.meta = { ...request.meta, earlyReturn: true, originalEndDate: originalEnd };
+                request.markModified('meta');
+                await request.save();
+
+                if (paidToRefund > 0) {
+                    await logLeaveLedger(req, {
+                        employeeId: request.employee,
+                        leaveType: request.leaveType,
+                        year: start.getFullYear(),
+                        actionType: 'Cancelled',
+                        days: paidToRefund,
+                        remarks: `Leave fully cancelled due to early return: ${remark || 'Approved'}`,
+                        referenceId: request._id,
+                        referenceModel: 'LeaveRequest'
+                    });
+                }
+
+                // Notify employee
+                await notificationController.createNotification(req, {
+                    receiverId: employeeId, receiverRole: 'employee', entityType: 'LeaveRequest', entityId: request._id,
+                    title: 'Early Return Approved', message: `Your early return request has been approved. Leave fully cancelled.`
+                });
+
+                return res.json({ success: true, message: "Early return (full cancellation) approved successfully", data: request });
+            }
+
+            // Partial Cancellation
+            const oldPaid = request.paidLeaveDays || 0;
+            
+            // Calculate new days
+            const newDaysCount = await calculateNetDays(req, start.toISOString(), newEnd.toISOString(), employeeId);
+            const newDays = request.isHalfDay ? (newDaysCount - 0.5) : newDaysCount;
+            
+            if (newDays <= 0) return res.status(400).json({ error: "Selected period contains no working days." });
+
+            let p = 0, u = 0;
+            if (['LOP', 'Loss of Pay', 'Leave without Pay', 'Personal Leave'].includes(request.leaveType)) {
+                u = newDays;
+            } else {
+                const b = await LeaveBalance.findOne({ tenant: req.tenantId, employee: employeeId, leaveType: request.leaveType, year: start.getFullYear() });
+                const trueAvailable = b ? (b.available + oldPaid) : 0;
+                p = Math.min(trueAvailable, newDays);
+                u = newDays - p;
+            }
+            const newPaid = p;
+            const newUnpaid = u;
+
+            // Refund balance
+            const refundPaid = oldPaid - newPaid;
+            if (refundPaid > 0) {
+                const balance = await LeaveBalance.findOne({ employee: employeeId, tenant: req.tenantId, leaveType: request.leaveType, year: start.getFullYear() });
+                if (balance) {
+                    balance.used = Math.max(0, (balance.used || 0) - refundPaid);
+                    if (typeof balance.available === 'number') {
+                        balance.available = Math.max(0, (balance.total || 0) - (balance.used || 0) - (balance.pending || 0));
+                    }
+                    await balance.save();
+                    await refreshEmployeeLeaveSnapshot(req, employeeId, start.getFullYear());
+                }
+            }
+
+            // Update Request
+            request.endDate = newEnd;
+            request.daysCount = newDays;
+            request.paidLeaveDays = newPaid;
+            request.unpaidLeaveDays = newUnpaid;
+            request.adminRemark = remark || 'Early Return Approved';
+            request.meta.earlyReturnRequest.status = 'Approved';
+            request.meta.earlyReturnRequest.approvedAt = new Date();
+            request.meta.earlyReturnRequest.actionBy = actorEmployeeId;
+            request.meta = { ...request.meta, earlyReturn: true, originalEndDate: originalEnd };
+            request.markModified('meta');
+            await request.save();
+
+            if (refundPaid > 0) {
+                await logLeaveLedger(req, {
+                    employeeId: request.employee,
+                    leaveType: request.leaveType,
+                    year: start.getFullYear(),
+                    actionType: 'Adjustment',
+                    days: refundPaid,
+                    remarks: `Early Return Adjustment: restored ${refundPaid} days`,
+                    referenceId: request._id,
+                    referenceModel: 'LeaveRequest'
+                });
+            }
+
+            // Clear Attendance from newEnd + 1 up to originalEnd
+            const clearStart = new Date(newEnd);
+            clearStart.setDate(clearStart.getDate() + 1);
+            
+            await Attendance.deleteMany({
+                tenant: req.tenantId,
+                employee: employeeId,
+                date: { $gte: clearStart, $lte: originalEnd },
+                status: { $in: ['leave', 'half_day'] }
+            });
+
+            // Notify employee
+            await notificationController.createNotification(req, {
+                receiverId: employeeId, receiverRole: 'employee', entityType: 'LeaveRequest', entityId: request._id,
+                title: 'Early Return Approved', message: `Your early return request has been approved. Leave reduced to ${newDays} days.`
+            });
+
+            return res.json({ success: true, message: "Early return approved successfully", data: request });
+        }
+
         if (request.status !== 'Pending') return res.status(400).json({ error: `Cannot approve request with status: ${request.status}` });
 
         if (request.meta?.workflowInstanceId && request.meta?.workflowStartStatus === 'STARTED') {
@@ -696,7 +1092,23 @@ exports.approveLeave = async (req, res) => {
 
         // Calculate NEW days count
         const newNetDays = await calculateNetDays(req, finalStartDate, finalEndDate, request.employee);
-        const newDaysCount = finalIsHalfDay ? (newNetDays - 0.5) : newNetDays;
+        
+        const fStart = new Date(finalStartDate);
+        const fEnd = new Date(finalEndDate);
+        fStart.setHours(0,0,0,0);
+        fEnd.setHours(0,0,0,0);
+        const isSingleDay = fStart.getTime() === fEnd.getTime();
+        let sub = 0;
+        if (finalIsHalfDay) {
+            const custom = request.meta?.customHalfDays;
+            if (custom && !isSingleDay) {
+                if (custom.firstDayHalf) sub += 0.5;
+                if (custom.lastDayHalf) sub += 0.5;
+            } else {
+                sub = 0.5;
+            }
+        }
+        const newDaysCount = newNetDays - sub;
         
         let newPaid = 0;
         let newUnpaid = 0;
@@ -719,7 +1131,7 @@ exports.approveLeave = async (req, res) => {
             await refreshEmployeeLeaveSnapshot(req, request.employee, leaveYear);
         }
 
-        // Update request with final approved values
+        const oldPaid = request.paidLeaveDays || 0;
         request.startDate = finalStartDate;
         request.endDate = finalEndDate;
         request.isHalfDay = finalIsHalfDay;
@@ -734,6 +1146,20 @@ exports.approveLeave = async (req, res) => {
         request.actionBy = actorEmployeeId;
         request.adminRemark = remark || 'Approved';
         await request.save();
+
+        const diff = oldPaid - newPaid;
+        if (diff !== 0) {
+            await logLeaveLedger(req, {
+                employeeId: request.employee,
+                leaveType: request.leaveType,
+                year: leaveYear,
+                actionType: 'Adjustment',
+                days: diff,
+                remarks: `Approved with duration adjustment by HR`,
+                referenceId: request._id,
+                referenceModel: 'LeaveRequest'
+            });
+        }
 
         // Re-sync to attendance with new dates
         await syncLeaveToAttendance(req, request);
@@ -767,6 +1193,49 @@ exports.rejectLeave = async (req, res) => {
 
         const request = await LeaveRequest.findOne({ _id: id, tenant: req.tenantId });
         if (!request) return res.status(404).json({ error: "Request not found" });
+
+        // Check for Early Return Request first
+        if (request.meta?.earlyReturnRequest?.status === 'Pending') {
+            // AUTHORIZATION CHECK
+            const targetEmp = await Employee.findOne({ 
+                _id: request.employee, 
+                $or: [{ mainCompanyId: req.tenantId }, { tenant: req.tenantId }] 
+            });
+
+            let userRole = (req.user.role || '').toLowerCase();
+            let isAuthorized = ['hr', 'admin', 'psa', 'company_admin', 'user'].includes(userRole);
+
+            if (!isAuthorized && userRole === 'employee') {
+                const dbRole = (actorEmployee?.role || '').toLowerCase();
+                if (['hr', 'admin', 'company_admin', 'user'].includes(dbRole)) {
+                    isAuthorized = true;
+                    userRole = dbRole;
+                }
+            }
+
+            const isManager = targetEmp && targetEmp.manager && actorEmployee?._id && targetEmp.manager.toString() === actorEmployee._id.toString();
+
+            if (!isAuthorized && !isManager) {
+                return res.status(403).json({ error: "Unauthorized: Only HR or direct manager can reject leaves." });
+            }
+
+            // PROCESS EARLY RETURN REJECTION
+            request.meta.earlyReturnRequest.status = 'Rejected';
+            request.meta.earlyReturnRequest.rejectedAt = new Date();
+            request.meta.earlyReturnRequest.rejectionReason = rejectionReason || 'Rejected';
+            request.meta.earlyReturnRequest.actionBy = actorEmployeeId;
+            request.markModified('meta');
+            await request.save();
+
+            // Notify employee
+            await notificationController.createNotification(req, {
+                receiverId: request.employee, receiverRole: 'employee', entityType: 'LeaveRequest', entityId: request._id,
+                title: 'Early Return Rejected', message: `Your early return request has been rejected: ${rejectionReason || 'No remark'}`
+            });
+
+            return res.json({ success: true, message: "Early return request rejected successfully", data: request });
+        }
+
         if (request.status !== 'Pending') return res.status(400).json({ error: "Request is not pending" });
 
         if (request.meta?.workflowInstanceId && request.meta?.workflowStartStatus === 'STARTED') {
@@ -833,6 +1302,19 @@ exports.rejectLeave = async (req, res) => {
         request.actionBy = actorEmployeeId;
         request.rejectionReason = rejectionReason || 'Rejected';
         await request.save();
+
+        if (request.paidLeaveDays > 0) {
+            await logLeaveLedger(req, {
+                employeeId: request.employee,
+                leaveType: request.leaveType,
+                year: leaveYear,
+                actionType: 'Rejected',
+                days: request.paidLeaveDays,
+                remarks: `Leave request rejected: ${rejectionReason || 'No remark'}`,
+                referenceId: request._id,
+                referenceModel: 'LeaveRequest'
+            });
+        }
 
         try {
             const { dispatchEvent } = require('../services/automationEngine.service');
@@ -965,7 +1447,7 @@ exports.getAllLeaves = async (req, res) => {
             }
         }
 
-        const { LeaveRequest } = getModels(req);
+        const { LeaveRequest, LeaveBalance } = getModels(req);
 
         // Extract pagination params
         const page = parseInt(req.query.page) || 1;
@@ -981,12 +1463,23 @@ exports.getAllLeaves = async (req, res) => {
             .skip(skip)
             .limit(limit);
 
-        // Map to include a single actionDateTime field for the frontend table
-        const mappedLeaves = leaves.map(l => {
+        const year = new Date().getFullYear();
+        // Map to include a single actionDateTime field and employee balances for the frontend table
+        const mappedLeaves = await Promise.all(leaves.map(async (l) => {
             const lObj = l.toObject();
             lObj.actionDateTime = l.approvedAt || l.rejectedAt || l.cancelledAt || null;
+            if (l.employee) {
+                const balances = await LeaveBalance.find({
+                    employee: l.employee._id,
+                    tenant: tenantObjectId,
+                    year
+                }).select('leaveType total used pending available').lean();
+                lObj.employeeBalances = balances;
+            } else {
+                lObj.employeeBalances = [];
+            }
             return lObj;
-        });
+        }));
 
         res.json({
             data: mappedLeaves,
@@ -1085,11 +1578,74 @@ exports.editLeave = async (req, res) => {
         const oldPaid = request.paidLeaveDays || 0;
         const oldType = request.leaveType;
 
-        // Settings for Cycle
-        const Settings = req.tenantDB.model('AttendanceSettings');
+        const Employee = req.tenantDB.model('Employee');
+        const LeavePolicy = req.tenantDB.model('LeavePolicy');
+
+        // Fetch employee doc and policy first
+        const employeeDoc = await Employee.findById(employeeId).select('leavePolicy leaveBalanceYear joiningDate tenant employeeType role department departmentId grade gradeId');
+        if (!employeeDoc?.leavePolicy && !['LOP', 'Loss of Pay', 'Leave without Pay', 'Personal Leave'].includes(leaveType)) {
+            return res.status(400).json({ error: 'NO_ACTIVE_LEAVE_POLICY', message: 'No active leave policy assigned.' });
+        }
+
+        const effectivePolicy = employeeDoc?.leavePolicy ? await LeavePolicy.findById(employeeDoc.leavePolicy) : null;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
         const year = start.getFullYear();
 
-        // 1. Validations & Overlap (excluding self)
+        // Resolve rule for this leave type
+        let activeRule = null;
+        if (effectivePolicy) {
+            const Grade = req.tenantDB.model('Grade');
+            const employeeGrade = await gradeLeavePolicyService.resolveEmployeeGrade({
+                employee: employeeDoc,
+                Grade,
+                tenantId: req.tenantId,
+                date: start
+            });
+            const resolvedRules = gradeLeavePolicyService.resolvePolicyRulesForEmployee({
+                policy: effectivePolicy,
+                employee: employeeDoc,
+                grade: employeeGrade
+            });
+            activeRule = resolvedRules.find(r => r.leaveType.toUpperCase() === leaveType.toUpperCase());
+        }
+
+        // 1. Notice Days / Post Facto Validations
+        if (activeRule) {
+            if (start >= today) {
+                const diffTime = start.getTime() - today.getTime();
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                if (diffDays < activeRule.advanceNoticeDays) {
+                    return res.status(400).json({ error: `Advance notice of ${activeRule.advanceNoticeDays} days is required for ${leaveType} leave.` });
+                }
+            } else {
+                // Past date
+                if (!activeRule.postFactoAllowed) {
+                    return res.status(400).json({ error: "Past dates are not allowed for this leave type." });
+                }
+                if (activeRule.maxPostFactoCount > 0) {
+                    const yearStart = new Date(year, 0, 1);
+                    const yearEnd = new Date(year, 11, 31, 23, 59, 59);
+                    const postFactoCount = await LeaveRequest.countDocuments({
+                        _id: { $ne: id },
+                        tenant: req.tenantId,
+                        employee: employeeId,
+                        leaveType,
+                        $expr: { $lt: ["$startDate", "$createdAt"] },
+                        status: { $ne: 'Rejected' },
+                        createdAt: { $gte: yearStart, $lte: yearEnd }
+                    });
+                    if (postFactoCount >= activeRule.maxPostFactoCount) {
+                        return res.status(400).json({ error: `You have reached the maximum limit of ${activeRule.maxPostFactoCount} post-facto applications for ${leaveType} this year.` });
+                    }
+                }
+            }
+        }
+
+        // Settings for Cycle
+        const Settings = req.tenantDB.model('AttendanceSettings');
+
+        // Overlap Check (excluding self)
         if (start.getDay() === 0 || end.getDay() === 0) return res.status(400).json({ error: "Leave cannot start/end on Sunday." });
         const overlap = await LeaveRequest.findOne({
             _id: { $ne: id }, tenant: req.tenantId, employee: employeeId, status: { $in: ['Pending', 'Approved'] },
@@ -1098,9 +1654,32 @@ exports.editLeave = async (req, res) => {
         if (overlap) return res.status(400).json({ error: "Overlap detected with existing request." });
 
         const newDaysCount = await calculateNetDays(req, startDate, endDate || startDate, employeeId);
-        const newDays = isHalfDay ? (newDaysCount - 0.5) : newDaysCount;
+        
+        const fStart = new Date(startDate);
+        const fEnd = new Date(endDate || startDate);
+        fStart.setHours(0,0,0,0);
+        fEnd.setHours(0,0,0,0);
+        const isSingleDay = fStart.getTime() === fEnd.getTime();
+        let sub = 0;
+        if (isHalfDay) {
+            const custom = req.body.meta?.customHalfDays;
+            if (custom && !isSingleDay) {
+                if (custom.firstDayHalf) sub += 0.5;
+                if (custom.lastDayHalf) sub += 0.5;
+            } else {
+                sub = 0.5;
+            }
+        }
+        const newDays = newDaysCount - sub;
 
         if (newDays <= 0) return res.status(400).json({ error: "Selected period contains no working days." });
+
+        // Medical certificate validation
+        if (activeRule && activeRule.medicalCertRequiredAfterDays > 0 && newDays >= activeRule.medicalCertRequiredAfterDays) {
+            if (!req.body.medicalCertUrl && !request.medicalCertUrl) {
+                return res.status(400).json({ error: `Medical certificate is mandatory for ${leaveType} leave of ${activeRule.medicalCertRequiredAfterDays} days or more.` });
+            }
+        }
 
         // 2. Balance Logic
         if (oldType === leaveType) {
@@ -1152,7 +1731,59 @@ exports.editLeave = async (req, res) => {
         request.isHalfDay = !!isHalfDay;
         request.halfDayTarget = isHalfDay ? (halfDayTarget || (endDate ? 'End' : 'Start')) : undefined;
         request.halfDaySession = isHalfDay ? halfDaySession : undefined;
+        if (req.body.medicalCertUrl) {
+            request.medicalCertUrl = req.body.medicalCertUrl;
+        }
+        if (req.body.meta) {
+            request.meta = {
+                ...(request.meta || {}),
+                ...req.body.meta
+            };
+            request.markModified('meta');
+        }
         await request.save();
+
+        // 4. Log transactions to Ledger
+        if (oldType !== leaveType) {
+            if (oldPaid > 0) {
+                await logLeaveLedger(req, {
+                    employeeId,
+                    leaveType: oldType,
+                    year,
+                    actionType: 'Adjustment',
+                    days: oldPaid,
+                    remarks: `Adjustment: Leave type changed from ${oldType} to ${leaveType}`,
+                    referenceId: request._id,
+                    referenceModel: 'LeaveRequest'
+                });
+            }
+            if (newPaidDays > 0) {
+                await logLeaveLedger(req, {
+                    employeeId,
+                    leaveType,
+                    year,
+                    actionType: 'Applied',
+                    days: -newPaidDays,
+                    remarks: `Leave applied: ${startDate} to ${endDate || startDate}`,
+                    referenceId: request._id,
+                    referenceModel: 'LeaveRequest'
+                });
+            }
+        } else {
+            const netDiff = oldPaid - newPaidDays;
+            if (netDiff !== 0) {
+                await logLeaveLedger(req, {
+                    employeeId,
+                    leaveType,
+                    year,
+                    actionType: 'Adjustment',
+                    days: netDiff,
+                    remarks: `Adjustment: Leave details updated`,
+                    referenceId: request._id,
+                    referenceModel: 'LeaveRequest'
+                });
+            }
+        }
 
         res.json({ message: "Leave request updated", data: request });
     } catch (error) {
@@ -1208,6 +1839,19 @@ exports.cancelLeave = async (req, res) => {
         request.actionBy = actorEmployeeId;
         await request.save();
 
+        if (request.paidLeaveDays > 0) {
+            await logLeaveLedger(req, {
+                employeeId: request.employee,
+                leaveType: request.leaveType,
+                year: new Date(request.startDate).getFullYear(),
+                actionType: 'Cancelled',
+                days: request.paidLeaveDays,
+                remarks: `Leave request cancelled by employee`,
+                referenceId: request._id,
+                referenceModel: 'LeaveRequest'
+            });
+        }
+
         res.json({ message: "Leave request cancelled", data: request });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -1216,22 +1860,33 @@ exports.cancelLeave = async (req, res) => {
 
 exports.earlyReturn = async (req, res) => {
     try {
-        const { LeaveRequest, LeaveBalance, Attendance } = getModels(req);
+        const { LeaveRequest, LeaveBalance, Attendance, Employee } = getModels(req);
         const { id } = req.params;
-        const { newEndDate } = req.body;
+        let { newEndDate, actualReturnDate, reason, comments } = req.body;
         
         const currentEmployee = await resolveAuthenticatedEmployee(req, { select: '_id' });
         if (!currentEmployee?._id) {
             return res.status(404).json({ error: "Employee not found" });
         }
         const employeeId = currentEmployee._id;
-        const actorEmployeeId = currentEmployee._id;
 
         const request = await LeaveRequest.findOne({ _id: id, employee: employeeId, tenant: req.tenantId });
         if (!request) return res.status(404).json({ error: "Request not found" });
 
         if (request.status !== 'Approved') {
             return res.status(400).json({ error: "Only Approved leaves can be partially cancelled/returned early." });
+        }
+
+        if (!actualReturnDate && newEndDate) {
+            const tempDate = new Date(newEndDate);
+            tempDate.setDate(tempDate.getDate() + 1);
+            actualReturnDate = tempDate.toISOString();
+        }
+        
+        if (!newEndDate && actualReturnDate) {
+            const tempDate = new Date(actualReturnDate);
+            tempDate.setDate(tempDate.getDate() - 1);
+            newEndDate = tempDate.toISOString();
         }
 
         const start = new Date(request.startDate);
@@ -1245,95 +1900,169 @@ exports.earlyReturn = async (req, res) => {
         if (newEnd >= originalEnd) {
             return res.status(400).json({ error: "New end date must be earlier than the original end date." });
         }
-        
-        if (newEnd < start) {
-            // Full cancellation
-            // Restore used balance
-            const balance = await LeaveBalance.findOne({ employee: employeeId, tenant: req.tenantId, leaveType: request.leaveType, year: start.getFullYear() });
-            if (balance) {
-                const paidToRefund = request.paidLeaveDays || 0;
-                balance.used = Math.max(0, (balance.used || 0) - paidToRefund);
-                if (typeof balance.available === 'number') {
-                    balance.available = Math.max(0, (balance.total || 0) - (balance.used || 0) - (balance.pending || 0));
-                }
-                await balance.save();
-                await refreshEmployeeLeaveSnapshot(req, employeeId, start.getFullYear());
+
+        request.meta = {
+            ...request.meta,
+            earlyReturnRequest: {
+                actualReturnDate: new Date(actualReturnDate),
+                newEndDate: newEnd,
+                reason: reason || 'Early Return',
+                comments: comments || '',
+                status: 'Pending',
+                requestedAt: new Date()
             }
+        };
 
-            // Remove attendance
-            await Attendance.deleteMany({
-                tenant: req.tenantId,
-                employee: employeeId,
-                date: { $gte: start, $lte: originalEnd },
-                status: { $in: ['leave', 'half_day'] }
-            });
-
-            request.status = 'Cancelled';
-            request.cancelledAt = new Date();
-            request.actionBy = actorEmployeeId;
-            request.meta = { ...request.meta, earlyReturn: true, originalEndDate: originalEnd };
-            await request.save();
-
-            return res.json({ message: "Leave fully cancelled due to early return.", data: request });
-        }
-
-        // Partial Cancellation
-        const oldPaid = request.paidLeaveDays || 0;
-        const oldDays = request.daysCount;
-        
-        // Calculate new days
-        const newDaysCount = await calculateNetDays(req, start.toISOString(), newEnd.toISOString(), employeeId);
-        const newDays = request.isHalfDay ? (newDaysCount - 0.5) : newDaysCount;
-        
-        if (newDays <= 0) return res.status(400).json({ error: "Selected period contains no working days." });
-
-        let p = 0, u = 0;
-        if (['LOP', 'Loss of Pay', 'Leave without Pay', 'Personal Leave'].includes(request.leaveType)) {
-            u = newDays;
-        } else {
-            const b = await LeaveBalance.findOne({ tenant: req.tenantId, employee: employeeId, leaveType: request.leaveType, year: start.getFullYear() });
-            const available = b ? (b.available + oldPaid) : 0;
-            p = Math.min(available, newDays);
-            u = newDays - p;
-        }
-        const newPaid = p;
-        const newUnpaid = u;
-
-        // Refund balance
-        const refundPaid = oldPaid - newPaid;
-        if (refundPaid > 0) {
-            const balance = await LeaveBalance.findOne({ employee: employeeId, tenant: req.tenantId, leaveType: request.leaveType, year: start.getFullYear() });
-            if (balance) {
-                balance.used = Math.max(0, (balance.used || 0) - refundPaid);
-                if (typeof balance.available === 'number') {
-                    balance.available = Math.max(0, (balance.total || 0) - (balance.used || 0) - (balance.pending || 0));
-                }
-                await balance.save();
-                await refreshEmployeeLeaveSnapshot(req, employeeId, start.getFullYear());
-            }
-        }
-
-        // Update Request
-        request.endDate = newEnd;
-        request.daysCount = newDays;
-        request.paidLeaveDays = newPaid;
-        request.unpaidLeaveDays = newUnpaid;
-        request.meta = { ...request.meta, earlyReturn: true, originalEndDate: originalEnd };
+        request.markModified('meta');
         await request.save();
 
-        // Clear Attendance from newEnd + 1 up to originalEnd
-        const clearStart = new Date(newEnd);
-        clearStart.setDate(clearStart.getDate() + 1);
-        
-        await Attendance.deleteMany({
-            tenant: req.tenantId,
-            employee: employeeId,
-            date: { $gte: clearStart, $lte: originalEnd },
-            status: { $in: ['leave', 'half_day'] }
+        // Notifications
+        const emp = await Employee.findById(employeeId);
+        const empName = emp ? `${emp.firstName} ${emp.lastName}` : "Employee";
+        const returnDateStr = new Date(actualReturnDate).toLocaleDateString('en-GB');
+
+        // Notify HR
+        await notificationController.createNotification(req, {
+            receiverId: req.tenantId, receiverRole: 'hr', entityType: 'LeaveRequest', entityId: request._id,
+            title: `Early Return Request: ${empName}`, 
+            message: `${empName} has requested an early return on ${returnDateStr} (${reason || 'Work completed earlier'})`
         });
 
-        res.json({ message: "Leave partially cancelled", data: request });
+        // Notify Manager
+        if (emp && emp.manager) {
+            await notificationController.createNotification(req, {
+                receiverId: emp.manager, receiverRole: 'manager', entityType: 'LeaveRequest', entityId: request._id,
+                title: `Early Return Request: ${empName}`, 
+                message: `${empName} has requested an early return on ${returnDateStr} (${reason || 'Work completed earlier'})`
+            });
+        }
+
+        res.json({ message: "Early return request submitted successfully, pending approval.", data: request });
     } catch (error) {
         res.status(500).json({ error: error.message });
+    }
+};
+
+exports.setOpeningBalance = async (req, res) => {
+    try {
+        const tenantIdStr = req.user?.tenantId || req.tenantId;
+        if (!tenantIdStr) return res.status(400).json({ error: "tenant_missing" });
+        req.tenantId = new mongoose.Types.ObjectId(tenantIdStr);
+
+        const { LeaveBalance, Employee, LeavePolicy } = getModels(req);
+        const { employeeId, leaveType, opening, year } = req.body;
+
+        if (!employeeId || !leaveType || opening === undefined || !year) {
+            return res.status(400).json({ error: "Missing required fields: employeeId, leaveType, opening, year" });
+        }
+
+        const targetYear = parseInt(year);
+        const openingVal = parseFloat(opening);
+
+        const employee = await Employee.findById(employeeId);
+        if (!employee) return res.status(404).json({ error: "Employee not found" });
+
+        const activePolicy = await leaveManagementService.resolveLeavePolicyForEmployee({
+            LeavePolicy,
+            tenantId: req.tenantId,
+            employee
+        });
+
+        if (activePolicy) {
+            await leaveManagementService.ensureEmployeeLeaveBalanceForYear({
+                employee,
+                tenantId: req.tenantId,
+                tenantDB: req.tenantDB,
+                year: targetYear,
+                policy: activePolicy
+            });
+        }
+
+        let balance = await LeaveBalance.findOne({
+            tenant: req.tenantId,
+            employee: employeeId,
+            leaveType: leaveType.toUpperCase(),
+            year: targetYear
+        });
+
+        if (!balance) {
+            balance = new LeaveBalance({
+                tenant: req.tenantId,
+                employee: employeeId,
+                policy: activePolicy?._id || null,
+                leaveType: leaveType.toUpperCase(),
+                year: targetYear,
+                used: 0,
+                pending: 0
+            });
+        }
+
+        const prevAvailable = balance.available || 0;
+        balance.opening = openingVal;
+        balance.isOpeningManual = true;
+        balance.total = openingVal + (balance.accrued || 0);
+        await balance.save();
+
+        await refreshEmployeeLeaveSnapshot(req, employeeId, targetYear);
+
+        const LeaveLedger = req.tenantDB.model('LeaveLedger');
+        await LeaveLedger.create({
+            tenant: req.tenantId,
+            employee: employeeId,
+            leaveType: leaveType.toUpperCase(),
+            year: targetYear,
+            actionType: 'Opening',
+            days: openingVal,
+            previousBalance: prevAvailable,
+            newBalance: balance.available,
+            remarks: `Manual opening balance override by HR`,
+            date: new Date()
+        });
+
+        res.json({ success: true, message: "Opening balance updated successfully", balance });
+    } catch (e) {
+        console.error("setOpeningBalance Error:", e);
+        res.status(500).json({ error: e.message });
+    }
+};
+
+exports.getLeaveLedger = async (req, res) => {
+    try {
+        const tenantIdStr = req.user?.tenantId || req.tenantId;
+        if (!tenantIdStr) return res.status(400).json({ error: "tenant_missing" });
+        req.tenantId = new mongoose.Types.ObjectId(tenantIdStr);
+
+        const { LeaveLedger } = getModels(req);
+        const isHR = ['hr', 'admin', 'psa'].includes(req.user.role);
+        
+        let employeeId = req.query.employeeId;
+        if (!isHR || !employeeId) {
+            const currentEmployee = await resolveAuthenticatedEmployee(req, { select: '_id' });
+            if (!currentEmployee?._id) {
+                return res.status(404).json({ error: "Employee not found" });
+            }
+            employeeId = currentEmployee._id;
+        }
+
+        const query = {
+            tenant: req.tenantId,
+            employee: new mongoose.Types.ObjectId(employeeId)
+        };
+
+        if (req.query.leaveType) {
+            query.leaveType = String(req.query.leaveType).toUpperCase();
+        }
+        if (req.query.year) {
+            query.year = parseInt(req.query.year);
+        }
+
+        const ledger = await LeaveLedger.find(query)
+            .sort({ date: -1, createdAt: -1 })
+            .lean();
+
+        res.json(ledger);
+    } catch (e) {
+        console.error("getLeaveLedger Error:", e);
+        res.status(500).json({ error: e.message });
     }
 };

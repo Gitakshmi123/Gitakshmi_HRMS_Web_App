@@ -4,6 +4,7 @@ const HolidaySchema = new mongoose.Schema({
     tenant: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', required: true, index: true },
     name: { type: String, required: true, trim: true },
     date: { type: Date, required: true },
+    endDate: { type: Date },
     type: { type: String, enum: ['Public', 'Optional', 'Company', 'National', 'Festival'], default: 'Public' },
     description: { type: String, trim: true },
 

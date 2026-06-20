@@ -83,15 +83,18 @@ exports.createPolicy = async (req, res) => {
         const { LeavePolicy, Employee, LeaveBalance } = getModels(req);
         const { 
             name, 
+            policyId,
             applicableTo = 'All', 
             rules = [], 
             departmentIds = [], 
+            branchIds = [],
             roles = [], 
             gradeIds = [], 
             gradeCodes = [], 
             designations = [], 
             applicableJobTypes = [], 
             applicableBands = [], 
+            applicableEmployeeTypes = [],
             specificEmployeeId, 
             status = 'ACTIVE' 
         } = req.body;
@@ -113,20 +116,25 @@ exports.createPolicy = async (req, res) => {
         const policy = new LeavePolicy({
             tenant: tenantId,
             name,
+            policyId,
             status: normalizedStatus,
             isActive: normalizedStatus === 'ACTIVE',
             applicableTo,
-            departmentIds,
+            departmentIds: departmentIds || [],
+            branchIds: branchIds || [],
             roles,
             gradeIds,
             gradeCodes,
             designations: designations || [],
             applicableJobTypes: applicableJobTypes || [],
             applicableBands: applicableBands || [],
+            applicableEmployeeTypes: applicableEmployeeTypes || [],
             specificEmployeeIds: req.body.specificEmployeeIds?.length > 0 
                 ? req.body.specificEmployeeIds 
                 : (specificEmployeeId ? [specificEmployeeId] : []),
-            rules: normalizedRules
+            rules: normalizedRules,
+            effectiveFrom: req.body.effectiveFrom || null,
+            expiryDate: req.body.expiryDate || null
         });
 
         await policy.save();
@@ -260,11 +268,12 @@ exports.getMyPolicies = async (req, res) => {
         const applicablePolicies = activePolicies.filter((policy) =>
             leaveManagementService.isPolicyApplicableToEmployee(policy, emp, resolvedGrade)
         );
-        const effectivePolicy = leaveManagementService.selectBestPolicyForEmployee({
+        const assignedPolicy = await leaveManagementService.getAssignedLeavePolicyForEmployee({ LeavePolicy, tenantId, employee: emp });
+        const effectivePolicy = assignedPolicy || leaveManagementService.selectBestPolicyForEmployee({
             policies: activePolicies,
             employee: emp,
             grade: resolvedGrade
-        }) || await leaveManagementService.getAssignedLeavePolicyForEmployee({ LeavePolicy, tenantId, employee: emp }) ||
+        }) ||
             await restorePolicyFromExistingBalance({
                 employee: emp,
                 LeaveBalance,

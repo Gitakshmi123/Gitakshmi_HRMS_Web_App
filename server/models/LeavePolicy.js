@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const LeavePolicySchema = new mongoose.Schema({
     tenant: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', required: true, index: true },
     name: { type: String, required: true, trim: true },
+    policyId: { type: String, trim: true }, // Added policyId (Policy ID / Code)
     description: { type: String, trim: true },
 
     // Simple compatibility fields (for quick UI+import) ✅
@@ -11,15 +12,18 @@ const LeavePolicySchema = new mongoose.Schema({
     carryForward: { type: Boolean, default: false },
     status: { type: String, enum: ['ACTIVE', 'INACTIVE'], default: 'ACTIVE' },
     isActive: { type: Boolean, default: true, index: true },
+    effectiveFrom: { type: Date, default: null },
+    expiryDate: { type: Date, default: null },
 
     // Who does this policy apply to?
     applicableTo: {
         type: String,
-        enum: ['All', 'Department', 'Role', 'Specific', 'Intern', 'Grade', 'Band', 'Designation', 'JobType'],
+        enum: ['All', 'Department', 'Role', 'Specific', 'Intern', 'Grade', 'Band', 'Designation', 'JobType', 'Custom'],
         default: 'All'
     },
     // If specific departments, roles, or individual employees
     departmentIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Department' }],
+    branchIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Branch' }], // Added branchIds (Applicable Branch)
     roles: [{ type: String, trim: true }],
     designations: [{ type: String, trim: true }],
     specificEmployeeIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Employee' }],
@@ -62,7 +66,15 @@ const LeavePolicySchema = new mongoose.Schema({
         allowDuringProbation: { type: Boolean, default: false }, // If false, 0 balance during probation
         minimumTenureMonths: { type: Number, default: 0 },
         
-        // --- Grade Overrides ---
+        // Advanced validations
+        advanceNoticeDays: { type: Number, default: 0 },
+        halfDayAllowed: { type: Boolean, default: true },
+        postFactoAllowed: { type: Boolean, default: false },
+        maxPostFactoCount: { type: Number, default: 0 },
+        medicalCertRequiredAfterDays: { type: Number, default: 0 },
+        applicableGender: { type: String, enum: ['All', 'Male', 'Female', 'Other'], default: 'All' },
+        maxChildrenLimit: { type: Number, default: 0 },
+
         gradeOverrides: [{
             gradeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Grade', default: null },
             gradeCode: { type: String, trim: true, uppercase: true, default: '' },
@@ -86,6 +98,17 @@ const LeavePolicySchema = new mongoose.Schema({
             requiresApproval: { type: Boolean, default: null },
             allowDuringProbation: { type: Boolean, default: null },
             minimumTenureMonths: { type: Number, default: null },
+            prorateForNewJoiners: { type: Boolean, default: null },
+            
+            // Advanced validation overrides
+            advanceNoticeDays: { type: Number, default: null },
+            halfDayAllowed: { type: Boolean, default: null },
+            postFactoAllowed: { type: Boolean, default: null },
+            maxPostFactoCount: { type: Number, default: null },
+            medicalCertRequiredAfterDays: { type: Number, default: null },
+            applicableGender: { type: String, enum: ['All', 'Male', 'Female', 'Other', null], default: null },
+            maxChildrenLimit: { type: Number, default: null },
+
             color: { type: String, default: '' }
         }],
         color: { type: String, default: '#3b82f6' } // Default blue-500

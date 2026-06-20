@@ -137,7 +137,7 @@ export default function HRSidebar({
       console.error('Sidebar order parse error:', e);
     }
     return [
-      'Dashboard', 'Access', 'Employee', 'Attendance', 'Payroll', 'Hiring',
+      'Dashboard', 'Access', 'Employee', 'Attendance', 'Leave Master', 'Payroll', 'Hiring',
       'Onboarding', 'BGV', 'Offboarding', 'Ticket Inbox', 'Social Media', 'Portals',
       'Reports', 'Settings', 'Sub Companies', 'emp service'
     ];
@@ -227,6 +227,7 @@ export default function HRSidebar({
     attendance: 'attendance',
     'attendance management': 'attendance',
     leave: 'leave',
+    'leave master': 'leave',
     policy: 'leave',
     payroll: 'payroll',
     'payroll system': 'payroll',
@@ -497,6 +498,7 @@ export default function HRSidebar({
     ensureSingleModule('Access', `${pathPrefix}/access`, 'access', 'accessControl', 'configuration.access');
     ensureSingleModule('Employee', `${pathPrefix}/employees`, 'employees', 'hr', 'people.employees');
     ensureSingleModule('Attendance', `${pathPrefix}/attendance`, 'attendance', 'attendance', 'attendance.dashboard');
+    ensureSingleModule('Leave Master', `${pathPrefix}/leave-policies`, 'leavePolicies', 'leave', 'leave.policies', [`${pathPrefix}/leave-policies`]);
     
 
     ensureSingleModule('Payroll', `${pathPrefix}/payroll/dashboard`, 'payrollDashboard', 'payroll', 'payroll.stats');

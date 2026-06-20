@@ -1238,18 +1238,28 @@ exports.getCalendar = async (req, res) => {
         // Get holidays for the month (including past and future for full visibility)
         const holidays = await Holiday.find({
             tenant: tenantId,
-            date: { $gte: startDate, $lte: endDate }
+            $or: [
+                { date: { $gte: startDate, $lte: endDate } },
+                { endDate: { $gte: startDate, $lte: endDate } },
+                { date: { $lte: startDate }, endDate: { $gte: endDate } }
+            ]
         }).sort({ date: 1 });
 
         // Create holiday map for quick lookup
         const holidayMap = {};
         holidays.forEach(h => {
-            const dateStr = h.date.toISOString().split('T')[0];
-            holidayMap[dateStr] = {
-                name: h.name,
-                type: h.type,
-                description: h.description || ''
-            };
+            const start = new Date(h.date);
+            start.setHours(0, 0, 0, 0);
+            const end = h.endDate ? new Date(h.endDate) : start;
+            end.setHours(0, 0, 0, 0);
+            for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                const dateStr = d.toISOString().split('T')[0];
+                holidayMap[dateStr] = {
+                    name: h.name,
+                    type: h.type,
+                    description: h.description || ''
+                };
+            }
         });
 
         // Get attendance records if employeeId is provided (for employee-specific calendar)
@@ -3208,7 +3218,12 @@ exports.getByDate = async (req, res) => {
 
         const holiday = await Holiday.findOne({
             tenant: req.tenantId,
-            date: targetDate
+            date: { $lte: targetDate },
+            $or: [
+                { endDate: { $exists: false } },
+                { endDate: null },
+                { endDate: { $gte: targetDate } }
+            ]
         }).lean();
 
         let settings = await AttendanceSettings.findOne({ tenant: req.tenantId });
@@ -3333,7 +3348,15 @@ exports.getEmployeeDateDetail = async (req, res) => {
             endDate: { $gte: targetDate }
         }).lean();
 
-        const holiday = await Holiday.findOne({ tenant: req.tenantId, date: targetDate }).lean();
+        const holiday = await Holiday.findOne({
+            tenant: req.tenantId,
+            date: { $lte: targetDate },
+            $or: [
+                { endDate: { $exists: false } },
+                { endDate: null },
+                { endDate: { $gte: targetDate } }
+            ]
+        }).lean();
         const globalSettings = await AttendanceSettings.findOne({ tenant: req.tenantId }).lean();
         const effectiveSettings = buildEffectiveAttendanceSettings(globalSettings || {}, employee.shiftId);
         const { isWeeklyOff } = isWeeklyOffDate({

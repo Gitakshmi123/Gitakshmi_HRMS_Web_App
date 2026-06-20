@@ -116,16 +116,34 @@ async function runMonthlyAccrual(tenantDB, tenantId, year, month) {
                     continue;
                 }
 
-                balance.total = Number(balance.total || 0) + accrualAmount;
-                balance.available = Number(balance.available || 0) + accrualAmount;
+                const prevAvailable = balance.available || 0;
+                balance.accrued = (balance.accrued || 0) + accrualAmount;
+                balance.total = (balance.opening || 0) + balance.accrued;
 
                 if (maxLeaveCap > 0) {
                     balance.total = Math.min(balance.total, maxLeaveCap);
-                    balance.available = Math.min(balance.available, maxLeaveCap);
                 }
 
                 balance.expiresAt = getBalanceExpiryDate(year, rule.expiryMonths);
                 await balance.save();
+
+                try {
+                    const LeaveLedger = tenantDB.model('LeaveLedger');
+                    await LeaveLedger.create({
+                        tenant: tenantId,
+                        employee: employee._id,
+                        leaveType,
+                        year,
+                        actionType: 'Accrual',
+                        days: accrualAmount,
+                        previousBalance: prevAvailable,
+                        newBalance: balance.available,
+                        remarks: `Monthly leave accrual credit`,
+                        date: new Date()
+                    });
+                } catch (ledgerErr) {
+                    console.error('[ACCRUAL_LEDGER_ERROR]', ledgerErr.message);
+                }
 
                 await leaveManagementService.syncEmployeeLeaveSnapshotFromDocuments({
                     employee,
@@ -217,16 +235,34 @@ async function runCarryForwardForYear(tenantDB, tenantId, fromYear, toYear) {
                     continue;
                 }
 
-                nextBalance.total = Number(nextBalance.total || 0) + carryAmount;
-                nextBalance.available = Number(nextBalance.available || 0) + carryAmount;
+                const prevAvailable = nextBalance.available || 0;
+                nextBalance.opening = (nextBalance.opening || 0) + carryAmount;
+                nextBalance.total = nextBalance.opening + (nextBalance.accrued || 0);
 
                 if (Number(effectiveRule.maxLeaveCap || 0) > 0) {
                     nextBalance.total = Math.min(nextBalance.total, Number(effectiveRule.maxLeaveCap));
-                    nextBalance.available = Math.min(nextBalance.available, Number(effectiveRule.maxLeaveCap));
                 }
 
                 nextBalance.expiresAt = getBalanceExpiryDate(toYear, effectiveRule.expiryMonths);
                 await nextBalance.save();
+
+                try {
+                    const LeaveLedger = tenantDB.model('LeaveLedger');
+                    await LeaveLedger.create({
+                        tenant: tenantId,
+                        employee: balance.employee,
+                        leaveType,
+                        year: toYear,
+                        actionType: 'Opening',
+                        days: carryAmount,
+                        previousBalance: prevAvailable,
+                        newBalance: nextBalance.available,
+                        remarks: `Carry forward credit from year ${fromYear}`,
+                        date: new Date()
+                    });
+                } catch (ledgerErr) {
+                    console.error('[CARRYFORWARD_LEDGER_ERROR]', ledgerErr.message);
+                }
 
                 if (employee) {
                     await leaveManagementService.syncEmployeeLeaveSnapshotFromDocuments({

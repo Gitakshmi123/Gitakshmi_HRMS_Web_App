@@ -20,81 +20,167 @@ const parseExcelFile = (filePath) => {
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
 
-        // Read formatted values to strictly check the visual format (DD-MM-YYYY)
-        const data = XLSX.utils.sheet_to_json(worksheet, {
-            header: 1,
-            raw: false, // Get formatted values as strings
-            dateNF: 'dd-mm-yyyy' // Suggest format if possible, but we'll validate strictly
-        });
+        // Read with raw=true to handle Excel date serial numbers,
+        // then also with raw=false for string fallback
+        const dataRaw = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true });
+        const dataFmt = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false, dateNF: 'dd-mm-yyyy' });
 
         const holidays = [];
         const errors = [];
 
-        // Date format regex: DD-MM-YYYY
-        const ddmmyyyyRegex = /^(\d{1,2})-(\d{1,2})-(\d{4})$/;
+        // Month name map for formats like "12-Nov-2026" or "12 November 2026"
+        const MONTHS = {
+            jan:1,feb:2,mar:3,apr:4,may:5,jun:6,
+            jul:7,aug:8,sep:9,oct:10,nov:11,dec:12,
+            january:1,february:2,march:3,april:4,june:6,
+            july:7,august:8,september:9,october:10,november:11,december:12
+        };
 
-        for (let i = 1; i < data.length; i++) {
-            const row = data[i];
-            if (!row || row.length === 0 || !row[0]) continue;
+        /**
+         * Parse a date from any common format:
+         * - DD-MM-YYYY  (01-01-2026)
+         * - DD/MM/YYYY  (01/01/2026)
+         * - MM/DD/YYYY  (01/31/2026) — fallback when day > 12 in slot 0 vs 1
+         * - DD-Mon-YYYY (12-Nov-2026)
+         * - DD Mon YYYY (12 Nov 2026)
+         * - YYYY-MM-DD  (ISO, 2026-11-12)
+         * - Excel serial number (numeric)
+         * - JS Date object
+         * Returns a Date or null
+         */
+        const parseAnyDate = (rawVal, fmtStr) => {
+            // Already a JS Date
+            if (rawVal instanceof Date && !isNaN(rawVal.getTime())) {
+                return rawVal;
+            }
+
+            // Excel serial number (number type)
+            if (typeof rawVal === 'number' && rawVal > 1) {
+                // SheetJS can convert serial to Date
+                const d = XLSX.SSF.parse_date_code(rawVal);
+                if (d) return new Date(d.y, d.m - 1, d.d, 12, 0, 0);
+            }
+
+            // Use the formatted string for text parsing
+            const s = String(fmtStr || rawVal || '').trim();
+            if (!s) return null;
+
+            // Try ISO YYYY-MM-DD
+            let m = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+            if (m) {
+                const [, y, mo, d] = m.map(Number);
+                return new Date(y, mo - 1, d, 12, 0, 0);
+            }
+
+            // Try DD-MM-YYYY or DD/MM/YYYY
+            m = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+            if (m) {
+                const [, d, mo, y] = m.map(Number);
+                if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
+                    return new Date(y, mo - 1, d, 12, 0, 0);
+                }
+            }
+
+            // Try DD-Mon-YYYY or DD Mon YYYY (e.g. 12-Nov-2026, 12 Nov 2026)
+            m = s.match(/^(\d{1,2})[-\s]+([A-Za-z]+)[-\s]+(\d{4})$/);
+            if (m) {
+                const day = parseInt(m[1], 10);
+                const monKey = m[2].toLowerCase().slice(0, 3);
+                const year = parseInt(m[3], 10);
+                const month = MONTHS[monKey] || MONTHS[m[2].toLowerCase()];
+                if (month && day >= 1 && day <= 31 && year >= 1900) {
+                    return new Date(year, month - 1, day, 12, 0, 0);
+                }
+            }
+
+            // Try Mon DD YYYY or Month DD, YYYY
+            m = s.match(/^([A-Za-z]+)[-\s]+(\d{1,2})[,\s]*(\d{4})$/);
+            if (m) {
+                const monKey = m[1].toLowerCase().slice(0, 3);
+                const day = parseInt(m[2], 10);
+                const year = parseInt(m[3], 10);
+                const month = MONTHS[monKey] || MONTHS[m[1].toLowerCase()];
+                if (month && day >= 1 && day <= 31 && year >= 1900) {
+                    return new Date(year, month - 1, day, 12, 0, 0);
+                }
+            }
+
+            // Last resort: native Date parse
+            const nd = new Date(s);
+            if (!isNaN(nd.getTime())) return nd;
+
+            return null;
+        };
+
+        const validateDate = (d, raw, fmt, rowNum, fieldName) => {
+            if (!d || isNaN(d.getTime())) {
+                errors.push({ row: rowNum, error: `Invalid ${fieldName} format: "${fmt || raw}". Use DD-MM-YYYY, DD-Mon-YYYY, or similar.` });
+                return null;
+            }
+            const y = d.getFullYear();
+            if (y < 1900 || y > 2100) {
+                errors.push({ row: rowNum, error: `Year ${y} out of range (1900-2100)` });
+                return null;
+            }
+            d.setHours(0, 0, 0, 0);
+            return d;
+        };
+
+        // Expected columns (0-indexed):
+        // 0: Holiday Name
+        // 1: Date (start)
+        // 2: End Date (optional)
+        // 3: Type
+        // 4: Description
+        const validTypes = ['Public', 'Optional', 'Company', 'National', 'Festival', 'Regional'];
+
+        for (let i = 1; i < dataRaw.length; i++) {
+            const rowR = dataRaw[i];
+            const rowF = dataFmt[i] || [];
+            if (!rowR || rowR.length === 0 || (!rowR[0] && !rowF[0])) continue;
 
             try {
-                const name = String(row[0] || '').trim();
-                const dateStr = String(row[1] || '').trim(); // Formatted date string
-                const type = String(row[2] || 'Public').trim();
-                const description = String(row[3] || '').trim();
+                const name = String(rowF[0] || rowR[0] || '').trim();
 
                 if (!name) {
                     errors.push({ row: i + 1, error: 'Holiday name is required' });
                     continue;
                 }
 
-                if (!dateStr) {
+                if (!rowR[1] && !rowF[1]) {
                     errors.push({ row: i + 1, error: 'Date is required' });
                     continue;
                 }
 
-                // Strict validation for DD-MM-YYYY
-                const match = dateStr.match(ddmmyyyyRegex);
-                if (!match) {
-                    errors.push({
-                        row: i + 1,
-                        error: `Invalid date format: "${dateStr}". Please use DD-MM-YYYY.`
-                    });
-                    continue;
+                // Parse start date
+                const startDate = validateDate(
+                    parseAnyDate(rowR[1], rowF[1]),
+                    rowR[1], rowF[1], i + 1, 'date'
+                );
+                if (!startDate) continue;
+
+                // Parse optional end date (col 2)
+                let endDate = null;
+                if (rowR[2] || rowF[2]) {
+                    const rawEnd = String(rowF[2] || rowR[2] || '').trim();
+                    if (rawEnd && rawEnd.toLowerCase() !== 'end date') {
+                        const parsed = parseAnyDate(rowR[2], rowF[2]);
+                        endDate = validateDate(parsed, rowR[2], rowF[2], i + 1, 'end date');
+                        // endDate errors are non-fatal — just skip end date
+                        if (!endDate) errors.pop(); // remove non-fatal end date error
+                    }
                 }
 
-                // Safely parse DD-MM-YYYY
-                const day = parseInt(match[1], 10);
-                const month = parseInt(match[2], 10);
-                const year = parseInt(match[3], 10);
+                // Type is col 3, Description is col 4
+                const typeRaw = String(rowF[3] || rowR[3] || 'Public').trim();
+                const description = String(rowF[4] || rowR[4] || '').trim();
 
-                // Construct date and validate
-                // We use noon to avoid any timezone shifting to the previous day during setHours(0)
-                const date = new Date(year, month - 1, day, 12, 0, 0);
-
-                if (isNaN(date.getTime()) ||
-                    date.getDate() !== day ||
-                    date.getMonth() !== (month - 1) ||
-                    date.getFullYear() !== year) {
-                    errors.push({ row: i + 1, error: `Invalid date: "${dateStr}"` });
-                    continue;
-                }
-
-                // Normalize to start of day
-                date.setHours(0, 0, 0, 0);
-
-                // Range validation
-                if (year < 1900 || year > 2100) {
-                    errors.push({ row: i + 1, error: `Year ${year} out of range (1900-2100)` });
-                    continue;
-                }
-
-                const validTypes = ['Public', 'Optional', 'Company', 'National', 'Festival'];
-                const holidayType = validTypes.includes(type) ? type : 'Public';
+                const holidayType = validTypes.includes(typeRaw) ? typeRaw : 'Public';
 
                 holidays.push({
                     name,
-                    date: date.toISOString(),
+                    date: startDate.toISOString(),
+                    endDate: endDate ? endDate.toISOString() : null,
                     type: holidayType,
                     description
                 });
@@ -120,7 +206,11 @@ exports.getHolidays = async (req, res) => {
         if (year) {
             const startOfYear = new Date(year, 0, 1);
             const endOfYear = new Date(year, 11, 31, 23, 59, 59);
-            query.date = { $gte: startOfYear, $lte: endOfYear };
+            query.$or = [
+                { date: { $gte: startOfYear, $lte: endOfYear } },
+                { endDate: { $gte: startOfYear, $lte: endOfYear } },
+                { date: { $lte: startOfYear }, endDate: { $gte: endOfYear } }
+            ];
         }
 
         const holidays = await Holiday.find(query).sort({ date: 1 });
@@ -134,7 +224,7 @@ exports.getHolidays = async (req, res) => {
 exports.createHoliday = async (req, res) => {
     try {
         const { Holiday, AuditLog } = getModels(req);
-        const { name, date, type, description } = req.body;
+        const { name, date, endDate, type, description } = req.body;
 
         if (!name || !date) {
             return res.status(400).json({ error: "Holiday name and date are required" });
@@ -144,6 +234,7 @@ exports.createHoliday = async (req, res) => {
             tenant: req.tenantId,
             name,
             date,
+            endDate: endDate || null,
             type: type || 'Public',
             description
         });
@@ -179,7 +270,7 @@ exports.updateHoliday = async (req, res) => {
     try {
         const { Holiday, AuditLog } = getModels(req);
         const { id } = req.params;
-        const { name, date, type, description } = req.body;
+        const { name, date, endDate, type, description } = req.body;
 
         const holiday = await Holiday.findOne({ _id: id, tenant: req.tenantId });
         if (!holiday) {
@@ -191,6 +282,7 @@ exports.updateHoliday = async (req, res) => {
         // Update fields
         if (name) holiday.name = name;
         if (date) holiday.date = date;
+        if (endDate !== undefined) holiday.endDate = endDate;
         if (type) holiday.type = type;
         if (description !== undefined) holiday.description = description;
 

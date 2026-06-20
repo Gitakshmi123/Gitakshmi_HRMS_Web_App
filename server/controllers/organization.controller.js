@@ -321,12 +321,18 @@ exports.getBranches = async (req, res) => {
   try {
     let subCompanyId = req.query.subCompanyId || req.user?.subCompanyId;
     if (subCompanyId === 'undefined' || subCompanyId === 'null') subCompanyId = null;
-    const sub = await validateSubCompany(req, subCompanyId);
-    if (!sub) return fail(res, 403, 'Invalid sub company scope');
+    
+    let sub = null;
+    if (subCompanyId) {
+      sub = await validateSubCompany(req, subCompanyId);
+      if (!sub) return fail(res, 403, 'Invalid sub company scope');
+    }
+    
     const Branch = getModel(req, 'Branch');
     const Division = getModel(req, 'Division');
     
-    const filter = { mainCompanyId: mainCompanyIdOf(req), subCompanyId: sub._id, isDeleted: { $ne: true } };
+    const filter = { mainCompanyId: mainCompanyIdOf(req), isDeleted: { $ne: true } };
+    if (sub) filter.subCompanyId = sub._id;
     if (['BRANCH_HEAD', 'DIVISION_HEAD', 'DEPARTMENT_HEAD'].includes(roleOf(req)) && req.user?.branchId) filter._id = req.user.branchId;
     
     const branches = await Branch.find(filter).lean();
@@ -344,7 +350,7 @@ exports.getBranches = async (req, res) => {
         code: branch.branchCode || branch.entityCode,
         headName: head?.name || 'Not Assigned',
         headEmail: head?.email || branch.contactEmail,
-        divisionCount: await Division.countDocuments({ mainCompanyId: mainCompanyIdOf(req), subCompanyId: sub._id, branchId: branch._id, isDeleted: { $ne: true } })
+        divisionCount: await Division.countDocuments({ mainCompanyId: mainCompanyIdOf(req), branchId: branch._id, isDeleted: { $ne: true } })
       };
     }));
     return ok(res, data);
@@ -357,12 +363,18 @@ exports.getDivisions = async (req, res) => {
   try {
     let branchId = req.query.branchId || req.user?.branchId;
     if (branchId === 'undefined' || branchId === 'null') branchId = null;
-    const branch = await validateBranch(req, branchId);
-    if (!branch) return fail(res, 403, 'Invalid branch scope');
+    
+    let branch = null;
+    if (branchId) {
+      branch = await validateBranch(req, branchId);
+      if (!branch) return fail(res, 403, 'Invalid branch scope');
+    }
+    
     const Division = getModel(req, 'Division');
     const Department = getModel(req, 'Department');
     
-    const filter = { mainCompanyId: mainCompanyIdOf(req), branchId: branch._id, isDeleted: { $ne: true } };
+    const filter = { mainCompanyId: mainCompanyIdOf(req), isDeleted: { $ne: true } };
+    if (branch) filter.branchId = branch._id;
     if (['DIVISION_HEAD', 'DEPARTMENT_HEAD'].includes(roleOf(req)) && req.user?.divisionId) filter._id = req.user.divisionId;
     
     const divisions = await Division.find(filter).lean();
@@ -435,16 +447,26 @@ exports.getDesignations = async (req, res) => {
   try {
     let departmentId = req.query.departmentId || req.user?.departmentId;
     if (departmentId === 'undefined' || departmentId === 'null') departmentId = null;
-    const department = await validateDepartment(req, departmentId);
-    if (!department) return fail(res, 403, 'Invalid department scope');
+    
+    let department = null;
+    if (departmentId) {
+      department = await validateDepartment(req, departmentId);
+      if (!department) return fail(res, 403, 'Invalid department scope');
+    }
+    
     const Designation = getModel(req, 'Designation');
     const Employee = getModel(req, 'Employee');
     
-    // Fetch all database designations
-    const dbDesignations = await Designation.find({ mainCompanyId: mainCompanyIdOf(req), departmentId: department._id, isDeleted: { $ne: true } }).lean();
+    const filter = { mainCompanyId: mainCompanyIdOf(req), isDeleted: { $ne: true } };
+    if (department) filter.departmentId = department._id;
     
-    // Fetch all active employees under this department
-    const employees = await Employee.find({ mainCompanyId: mainCompanyIdOf(req), departmentId: department._id, isActive: { $ne: false }, isDeleted: { $ne: true } }).lean();
+    // Fetch all database designations
+    const dbDesignations = await Designation.find(filter).lean();
+    
+    // Fetch all active employees
+    const empFilter = { mainCompanyId: mainCompanyIdOf(req), isActive: { $ne: false }, isDeleted: { $ne: true } };
+    if (department) empFilter.departmentId = department._id;
+    const employees = await Employee.find(empFilter).lean();
     
     // Group employees by designation strings for which there is no real designationId in the DB
     const dbDesignationIds = new Set(dbDesignations.map(d => String(d._id)));
@@ -461,7 +483,7 @@ exports.getDesignations = async (req, res) => {
       title: name,
       isVirtual: true,
       code: 'VIRTUAL',
-      departmentId: department._id,
+      departmentId: department ? department._id : null,
       employeeCount: employees.filter(emp => emp.designation && emp.designation.trim() === name).length
     }));
 
@@ -505,9 +527,11 @@ exports.getEmployees = async (req, res) => {
     } else {
       let departmentId = req.query.departmentId || req.user?.departmentId;
       if (departmentId === 'undefined' || departmentId === 'null') departmentId = null;
-      const department = await validateDepartment(req, departmentId);
-      if (!department) return fail(res, 403, 'Invalid department scope');
-      filter.departmentId = department._id;
+      if (departmentId) {
+        const department = await validateDepartment(req, departmentId);
+        if (!department) return fail(res, 403, 'Invalid department scope');
+        filter.departmentId = department._id;
+      }
     }
 
     const Designation = getModel(req, 'Designation');

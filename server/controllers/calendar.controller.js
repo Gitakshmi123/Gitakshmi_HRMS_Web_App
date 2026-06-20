@@ -39,9 +39,24 @@ exports.getCalendar = async (req, res) => {
         if (!settings) settings = { weeklyOffDays: [0] };
 
         // Fetch holidays in range
-        const holidays = await Holiday.find({ tenant: tenantId, date: { $gte: startDate, $lte: endDate } }).lean();
+        const holidays = await Holiday.find({
+            tenant: tenantId,
+            $or: [
+                { date: { $gte: startDate, $lte: endDate } },
+                { endDate: { $gte: startDate, $lte: endDate } },
+                { date: { $lte: startDate }, endDate: { $gte: endDate } }
+            ]
+        }).lean();
         const holidayMap = {};
-        holidays.forEach(h => holidayMap[toDateStr(h.date)] = h);
+        holidays.forEach(h => {
+            const start = new Date(h.date);
+            start.setHours(0, 0, 0, 0);
+            const end = h.endDate ? new Date(h.endDate) : start;
+            end.setHours(0, 0, 0, 0);
+            for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                holidayMap[toDateStr(d)] = h;
+            }
+        });
 
         // Fetch attendances for range and group by date
         const attendanceAgg = await Attendance.aggregate([
@@ -178,9 +193,24 @@ exports.getAttendanceCalendar = async (req, res) => {
         if (!settings) settings = { weeklyOffDays: [0] };
 
         // Holidays map
-        const holidays = await Holiday.find({ tenant: queryTenant, date: { $gte: startDate, $lte: endDate } }).lean();
+        const holidays = await Holiday.find({
+            tenant: queryTenant,
+            $or: [
+                { date: { $gte: startDate, $lte: endDate } },
+                { endDate: { $gte: startDate, $lte: endDate } },
+                { date: { $lte: startDate }, endDate: { $gte: endDate } }
+            ]
+        }).lean();
         const holidayMap = {};
-        holidays.forEach(h => holidayMap[h.date.toISOString().split('T')[0]] = h);
+        holidays.forEach(h => {
+            const start = new Date(h.date);
+            start.setHours(0, 0, 0, 0);
+            const end = h.endDate ? new Date(h.endDate) : start;
+            end.setHours(0, 0, 0, 0);
+            for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                holidayMap[d.toISOString().split('T')[0]] = h;
+            }
+        });
 
         // Attendance aggregation per date
         const attendanceAgg = await Attendance.aggregate([
@@ -342,7 +372,15 @@ exports.getAttendanceCalendarDetail = async (req, res) => {
         onDuty.forEach(o => employees.push({ employeeId: o.employee._id, name: `${o.employee.firstName || ''} ${o.employee.lastName || ''}`.trim(), status: 'On Duty' }));
         leaves.forEach(l => employees.push({ employeeId: l.employee._id, name: `${l.employee.firstName || ''} ${l.employee.lastName || ''}`.trim(), status: 'On Leave', leaveType: l.leaveType, isHalfDay: !!l.isHalfDay }));
 
-        const holiday = await Holiday.findOne({ tenant: queryTenant, date: date }).lean();
+        const holiday = await Holiday.findOne({
+            tenant: queryTenant,
+            date: { $lte: date },
+            $or: [
+                { endDate: { $exists: false } },
+                { endDate: null },
+                { endDate: { $gte: date } }
+            ]
+        }).lean();
 
         res.json({ date: dateStr, totalEmployees, present: present.length, onDuty: onDuty.length, onLeave: leaves.length, holiday: holiday || null, employees });
 
