@@ -3,11 +3,24 @@ const mongoose = require('mongoose');
 const rosterSchema = new mongoose.Schema({
     tenant: { type: String, required: true, index: true },
     rosterName: { type: String, required: true },
-    month: { type: Number, required: true }, // 1-12
+    month: { type: Number, required: true }, // Derived for filtering
     year: { type: Number, required: true },
+    startDate: { type: Date, required: true },
+    endDate: { type: Date, required: true },
+    weeklyOffDays: [{ 
+        type: Number, 
+        min: 0,
+        max: 6
+    }],
+    halfDayOfWeek: [{ 
+        type: Number, 
+        min: 0,
+        max: 6
+    }],
+    weekendDates: [{ type: Date }],
     rosterType: { 
         type: String, 
-        enum: ['Manual', 'Weekly Rotation', 'Team Rotation', 'Fair Rotation'],
+        enum: ['Manual', 'Fixed Shift', 'Weekly Rotation', 'Team Rotation', 'Fair Rotation'],
         default: 'Manual'
     },
     departmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Department', default: null },

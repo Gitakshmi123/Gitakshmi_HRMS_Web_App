@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Drawer, Typography, Empty, message, Tag, Badge, Tabs } from 'antd';
-import { Eye, History, GitBranch } from 'lucide-react';
+import { Table, Button, Drawer, Typography, Empty, message, Tag, Badge, Tabs, Descriptions, Card, Divider } from 'antd';
+import { Eye, History, GitBranch, Clock, AlertCircle, Shield, CheckCircle2 } from 'lucide-react';
 import shiftMasterService from '../../services/shiftMasterService';
 import dayjs from 'dayjs';
 
@@ -144,14 +144,80 @@ export default function PolicyManagementTab() {
                      )}
                   </div>
 
-                  <div className="bg-slate-900 rounded-lg p-4 overflow-auto" style={{ maxHeight: 'calc(100vh - 250px)' }}>
-                    <pre className="text-green-400 text-[11px] font-mono leading-relaxed">
-                      {JSON.stringify({
-                         attendanceRules: policy.attendanceRules,
-                         permissionEngine: policy.permissionEngine,
-                         overtimeEngine: policy.overtimeEngine
-                      }, null, 2)}
-                    </pre>
+                  <div className="space-y-4 overflow-auto pb-6" style={{ maxHeight: 'calc(100vh - 250px)' }}>
+                    <Card size="small" title={<><Clock size={16} className="inline mr-2 text-indigo-500" />Attendance Rules</>} className="shadow-sm border-slate-200">
+                      <Descriptions column={1} size="small" bordered>
+                        <Descriptions.Item label="Advance Punch In Window">
+                          {policy.attendanceRules?.punchWindow?.maxAdvancePunchInMinutes} mins
+                        </Descriptions.Item>
+                        <Descriptions.Item label="Late Punch Out Window">
+                          {policy.attendanceRules?.punchWindow?.maxLatePunchOutMinutes} mins
+                        </Descriptions.Item>
+                        <Descriptions.Item label="Auto Mark Absent (No Punch)">
+                          {policy.attendanceRules?.absentCfg?.autoMarkAbsentOnNoPunch ? <Tag color="red">Enabled</Tag> : <Tag>Disabled</Tag>}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="Sandwich Leave Penalty">
+                          {policy.attendanceRules?.absentCfg?.sandwichLeaveEnabled ? <Tag color="warning">Enabled</Tag> : <Tag>Disabled</Tag>}
+                        </Descriptions.Item>
+                      </Descriptions>
+
+                      {policy.attendanceRules?.lateMarks?.length > 0 && (
+                        <div className="mt-4">
+                          <div className="font-medium text-sm text-slate-700 mb-2">Late Mark Conditions:</div>
+                          {policy.attendanceRules.lateMarks.map((lm, idx) => (
+                            <Tag color="orange" key={idx} className="mb-1">
+                              If Late {lm.conditionType.replace('_', ' ')} {lm.minutes} mins → Action: {lm.action.replace('_', ' ')}
+                            </Tag>
+                          ))}
+                        </div>
+                      )}
+
+                      {policy.attendanceRules?.earlyExit?.length > 0 && (
+                        <div className="mt-4">
+                          <div className="font-medium text-sm text-slate-700 mb-2">Early Exit Conditions:</div>
+                          {policy.attendanceRules.earlyExit.map((ee, idx) => (
+                            <Tag color="orange" key={idx} className="mb-1">
+                              If Early {ee.conditionType.replace('_', ' ')} {ee.minutes} mins → Action: {ee.action.replace('_', ' ')}
+                            </Tag>
+                          ))}
+                        </div>
+                      )}
+                    </Card>
+
+                    {policy.overtimeEngine && (
+                      <Card size="small" title={<><AlertCircle size={16} className="inline mr-2 text-indigo-500" />Overtime Rules</>} className="shadow-sm border-slate-200">
+                        <Descriptions column={1} size="small" bordered>
+                          <Descriptions.Item label="Calculation Type">
+                            {policy.overtimeEngine.calculationType}
+                          </Descriptions.Item>
+                          <Descriptions.Item label="Minimum Minutes">
+                            {policy.overtimeEngine.minimumMinutesToQualify} mins
+                          </Descriptions.Item>
+                          <Descriptions.Item label="Maximum Cap">
+                            {policy.overtimeEngine.maximumCapMinutes} mins
+                          </Descriptions.Item>
+                          <Descriptions.Item label="Rate Multiplier">
+                            {policy.overtimeEngine.rateMultiplier}x
+                          </Descriptions.Item>
+                        </Descriptions>
+                      </Card>
+                    )}
+
+                    {policy.permissionEngine && (
+                      <Card size="small" title={<><Shield size={16} className="inline mr-2 text-indigo-500" />Access & Permissions</>} className="shadow-sm border-slate-200">
+                        <Descriptions column={1} size="small" bordered>
+                          <Descriptions.Item label="Manager Override Allowed">
+                            {policy.permissionEngine.managerOverride ? <CheckCircle2 size={16} className="text-green-500"/> : "No"}
+                          </Descriptions.Item>
+                          <Descriptions.Item label="Self Request Adjustments">
+                            {policy.permissionEngine.selfRequestAdjustment ? <CheckCircle2 size={16} className="text-green-500"/> : "No"}
+                          </Descriptions.Item>
+                          <Descriptions.Item label="Max Swaps Allowed">
+                            {policy.permissionEngine.maxSwapsAllowedPerMonth} per month
+                          </Descriptions.Item>
+                        </Descriptions>
+                      </Card>
+                    )}
                   </div>
                 </div>
               )

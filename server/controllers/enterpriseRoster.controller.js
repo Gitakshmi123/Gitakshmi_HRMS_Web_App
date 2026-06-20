@@ -14,20 +14,19 @@ const getModels = (req) => {
     };
 };
 
-// Helper: Calculate weeks of a month
-const calculateMonthWeeks = (year, month) => {
-    const startOfMonth = dayjs(new Date(year, month - 1, 1));
-    const endOfMonth = startOfMonth.endOf('month');
+// Helper: Calculate weeks from startDate to endDate
+const calculateWeeks = (startDateStr, endDateStr) => {
+    const startOfRange = dayjs(startDateStr).startOf('day');
+    const endOfRange = dayjs(endDateStr).endOf('day');
     const weeks = [];
     
-    let currentStart = startOfMonth;
+    let currentStart = startOfRange;
     let weekNo = 1;
 
-    while (currentStart.isBefore(endOfMonth) || currentStart.isSame(endOfMonth, 'day')) {
-        let currentEnd = currentStart.endOf('week'); // Ends on Saturday normally, depending on locale
-        // If the end of the week is beyond the end of the month, clamp it
-        if (currentEnd.isAfter(endOfMonth)) {
-            currentEnd = endOfMonth;
+    while (currentStart.isBefore(endOfRange) || currentStart.isSame(endOfRange, 'day')) {
+        let currentEnd = currentStart.endOf('week'); // Ends on Saturday
+        if (currentEnd.isAfter(endOfRange)) {
+            currentEnd = endOfRange;
         }
         weeks.push({
             weekNo,
@@ -44,7 +43,7 @@ const calculateMonthWeeks = (year, month) => {
 exports.createRoster = async (req, res) => {
     try {
         const tenantId = req.headers['x-tenant-id'];
-        const { Roster } = getModels(req);
+        const { Roster, RosterAssignment, RosterRotation } = getModels(req);
         
         const newRoster = new Roster({
             ...req.body,
@@ -53,6 +52,65 @@ exports.createRoster = async (req, res) => {
         });
         
         await newRoster.save();
+
+        // Auto-generation logic for Fixed Shift
+        if (newRoster.rosterType === 'Fixed Shift' && req.body.fixedShiftId) {
+            const weeks = calculateWeeks(newRoster.startDate, newRoster.endDate);
+            let assignments = [];
+
+            for (const empId of newRoster.employees) {
+                for (const week of weeks) {
+                    assignments.push({
+                        tenant: tenantId,
+                        rosterId: newRoster._id,
+                        employeeId: empId,
+                        shiftId: req.body.fixedShiftId,
+                        weekNo: week.weekNo,
+                        startDate: week.startDate,
+                        endDate: week.endDate,
+                        assignedBy: req.user?._id,
+                        status: 'Draft'
+                    });
+                }
+            }
+
+            if (assignments.length > 0) {
+                await RosterAssignment.insertMany(assignments);
+            }
+        }
+        // Auto-generation logic for Rotations
+        else if (req.body.rotationId && newRoster.rosterType !== 'Manual' && newRoster.rosterType !== 'Fixed Shift') {
+            const rotation = await RosterRotation.findById(req.body.rotationId).lean();
+            if (rotation && rotation.sequence && rotation.sequence.length > 0) {
+                const weeks = calculateWeeks(newRoster.startDate, newRoster.endDate);
+                let assignments = [];
+                const sequence = rotation.sequence;
+
+                for (const empId of newRoster.employees) {
+                    let sequenceIndex = 0;
+                    for (const week of weeks) {
+                        const shiftId = sequence[sequenceIndex % sequence.length];
+                        assignments.push({
+                            tenant: tenantId,
+                            rosterId: newRoster._id,
+                            employeeId: empId,
+                            shiftId: shiftId,
+                            weekNo: week.weekNo,
+                            startDate: week.startDate,
+                            endDate: week.endDate,
+                            assignedBy: req.user?._id,
+                            status: 'Draft'
+                        });
+                        sequenceIndex++;
+                    }
+                }
+
+                if (assignments.length > 0) {
+                    await RosterAssignment.insertMany(assignments);
+                }
+            }
+        }
+
         res.status(201).json({ success: true, data: newRoster });
     } catch (error) {
         console.error('[CREATE_ROSTER_ERROR]', error);
@@ -73,7 +131,7 @@ exports.generateRoster = async (req, res) => {
         const rotation = await RosterRotation.findById(rotationId).lean();
         if (!rotation) return res.status(404).json({ success: false, message: 'Rotation Pattern not found' });
 
-        const weeks = calculateMonthWeeks(roster.year, roster.month);
+        const weeks = calculateWeeks(roster.startDate, roster.endDate);
         let assignments = [];
 
         // Clear existing drafts for this roster
@@ -152,11 +210,30 @@ exports.publishRoster = async (req, res) => {
             const end = dayjs(assign.endDate);
             
             while (current.isBefore(end) || current.isSame(end, 'day')) {
+                const dayOfWeek = current.day(); // 0 is Sunday, 6 is Saturday
+                const currentFormatted = current.format('YYYY-MM-DD');
+                let isWeeklyOff = false;
+                let isHalfDay = false;
+                
+                if (roster.weeklyOffDays && roster.weeklyOffDays.includes(dayOfWeek)) {
+                    isWeeklyOff = true;
+                }
+                
+                if (roster.halfDayOfWeek && roster.halfDayOfWeek.includes(dayOfWeek)) {
+                    isHalfDay = true;
+                }
+                
+                if (roster.weekendDates && roster.weekendDates.some(d => dayjs(d).format('YYYY-MM-DD') === currentFormatted)) {
+                    isWeeklyOff = true;
+                }
+
                 dailyRosters.push({
                     tenant: tenantId,
                     employeeId: assign.employeeId,
                     date: current.toDate(),
                     shiftMasterId: assign.shiftId,
+                    isWeeklyOff: isWeeklyOff,
+                    isHalfDay: isHalfDay,
                     generatedBy: 'Roster_Rotation',
                     status: 'Published'
                 });
@@ -166,11 +243,10 @@ exports.publishRoster = async (req, res) => {
 
         if (dailyRosters.length > 0) {
             // Delete old generated entries for these employees and dates to avoid duplicates
-            // Optimization: delete by month range for these employees
             await EmployeeRoster.deleteMany({
                 tenant: tenantId,
                 employeeId: { $in: roster.employees },
-                date: { $gte: dayjs(new Date(roster.year, roster.month - 1, 1)).toDate(), $lte: dayjs(new Date(roster.year, roster.month - 1, 1)).endOf('month').toDate() },
+                date: { $gte: roster.startDate, $lte: roster.endDate },
                 generatedBy: 'Roster_Rotation'
             });
             await EmployeeRoster.insertMany(dailyRosters);

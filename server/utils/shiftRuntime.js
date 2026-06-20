@@ -168,7 +168,11 @@ function translateShiftPolicyToLegacyConfig(shiftMaster, shiftPolicy) {
 
         overtimeCfg: {
             enabled: !!shiftPolicy?.overtimeEngine?.isEligible,
-            startAfterMinutes: shiftPolicy?.overtimeEngine?.minimumMinutesToQualify || 30
+            trackingEnabled: !!shiftPolicy?.overtimeEngine?.isEligible,
+            startAfterMinutes: shiftPolicy?.overtimeEngine?.minimumMinutesToQualify || 30,
+            multiplier: shiftPolicy?.overtimeEngine?.normalMultiplier || 1.0,
+            compensationMode: 'MULTIPLIER', // Tell Phase 2 to use the multiplier
+            earningLabel: 'Overtime Pay'
         },
 
         absentCfg: {
