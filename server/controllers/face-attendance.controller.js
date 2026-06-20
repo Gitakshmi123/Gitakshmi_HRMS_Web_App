@@ -2,7 +2,7 @@ const RealFaceRecognitionService = require('../services/realFaceRecognition.serv
 const faceService = new RealFaceRecognitionService();
 const legacyFaceService = require('../services/faceRecognition.service');
 const crypto = require('crypto');
-const { buildEffectiveAttendanceSettings, normalizePunchMode } = require('../utils/shiftRuntime');
+const { buildEffectiveAttendanceSettings, normalizePunchMode, translateShiftPolicyToLegacyConfig } = require('../utils/shiftRuntime');
 const {
   buildAttendanceWindow,
   calculateAttendance,
@@ -348,9 +348,21 @@ exports.verifyFaceAttendance = async (req, res) => {
     if (!attendanceSettings) {
       attendanceSettings = await AttendanceSettings.create({ tenant: tenantId });
     }
-    const shiftConfig = employee.shiftId
+    let shiftConfig = employee.shiftId
       ? await Shift.findOne({ _id: employee.shiftId, isActive: true, isDeleted: false }).lean()
       : null;
+    // ✅ FIX: If legacy Shift not found, try new ShiftMaster system
+    if (!shiftConfig && employee.shiftId) {
+      const ShiftMasterSchema = require('../models/ShiftMaster');
+      const ShiftPolicySchema = require('../models/ShiftPolicy');
+      const ShiftMaster = req.tenantDB.model('ShiftMaster', ShiftMasterSchema);
+      const ShiftPolicy = req.tenantDB.model('ShiftPolicy', ShiftPolicySchema);
+      const shiftMaster = await ShiftMaster.findOne({ _id: employee.shiftId, status: 'Active' }).lean();
+      if (shiftMaster) {
+        const shiftPolicy = await ShiftPolicy.findOne({ shiftMasterId: shiftMaster._id, isCurrent: true }).lean();
+        shiftConfig = translateShiftPolicyToLegacyConfig(shiftMaster, shiftPolicy);
+      }
+    }
     const employeeGrade = shiftConfig ? null : await fetchEmployeeGrade({
       employee,
       Grade,

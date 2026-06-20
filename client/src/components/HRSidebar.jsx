@@ -500,24 +500,6 @@ export default function HRSidebar({
     ensureSingleModule('Attendance', `${pathPrefix}/attendance`, 'attendance', 'attendance', 'attendance.dashboard');
     ensureSingleModule('Leave Master', `${pathPrefix}/leave-policies`, 'leavePolicies', 'leave', 'leave.policies', [`${pathPrefix}/leave-policies`]);
     
-    // Force Policy visibility ONLY if they have permission
-    const policyExists = sections.some(s => s.moduleName === 'Policy');
-    const canSeePolicy = hasPermission('leave.requests', 'any') || hasPermission('leave.policies', 'any') || hasPermission('policy.view', 'any') || hasPermission('policy.manage', 'any');
-    if (!policyExists && canSeePolicy) {
-      sections.push({
-        id: 'manual-policy',
-        title: 'MANAGEMENT',
-        moduleName: 'Policy',
-        icon: 'leaveRequests',
-        items: [{ 
-          label: 'Policy', 
-          to: `${pathPrefix}/leave-approvals`, 
-          icon: ICONS.leaveRequests, 
-          children: [], 
-          matchPaths: [`${pathPrefix}/leave-approvals`, `${pathPrefix}/leave-policies`, `${pathPrefix}/organization-policies`] 
-        }]
-      });
-    }
 
     ensureSingleModule('Payroll', `${pathPrefix}/payroll/dashboard`, 'payrollDashboard', 'payroll', 'payroll.stats');
     ensureSingleModule(

@@ -41,9 +41,22 @@ const LeavePolicySchema = new mongoose.Schema({
     rules: [{
         leaveType: { type: String, required: true, trim: true }, // e.g. "CL", "SL", "LWP"
         totalPerYear: { type: Number, default: 0 },
+        
+        // --- Dynamic Application Constraints ---
+        advanceNoticeDays: { type: Number, default: 0 }, // e.g. 7 for PL, 2 for CL
+        allowPostFacto: { type: Boolean, default: false }, // Can apply after taking leave
+        maxPostFactoLimit: { type: Number, default: 0 }, // Max times post facto allowed per year
+        medicalCertificateMandatoryAfterDays: { type: Number, default: 0 }, // Require attachment if >= X days
+        minimumLeaveFraction: { type: Number, default: 0.5 }, // e.g. 0.5 for Half Day allowed
+        
+        // --- Accrual & Balance Logic ---
         monthlyAccrual: { type: Boolean, default: false }, // If true, adds Total/12 every month
         accrualType: { type: String, enum: ['yearly', 'monthly'], default: 'yearly' },
         monthlyAccrualRate: { type: Number, default: 0 },
+        proRataApplicable: { type: Boolean, default: true }, // Pro-rate for mid-year joiners
+        accrualDependsOnAttendance: { type: Boolean, default: false }, // e.g. based on Present+WO+Holidays
+        allowNegativeBalance: { type: Boolean, default: false },
+        
         carryForwardAllowed: { type: Boolean, default: false },
         maxCarryForward: { type: Number, default: 0 },
         maxLeaveCap: { type: Number, default: 0 },
@@ -66,9 +79,17 @@ const LeavePolicySchema = new mongoose.Schema({
             gradeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Grade', default: null },
             gradeCode: { type: String, trim: true, uppercase: true, default: '' },
             totalPerYear: { type: Number, default: null },
+            advanceNoticeDays: { type: Number, default: null },
+            allowPostFacto: { type: Boolean, default: null },
+            maxPostFactoLimit: { type: Number, default: null },
+            medicalCertificateMandatoryAfterDays: { type: Number, default: null },
+            minimumLeaveFraction: { type: Number, default: null },
             monthlyAccrual: { type: Boolean, default: null },
             accrualType: { type: String, enum: ['yearly', 'monthly', null], default: null },
             monthlyAccrualRate: { type: Number, default: null },
+            proRataApplicable: { type: Boolean, default: null },
+            accrualDependsOnAttendance: { type: Boolean, default: null },
+            allowNegativeBalance: { type: Boolean, default: null },
             carryForwardAllowed: { type: Boolean, default: null },
             maxCarryForward: { type: Number, default: null },
             maxLeaveCap: { type: Number, default: null },

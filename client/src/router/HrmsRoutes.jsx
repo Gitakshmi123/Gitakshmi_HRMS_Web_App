@@ -61,6 +61,7 @@ const AttendanceHistory = lazy(() => import('../pages/HR/AttendanceHistory'));
 const FaceUpdateRequests = lazy(() => import('../pages/HR/FaceUpdateRequests'));
 const Compensation = lazy(() => import('../pages/HR/Compensation'));
 const OfferJoiningManager = lazy(() => import('../pages/HR/OfferJoiningManager'));
+const ShiftManagement = lazy(() => import('../pages/ShiftManagement'));
 
 // Letter modules
 const LetterDashboard = lazy(() => import('../pages/HR/Letters/LetterDashboard'));
@@ -472,6 +473,7 @@ export default function HrmsRoutes() {
 
         {/* --- ATTENDANCE MODULE --- */}
         <Route element={<ProtectedModule module="attendance"><Outlet /></ProtectedModule>}>
+          <Route path="shift-management" element={<ShiftManagement />} />
           <Route path="attendance" element={<AttendanceAdmin />} />
           <Route path="attendance/live-tracking" element={<AttendanceAdmin forceView="liveTracking" />} />
           <Route path="attendance/settings" element={<AttendanceAdmin forceView="settings" />} />

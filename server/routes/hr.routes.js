@@ -73,6 +73,7 @@ router.post('/hr/departments', auth.authenticate, checkPermission('people.depart
 router.put('/hr/departments/:id', auth.authenticate, checkPermission('people.departments', 'edit'), deptCtrl.update);
 router.delete('/hr/departments/:id', auth.authenticate, checkPermission('people.departments', 'delete'), deptCtrl.remove);
 router.get('/hr/departments/hierarchy/full', auth.authenticate, checkPermission('people.departments', 'view'), auth.requireHr, deptCtrl.getFullOrgHierarchy);
+router.post('/hr/departments/bulk-upload', auth.authenticate, checkPermission('people.departments', 'create'), deptCtrl.bulkUploadDepartments);
 
 /* -----------------------------------------
    LEAVES

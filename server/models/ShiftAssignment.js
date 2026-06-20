@@ -1,40 +1,54 @@
 const mongoose = require('mongoose');
 
 /**
- * ShiftAssignment Schema
+ * Enterprise ShiftAssignment Schema (Phase 2 Module 1)
  *
- * Records which shift is assigned to which employee, with date-range scoping.
- * Supports:
- *   - Standard assignment: employee assigned to a shift from effectiveFrom onwards
- *   - Temporary overrides: isOverride=true with overrideEndDate for short date ranges
+ * Records which shift is assigned to an entity, supporting Priority Hierarchies:
+ * Employee > Department > Branch > Company Default
+ * 
+ * Supports Future Assignment Queue and Effective Date logic.
  *
  * Multi-tenant: all documents scoped by `tenant` field.
  */
 
 const shiftAssignmentSchema = new mongoose.Schema(
     {
-        // ── EMPLOYEE & SHIFT REFERENCE ────────────────────────────────────
-        employee: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'Employee',
-            required: [true, 'Employee reference is required'],
+        tenant: {
+            type: String,
+            required: true,
+            index: true,
         },
-        shift: {
+        shiftMasterId: {
             type: mongoose.Schema.Types.ObjectId,
+            ref: 'ShiftMaster',
             required: [true, 'Shift reference is required'],
         },
 
-        // ── EFFECTIVE DATES ───────────────────────────────────────────────
+        // ── ASSIGNMENT TARGET HIERARCHY ───────────────────────────────────
+        entityType: {
+            type: String,
+            enum: ['Employee', 'Department', 'Designation', 'Branch', 'Company'],
+            required: true
+        },
+        entityId: {
+            type: mongoose.Schema.Types.ObjectId,
+            // Only required if not Company-wide default
+            required: function() {
+                return this.entityType !== 'Company';
+            }
+        },
+
+        // ── EFFECTIVE DATES (FUTURE QUEUE & EXPIRATION) ───────────────────
         effectiveFrom: {
             type: Date,
             required: [true, 'Effective From date is required'],
         },
         effectiveTo: {
             type: Date,
-            default: null,  // null = open-ended (no end date)
+            default: null,  // null = open-ended (runs indefinitely until superseded)
         },
 
-        // ── OVERRIDE SUPPORT ──────────────────────────────────────────────
+        // ── OVERRIDE SUPPORT (For legacy compatibility & short terms) ─────
         isOverride: {
             type: Boolean,
             default: false,  // true = temporary date-range override
@@ -49,26 +63,20 @@ const shiftAssignmentSchema = new mongoose.Schema(
             type: Boolean,
             default: true,
         },
-
+        
         // ── META ──────────────────────────────────────────────────────────
-        tenant: {
-            type: String,
-            required: true,
-            index: true,
-        },
         assignedBy: {
-            type: String,  // user email or ID who assigned
-            default: null,
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User'
         },
     },
     { timestamps: true }
 );
 
 // ── INDEXES ──────────────────────────────────────────────────────────────
-// Composite: find active assignment for an employee on a date
-shiftAssignmentSchema.index({ employee: 1, effectiveFrom: -1, tenant: 1 });
-shiftAssignmentSchema.index({ tenant: 1, isActive: 1 });
-shiftAssignmentSchema.index({ shift: 1, tenant: 1, isActive: 1 });
-shiftAssignmentSchema.index({ employee: 1, tenant: 1, isActive: 1, isOverride: 1 });
+// Fast lookup for finding active assignments for an entity
+shiftAssignmentSchema.index({ tenant: 1, entityType: 1, entityId: 1, effectiveFrom: -1 });
+// Find what shift an employee is assigned to today
+shiftAssignmentSchema.index({ tenant: 1, isActive: 1, effectiveFrom: 1, effectiveTo: 1 });
 
 module.exports = shiftAssignmentSchema;
