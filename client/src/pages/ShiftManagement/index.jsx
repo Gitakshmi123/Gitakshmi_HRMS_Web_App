@@ -1,11 +1,15 @@
 import React, { useState } from 'react';
 import { Tabs } from 'antd';
-import { LayoutDashboard, Clock, FileJson, Key, ShieldCheck, UserCheck, CalendarDays, Workflow, BarChart3, RotateCcw } from 'lucide-react';
+import { LayoutDashboard, Clock, FileJson, Key, ShieldCheck, UserCheck, CalendarDays, Workflow, BarChart3, History, LineChart } from 'lucide-react';
 import ShiftMasterTab from './ShiftMasterTab';
 import RuleBuilderTab from './RuleBuilderTab';
 import PolicyManagementTab from './PolicyManagementTab';
 import ShiftAssignmentTab from './ShiftAssignmentTab';
 import SimulationCenterTab from './SimulationCenterTab';
+import RosterManagementTab from './RosterManagementTab';
+import WorkflowApprovalsTab from './WorkflowApprovalsTab';
+import AuditReplayTab from './AuditReplayTab';
+import AnalyticsTab from './AnalyticsTab';
 
 export default function ShiftManagement() {
   const [activeTab, setActiveTab] = useState('1');
@@ -29,7 +33,7 @@ export default function ShiftManagement() {
     {
       key: '6',
       label: <span className="flex items-center gap-2"><CalendarDays size={16} /> Roster Management</span>,
-      children: <div className="p-4"><h2 className="text-lg font-semibold">Roster Management (Coming Phase 4)</h2></div>
+      children: <RosterManagementTab />
     },
     {
       key: '7',
@@ -39,7 +43,7 @@ export default function ShiftManagement() {
     {
       key: '8',
       label: <span className="flex items-center gap-2"><Workflow size={16} /> Workflow & Approvals</span>,
-      children: <div className="p-4"><h2 className="text-lg font-semibold">Workflow & Approvals (Coming Phase 4)</h2></div>
+      children: <WorkflowApprovalsTab />
     },
     {
       key: '9',
@@ -48,13 +52,13 @@ export default function ShiftManagement() {
     },
     {
       key: '10',
-      label: <span className="flex items-center gap-2"><RotateCcw size={16} /> Audit Replay</span>,
-      children: <div className="p-4"><h2 className="text-lg font-semibold">Audit Replay (Coming Phase 3)</h2></div>
+      label: <span className="flex items-center gap-2"><History size={16} /> Audit Replay</span>,
+      children: <AuditReplayTab />
     },
     {
       key: '11',
-      label: <span className="flex items-center gap-2"><BarChart3 size={16} /> Analytics</span>,
-      children: <div className="p-4"><h2 className="text-lg font-semibold">Analytics (Coming Phase 5)</h2></div>
+      label: <span className="flex items-center gap-2"><LineChart size={16} /> Analytics</span>,
+      children: <AnalyticsTab />
     }
   ];
 

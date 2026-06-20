@@ -11,6 +11,8 @@ const AuditLogSchema = require('../models/AuditLog');
 const FaceDataSchema = require('../models/FaceData');
 const FaceUpdateRequestSchema = require('../models/FaceUpdateRequest');
 const ShiftSchema = require('../models/Shift'); // Shift Management
+const ShiftMasterSchema = require('../models/ShiftMaster');
+const ShiftPolicySchema = require('../models/ShiftPolicy');
 // const OfficeSchema = require('../models/OfficeSchema.model');
 // const CompanyProfile = require('../models/CompanyProfile');
 const Employee = require('../models/Employee');
@@ -27,7 +29,7 @@ const {
     calculateAttendance,
     isWeeklyOffByShift,
 } = require('../services/shiftPolicyEngine');
-const { buildEffectiveAttendanceSettings, normalizePunchMode } = require('../utils/shiftRuntime');
+const { buildEffectiveAttendanceSettings, normalizePunchMode, translateShiftPolicyToLegacyConfig } = require('../utils/shiftRuntime');
 const {
     buildGradeAttendanceSettings,
     fetchEmployeeGrade,
@@ -50,6 +52,9 @@ const getModels = (req) => {
         FaceData: db.model('FaceData', FaceDataSchema),
         FaceUpdateRequest: db.model('FaceUpdateRequest', FaceUpdateRequestSchema),
         Shift: db.model('Shift', ShiftSchema), // Shift Management
+        ShiftMaster: db.model('ShiftMaster', ShiftMasterSchema),
+        ShiftPolicy: db.model('ShiftPolicy', ShiftPolicySchema),
+        RosterAssignment: db.model('RosterAssignment', require('../models/RosterAssignment')),
         // Office: db.model('Office', CompanyProfile)
     };
 };
@@ -474,7 +479,7 @@ const calculateOvertimeHours = (workingHours, shiftStartTime, shiftEndTime, over
 // 1. PUNCH IN / OUT (DYNAMIC) - With Policy Validation
 exports.punch = async (req, res) => {
     try {
-        const { Attendance, AttendanceSettings, AuditLog, Employee: EmployeeModel, Shift, Grade } = getModels(req);
+        const { Attendance, AttendanceSettings, AuditLog, Employee: EmployeeModel, Shift, ShiftMaster, ShiftPolicy, Grade } = getModels(req);
         const employeeId = req.user.id;
         let tid = req.tenantId || req.user?.tenantId;
         
@@ -522,11 +527,43 @@ exports.punch = async (req, res) => {
             });
         }
         let shiftConfig = null;
-        if (employeeDoc && employeeDoc.shiftId) {
-            shiftConfig = await Shift.findOne({ _id: employeeDoc.shiftId, isActive: true }).lean();
+        let shiftMaster = null;
+        let shiftPolicy = null;
+        
+        let activeShiftId = employeeDoc && employeeDoc.shiftId ? employeeDoc.shiftId : null;
+
+        // Enterprise Roster Integration
+        if (employeeDoc) {
+            try {
+                const { RosterAssignment } = getModels({ tenantDB: req.tenantDB });
+                const currentRoster = await RosterAssignment.findOne({
+                    employeeId: employeeId,
+                    status: 'Published',
+                    startDate: { $lte: today },
+                    endDate: { $gte: today }
+                }).lean();
+                if (currentRoster && currentRoster.shiftId) {
+                    activeShiftId = currentRoster.shiftId;
+                }
+            } catch (err) {
+                console.error('Roster lookup error:', err.message);
+            }
+        }
+
+        if (activeShiftId) {
+            shiftConfig = await Shift.findOne({ _id: activeShiftId, isActive: true }).lean();
+            if (!shiftConfig) {
+                shiftMaster = await ShiftMaster.findOne({ _id: activeShiftId, status: 'Active' }).lean();
+                if (shiftMaster) {
+                    shiftPolicy = await ShiftPolicy.findOne({ shiftMasterId: shiftMaster._id, isCurrent: true }).lean();
+                    // ✅ FIX: Convert ShiftMaster+ShiftPolicy to legacy shiftConfig format
+                    // so all downstream attendance rules engine uses the new shift policy
+                    shiftConfig = translateShiftPolicyToLegacyConfig(shiftMaster, shiftPolicy);
+                }
+            }
         }
         const baseSettings = settings?.toObject ? settings.toObject() : settings;
-        const employeeGrade = shiftConfig ? null : await fetchEmployeeGrade({
+        const employeeGrade = (shiftConfig || shiftMaster) ? null : await fetchEmployeeGrade({
             employee: employeeDoc,
             Grade,
             tenantId,
@@ -536,16 +573,46 @@ exports.punch = async (req, res) => {
         const effectiveSettings = shiftConfig
             ? buildEffectiveAttendanceSettings(baseSettings, shiftConfig)
             : gradePolicy.settings;
+            
         // Resolved shift params — shift takes priority, falls back to global settings
-        const resolvedShiftStart = effectiveSettings.shiftStartTime ?? '09:00';
-        const resolvedShiftEnd = effectiveSettings.shiftEndTime ?? '18:00';
-        const resolvedGraceMin = effectiveSettings.graceTimeMinutes ?? 15;
+        const resolvedShiftStart = shiftMaster ? shiftMaster.coreTiming?.startTime : (effectiveSettings.shiftStartTime ?? '09:00');
+        const resolvedShiftEnd = shiftMaster ? shiftMaster.coreTiming?.endTime : (effectiveSettings.shiftEndTime ?? '18:00');
+        const resolvedGraceMin = shiftMaster ? (shiftMaster.coreTiming?.graceMinutes ?? 15) : (effectiveSettings.graceTimeMinutes ?? 15);
         const resolvedLateMin = effectiveSettings.lateMarkThresholdMinutes ?? 30;
-        const resolvedIsNightShift = shiftConfig?.isNightShift ?? false;
+        const resolvedIsNightShift = shiftMaster ? shiftMaster.isNightShift : (shiftConfig?.isNightShift ?? false);
         const resolvedPunchMode = normalizePunchMode(shiftConfig?.punchMode?.mode ?? effectiveSettings.punchMode);
         const resolvedMaxPunchesPerDay = effectiveSettings.maxPunchesPerDay ?? 10;
         const resolvedMaxPunchAction = effectiveSettings.maxPunchAction ?? 'block';
         const weeklyOffDecision = shiftConfig ? isWeeklyOffByShift(today, shiftConfig) : null;
+
+        // ========== MAX ADVANCE PUNCH VALIDATION ==========
+        let attendance = await Attendance.findOne({
+            employee: employeeId,
+            tenant: tenantId,
+            date: today
+        });
+        
+        const lastLog = attendance ? attendance.logs[attendance.logs.length - 1] : null;
+        let nextPunchType = (lastLog && lastLog.type === 'IN') ? 'OUT' : 'IN';
+        if (req.body.action === 'IN' || req.body.action === 'RESUME') nextPunchType = 'IN';
+        if (req.body.action === 'OUT' || req.body.action === 'BREAK') nextPunchType = 'OUT';
+
+        if (nextPunchType === 'IN') {
+            const maxAdvance = shiftPolicy?.attendanceRules?.punchWindow?.maxAdvancePunchInMinutes;
+            if (maxAdvance !== undefined && maxAdvance !== null) {
+                const [sH, sM] = resolvedShiftStart.split(':').map(Number);
+                const shiftStartDateTime = new Date(today);
+                shiftStartDateTime.setHours(sH, sM, 0, 0);
+                
+                const earliestPunchTime = new Date(shiftStartDateTime.getTime() - maxAdvance * 60000);
+                if (now < earliestPunchTime) {
+                    return res.status(400).json({
+                        error: `You cannot punch in before ${earliestPunchTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}. Shift starts at ${resolvedShiftStart}.`,
+                        code: 'EARLY_PUNCH_NOT_ALLOWED'
+                    });
+                }
+            }
+        }
 
         // ========== EMPLOYEE HOLIDAY CHECK ==========
         // Block punching on employee-specific holidays
@@ -638,13 +705,6 @@ exports.punch = async (req, res) => {
             }
         }
 
-        let attendance = await Attendance.findOne({
-            employee: employeeId,
-            tenant: tenantId,
-            date: today
-        });
-
-        // ========== NIGHT SHIFT LOGOUT RESOLUTION ==========
         // If no record for today, check if this is an OUT punch for yesterday's night shift
         if (!attendance && now.getHours() < 12) {
             const yesterday = new Date(today);
@@ -716,12 +776,7 @@ exports.punch = async (req, res) => {
             return res.json({ message: "Punched In", data: attendance });
         }
 
-        // Attendance exists - determine next punch type
-        const lastLog = attendance.logs[attendance.logs.length - 1];
-        let nextPunchType = (lastLog && lastLog.type === 'IN') ? 'OUT' : 'IN';
-
-        if (req.body.action === 'IN' || req.body.action === 'RESUME') nextPunchType = 'IN';
-        if (req.body.action === 'OUT' || req.body.action === 'BREAK') nextPunchType = 'OUT';
+        // Attendance exists - nextPunchType is already determined above
 
         // Sequence Validation
         if (lastLog && nextPunchType === lastLog.type) {
@@ -1029,7 +1084,7 @@ exports.getAllAttendance = async (req, res) => {
 // 5. ATTENDANCE SETTINGS (HR)
 exports.getSettings = async (req, res) => {
     try {
-        const { AttendanceSettings, Employee, Shift } = getModels(req);
+        const { AttendanceSettings, Employee, ShiftMaster, ShiftPolicy } = getModels(req);
         let settings = await AttendanceSettings.findOne({ tenant: req.tenantId });
         if (!settings) {
             settings = new AttendanceSettings({ tenant: req.tenantId });
@@ -1045,15 +1100,21 @@ exports.getSettings = async (req, res) => {
         const employee = await Employee.findOne({ _id: targetId, tenant: req.tenantId }).select('shiftId').lean();
         
         if (employee?.shiftId) {
-            const shiftConfig = await Shift.findOne({ _id: employee.shiftId, isActive: true }).lean();
-            if (shiftConfig) {
+            const shiftMaster = await ShiftMaster.findOne({ _id: employee.shiftId, status: 'Active' }).lean();
+            if (shiftMaster) {
+                const shiftPolicy = await ShiftPolicy.findOne({ shiftMasterId: shiftMaster._id, isCurrent: true }).lean();
+                const shiftConfig = translateShiftPolicyToLegacyConfig(shiftMaster, shiftPolicy);
+                
                 responseSettings = buildEffectiveAttendanceSettings(responseSettings, shiftConfig);
                 responseSettings.effectiveShift = {
-                    _id: shiftConfig._id,
-                    name: shiftConfig.name,
-                    code: shiftConfig.code,
-                    shiftType: shiftConfig.shiftType,
-                    punchMode: shiftConfig.punchMode?.mode || 'single',
+                    _id: shiftMaster._id,
+                    name: shiftMaster.name,
+                    code: shiftMaster.code,
+                    shiftType: shiftMaster.type || 'General',
+                    punchMode: shiftMaster.punchMode?.requiresWebPunch ? 'single' : 'multiple',
+                    startTime: shiftMaster.coreTiming?.startTime,
+                    endTime: shiftMaster.coreTiming?.endTime,
+                    isNightShift: shiftMaster.coreTiming?.isNightShiftAcrossMidnight
                 };
             }
         }
@@ -1309,7 +1370,7 @@ exports.getCalendar = async (req, res) => {
 // 8. GET TODAY SUMMARY (For Employee Dashboard)
 exports.getTodaySummary = async (req, res) => {
     try {
-        const { Attendance, Employee, Shift } = getModels(req);
+        const { Attendance, Employee, ShiftMaster } = getModels(req);
         const tenantId = req.tenantId;
 
         const employee = await resolveEmployee(req, Employee);
@@ -1330,10 +1391,10 @@ exports.getTodaySummary = async (req, res) => {
         let shiftDuration = 8; // Default
 
         if (employee && employee.shiftId) {
-            const shift = await Shift.findById(employee.shiftId).lean();
-            if (shift) {
-                const [sH, sM] = shift.startTime.split(':').map(Number);
-                const [eH, eM] = shift.endTime.split(':').map(Number);
+            const shift = await ShiftMaster.findById(employee.shiftId).lean();
+            if (shift && shift.coreTiming) {
+                const [sH, sM] = shift.coreTiming.startTime.split(':').map(Number);
+                const [eH, eM] = shift.coreTiming.endTime.split(':').map(Number);
                 let duration = (eH * 60 + eM) - (sH * 60 + sM);
                 if (duration < 0) duration += 24 * 60; // Night shift
                 shiftDuration = duration / 60;

@@ -630,6 +630,11 @@ app.use('/api/attendance/shifts', auth, attendanceCheck, require('./routes/shift
 app.use('/api/shifts', auth, attendanceCheck, require('./routes/shift.routes'));
 app.use('/api/shift-master', shiftMasterRoutes);
 app.use('/api/shift-assignment', shiftAssignmentRoutes);
+app.use('/api/roster', auth, require('./routes/roster.routes'));
+app.use('/api/enterprise-roster', auth, require('./routes/enterpriseRoster.routes'));
+app.use('/api/swaps', auth, require('./routes/swap.routes'));
+app.use('/api/audit-logs', auth, require('./routes/auditLog.routes'));
+app.use('/api/shift-analytics', auth, require('./routes/shiftAnalytics.routes'));
 app.use('/api/attendance-policy', auth, attendanceCheck, attendancePolicyRoutes);
 app.use('/api/location', auth, attendanceCheck, locationRoutes);
 app.use('/api/holidays', auth, attendanceCheck, holidayRoutes);

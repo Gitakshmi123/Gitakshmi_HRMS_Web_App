@@ -2,8 +2,10 @@ const mongoose = require('mongoose');
 const notificationController = require('../controllers/notification.controller');
 const leaveManagementService = require('../services/leaveManagement.service');
 const workflowEngine = require('../services/workflowEngine.service');
-const ShiftSchema = require('../models/Shift');
+const ShiftMasterSchema = require('../models/ShiftMaster');
+const ShiftPolicySchema = require('../models/ShiftPolicy');
 const { isWeeklyOffByShift } = require('../services/shiftPolicyEngine');
+const { translateShiftPolicyToLegacyConfig } = require('../utils/shiftRuntime');
 const { resolveAuthenticatedEmployee } = require('../utils/employeeAuthResolver');
 
 const getModels = (req) => {
@@ -20,7 +22,8 @@ const getModels = (req) => {
             Holiday: req.tenantDB.model('Holiday'),
             Attendance: req.tenantDB.model('Attendance'),
             AttendanceSettings: req.tenantDB.model('AttendanceSettings'),
-            Shift: req.tenantDB.model('Shift', ShiftSchema),
+            ShiftMaster: req.tenantDB.model('ShiftMaster', ShiftMasterSchema),
+            ShiftPolicy: req.tenantDB.model('ShiftPolicy', ShiftPolicySchema),
         };
     } catch (err) {
         console.error('Error in getModels (leaveRequest):', err);
@@ -62,7 +65,7 @@ async function restorePolicyFromExistingBalance({ employee, LeaveBalance, LeaveP
 
 // Helper to calculate days (Sandwich Rule Active: Counts ALL days including weekends/holidays)
 const calculateNetDays = async (req, startDate, endDate, employeeId = null) => {
-    const { Employee, Holiday, AttendanceSettings, Shift } = getModels(req);
+    const { Employee, Holiday, AttendanceSettings, ShiftMaster, ShiftPolicy } = getModels(req);
     const start = new Date(startDate);
     const end = new Date(endDate || startDate);
     start.setHours(0, 0, 0, 0);
@@ -78,7 +81,11 @@ const calculateNetDays = async (req, startDate, endDate, employeeId = null) => {
             $or: [{ mainCompanyId: req.tenantId }, { tenant: req.tenantId }] 
         }).select('shiftId').lean();
         if (employee?.shiftId) {
-            shiftConfig = await Shift.findOne({ _id: employee.shiftId, tenant: req.tenantId, isDeleted: false, isActive: true }).lean();
+            const shiftMaster = await ShiftMaster.findOne({ _id: employee.shiftId, tenant: req.tenantId, status: 'Active' }).lean();
+            if (shiftMaster) {
+                const shiftPolicy = await ShiftPolicy.findOne({ shiftMasterId: shiftMaster._id, isCurrent: true }).lean();
+                shiftConfig = translateShiftPolicyToLegacyConfig(shiftMaster, shiftPolicy);
+            }
         }
     }
 
@@ -616,7 +623,7 @@ exports.approveLeave = async (req, res) => {
         if (!tenantIdStr) return res.status(400).json({ error: "tenant_missing" });
         req.tenantId = new mongoose.Types.ObjectId(tenantIdStr);
 
-        const { LeaveRequest, LeaveBalance, Employee, Holiday, AttendanceSettings, Shift, LeavePolicy } = getModels(req);
+        const { LeaveRequest, LeaveBalance, Employee, Holiday, AttendanceSettings, ShiftMaster, ShiftPolicy, LeavePolicy } = getModels(req);
         const { id } = req.params;
         const { remark, startDate, endDate, isHalfDay, halfDayTarget, halfDaySession } = req.body;
         const actorEmployee = await resolveAuthenticatedEmployee(req, { select: '_id role' });

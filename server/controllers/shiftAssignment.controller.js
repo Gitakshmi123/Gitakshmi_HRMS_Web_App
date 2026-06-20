@@ -1,12 +1,14 @@
 const ShiftAssignmentSchema = require('../models/ShiftAssignment');
 const AuditLogSchema = require('../models/AuditLog');
+const EmployeeSchema = require('../models/Employee');
 
 const getModels = (req) => {
     const db = req.tenantDB;
     if (!db) throw new Error("Tenant database connection not available");
     return {
         ShiftAssignment: db.model('ShiftAssignment', ShiftAssignmentSchema),
-        AuditLog: db.model('AuditLog', AuditLogSchema)
+        AuditLog: db.model('AuditLog', AuditLogSchema),
+        Employee: db.model('Employee', EmployeeSchema)
     };
 };
 
@@ -38,6 +40,30 @@ exports.createAssignment = async (req, res) => {
                 meta: { entityType, entityId, shiftMasterId }
             });
             await auditLog.save();
+        }
+
+        // --- BACKWARD COMPATIBILITY SYNC ---
+        // Automatically sync the newly assigned shift back to the Employee model's shiftId
+        try {
+            const { Employee } = getModels(req);
+            let query = { tenant: req.tenantId };
+            
+            if (entityType === 'Employee') {
+                query._id = entityId;
+            } else if (entityType === 'Department') {
+                query.departmentId = entityId;
+            } else if (entityType === 'Branch') {
+                query.branchId = entityId;
+            } else if (entityType === 'Designation') {
+                query.designationId = entityId;
+            }
+            // For 'Company', query just uses tenantId and affects everyone
+
+            await Employee.updateMany(query, { $set: { shiftId: shiftMasterId } });
+            console.log(`[ShiftAssignment] Successfully synced shiftId ${shiftMasterId} to Employee collection for entityType ${entityType}`);
+        } catch (syncError) {
+            console.error("[ShiftAssignment] Failed to sync shiftId to Employee model:", syncError);
+            // Non-blocking error, we still return success for the assignment
         }
 
         res.status(201).json({ success: true, message: "Shift Assigned Successfully", data: newAssignment });
