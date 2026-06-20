@@ -16,6 +16,7 @@ import { Button } from 'antd';
 import clsx from 'clsx';
 import EmployeeHierarchyChainPanel from '../../components/Organization/EmployeeHierarchyChainPanel';
 import WorkflowSettings from '../settings/WorkflowSettings';
+import DesignationExcelUploadModal from '../../components/HR/DesignationExcelUploadModal';
 
 // --- COMPONENTS ---
 
@@ -110,7 +111,7 @@ const TreeNode = ({ node, level, onSelect, activeId, expandedNodes, toggleExpand
   );
 };
 
-const OrganizationHeader = ({ node, breadcrumb, onAddNew, onEdit, onDelete, onPermissions, permissions }) => {
+const OrganizationHeader = ({ node, breadcrumb, onAddNew, onEdit, onDelete, onPermissions, permissions, onImportDesignations }) => {
   if (!node) return null;
   const type = node.hierarchyType;
 
@@ -173,13 +174,13 @@ const OrganizationHeader = ({ node, breadcrumb, onAddNew, onEdit, onDelete, onPe
           </div>
         </div>
 
-        <ActionToolbar onAddNew={onAddNew} onEdit={onEdit} onDelete={onDelete} onPermissions={onPermissions} node={node} permissions={permissions} />
+        <ActionToolbar onAddNew={onAddNew} onEdit={onEdit} onDelete={onDelete} onPermissions={onPermissions} node={node} permissions={permissions} onImportDesignations={onImportDesignations} />
       </div>
     </div>
   );
 };
 
-const ActionToolbar = ({ onAddNew, onEdit, onDelete, onPermissions, node, permissions = {} }) => {
+const ActionToolbar = ({ onAddNew, onEdit, onDelete, onPermissions, node, permissions = {}, onImportDesignations }) => {
   const isEmployee = node.hierarchyType === 'employee';
   const { canEdit, canCreate, canDelete } = permissions;
   
@@ -218,13 +219,24 @@ const ActionToolbar = ({ onAddNew, onEdit, onDelete, onPermissions, node, permis
       )}
 
       {!isEmployee && canCreate && (
-        <button 
-          onClick={onAddNew}
-          className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-blue-600 border border-blue-600 rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-200 active:scale-95 transition-all"
-        >
-          <Plus size={16} strokeWidth={3} />
-          <span>Add {getNextTypeLabel(node.hierarchyType)}</span>
-        </button>
+        <div className="flex gap-2">
+          {node.hierarchyType === 'department' && (
+            <button 
+              onClick={onImportDesignations}
+              className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 shadow-sm active:scale-95 transition-all"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <span>Import Designations</span>
+            </button>
+          )}
+          <button 
+            onClick={onAddNew}
+            className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-blue-600 border border-blue-600 rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-200 active:scale-95 transition-all"
+          >
+            <Plus size={16} strokeWidth={3} />
+            <span>Add {getNextTypeLabel(node.hierarchyType)}</span>
+          </button>
+        </div>
       )}
 
       {node._id !== 'root' && canDelete && (
@@ -377,6 +389,9 @@ export default function Organization() {
   const [treeData, setTreeData] = useState([]);
   const [expandedNodes, setExpandedNodes] = useState({});
   const [selectedNode, setSelectedNode] = useState(null);
+  
+  // Bulk Upload state
+  const [showDesignationUpload, setShowDesignationUpload] = useState(false);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -873,7 +888,7 @@ export default function Organization() {
 
       {/* LEFT PANEL: TREE SIDEBAR */}
       <aside className={clsx(
-        "fixed inset-y-0 left-0 z-40 w-[320px] bg-white border-r border-gray-100 flex flex-col transition-transform duration-300 transform lg:relative lg:translate-x-0",
+        "fixed inset-0 z-40 w-[320px] bg-white border-r border-gray-100 flex flex-col transition-transform duration-300 transform lg:relative lg:translate-x-0",
         !isSidebarOpen && "-translate-x-full lg:translate-x-0 lg:w-0"
       )}>
         <SearchHierarchy value={searchQuery} onChange={setSearchQuery} />
@@ -923,8 +938,20 @@ export default function Organization() {
                 onEdit={handleEdit}
                 onDelete={handleDelete}
                 onPermissions={handlePermissions}
+                onImportDesignations={() => setShowDesignationUpload(true)}
                 permissions={permissions}
               />
+              
+              <DesignationExcelUploadModal 
+                isOpen={showDesignationUpload} 
+                onClose={() => setShowDesignationUpload(false)}
+                onSuccess={(result) => {
+                  if (result.uploadedCount > 0) {
+                      // refresh tree logic
+                  }
+                }}
+              />
+
               <div className="flex items-center gap-6 border-b border-gray-200">
                 <button
                   onClick={() => setActiveTab('details')}

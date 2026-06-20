@@ -29,6 +29,13 @@ const ShiftPolicySchema = new mongoose.Schema({
             minutes: { type: Number },
             action: { type: String, enum: ['LATE_MARK', 'HALF_DAY', 'ABSENT', 'DEDUCT_LEAVE'] }
         }],
+        
+        // --- Dynamic Monthly Late Rule ---
+        // e.g. 3 late marks -> 1 half day (or '0.5' leave deduction)
+        monthlyLateToHalfDayConversion: { type: Number, default: 0 }, // 0 means disabled
+        monthlyLateAction: { type: String, enum: ['HALF_DAY', 'DEDUCT_LEAVE', 'LWP'], default: 'HALF_DAY' },
+        monthlyLateLeaveDeductType: { type: String, default: '' }, // If action is DEDUCT_LEAVE (e.g. 'CL')
+
         // Minimum hours thresholds
         absentThresholdMinutes: { type: Number, default: 240 } // IF Working Hours < 4 (240 min) THEN Absent
     },

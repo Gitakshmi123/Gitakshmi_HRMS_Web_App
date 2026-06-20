@@ -498,24 +498,6 @@ export default function HRSidebar({
     ensureSingleModule('Employee', `${pathPrefix}/employees`, 'employees', 'hr', 'people.employees');
     ensureSingleModule('Attendance', `${pathPrefix}/attendance`, 'attendance', 'attendance', 'attendance.dashboard');
     
-    // Force Policy visibility ONLY if they have permission
-    const policyExists = sections.some(s => s.moduleName === 'Policy');
-    const canSeePolicy = hasPermission('leave.requests', 'any') || hasPermission('leave.policies', 'any') || hasPermission('policy.view', 'any') || hasPermission('policy.manage', 'any');
-    if (!policyExists && canSeePolicy) {
-      sections.push({
-        id: 'manual-policy',
-        title: 'MANAGEMENT',
-        moduleName: 'Policy',
-        icon: 'leaveRequests',
-        items: [{ 
-          label: 'Policy', 
-          to: `${pathPrefix}/leave-approvals`, 
-          icon: ICONS.leaveRequests, 
-          children: [], 
-          matchPaths: [`${pathPrefix}/leave-approvals`, `${pathPrefix}/leave-policies`, `${pathPrefix}/organization-policies`] 
-        }]
-      });
-    }
 
     ensureSingleModule('Payroll', `${pathPrefix}/payroll/dashboard`, 'payrollDashboard', 'payroll', 'payroll.stats');
     ensureSingleModule(
@@ -558,16 +540,6 @@ export default function HRSidebar({
     ensureSingleModule('Reports', `${pathPrefix}/reports`, 'history', 'reports', 'reports.staffing');
     ensureSingleModule('Offboarding', `${pathPrefix}/exit-management`, 'exit', 'hr', 'offboarding.exit');
     ensureSingleModule('Organization', `${pathPrefix}/organization`, 'organization', 'hr', 'people.org');
-    ensureSingleModule(
-      'Shift Management',
-      `${pathPrefix}/shift-management`,
-      'runHistory',
-      'attendance',
-      'attendance.dashboard',
-      [
-        `${pathPrefix}/shift-management`
-      ]
-    );
 
     // Ensure EMP Service pages exist in HR sidebar (7 ESS pages)
     if (!hasEmpServiceModule && hasCompanyModule('employeePortal')) {

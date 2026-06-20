@@ -9,7 +9,9 @@ import {
     Layout,
     Database,
     MapPin,
-    Fingerprint
+    Fingerprint,
+    Zap,
+    Package
 } from 'lucide-react';
 import companiesService from '../../services/companiesService';
 import { API_ROOT } from '../../utils/api';
@@ -137,7 +139,7 @@ export default function ViewCompany() {
                                 
                                 <div className="space-y-6">
                                     {/* Data Fields Condensed */}
-                                    <div className="grid grid-cols-1 gap-2.5">
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-2.5">
                                         <div className="space-y-1">
                                             <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] px-1">Primary Email</p>
                                             <div className="h-11 bg-slate-50 rounded-xl flex items-center px-4 gap-3 border border-transparent group-hover:border-slate-100 transition-all">

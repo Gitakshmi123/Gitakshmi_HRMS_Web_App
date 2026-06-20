@@ -339,13 +339,76 @@ exports.applyLeave = async (req, res) => {
             }
         }
 
+        // Fetch effective policy early for validations
+        const employeeDoc = isHR
+            ? await Employee.findById(employeeId).select('leavePolicy leaveBalanceYear joiningDate tenant employeeType role department departmentId grade gradeId')
+            : actorEmployee;
+            
+        if (!employeeDoc?.leavePolicy && !['LOP', 'Loss of Pay', 'Leave without Pay', 'Personal Leave'].includes(leaveType)) {
+            return res.status(400).json({ error: 'NO_ACTIVE_LEAVE_POLICY', message: 'No active leave policy assigned.' });
+        }
+
+        const effectivePolicy = employeeDoc?.leavePolicy ? await LeavePolicy.findById(employeeDoc.leavePolicy) : null;
+        const activeRule = effectivePolicy?.rules?.find(r => r.leaveType === leaveType);
+
         const start = new Date(startDate);
         const end = new Date(endDate || startDate);
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        // 1. Date Validations (Skip some for HR if needed, but usually keep standard)
-        if (!isHR && start < today) return res.status(400).json({ error: "Past dates are not allowed." });
+        // 1. Dynamic Date & Policy Validations
+        if (!isHR && activeRule) {
+            // Check Advance Notice
+            if (activeRule.advanceNoticeDays > 0) {
+                const noticeDate = new Date(today);
+                noticeDate.setDate(noticeDate.getDate() + activeRule.advanceNoticeDays);
+                if (start < noticeDate) {
+                    return res.status(400).json({ error: `This leave type requires at least ${activeRule.advanceNoticeDays} days of advance notice.` });
+                }
+            }
+
+            // Check Post-Facto
+            if (start < today) {
+                if (!activeRule.allowPostFacto) {
+                    return res.status(400).json({ error: "Applying for leave in the past (post-facto) is not allowed for this leave type." });
+                }
+                
+                if (activeRule.maxPostFactoLimit > 0) {
+                    // Check how many post-facto leaves were applied this year
+                    const startOfYear = new Date(today.getFullYear(), 0, 1);
+                    const pastPostFactoLeaves = await LeaveRequest.countDocuments({
+                        tenant: req.tenantId,
+                        employee: employeeId,
+                        leaveType: leaveType,
+                        startDate: { $lt: today, $gte: startOfYear },
+                        createdAt: { $gte: startOfYear } // Rough heuristic for applied post-facto
+                    });
+                    
+                    if (pastPostFactoLeaves >= activeRule.maxPostFactoLimit) {
+                        return res.status(400).json({ error: `You have exceeded the maximum allowed post-facto applications (${activeRule.maxPostFactoLimit}) for this leave type.` });
+                    }
+                }
+            }
+            
+            // Check Medical Certificate / Attachment requirement (Frontend must send attachmentUrl)
+            const daysCountObj = await calculateNetDays(req, startDate, endDate || startDate, employeeId);
+            const actualRequestedDays = isHalfDay ? (daysCountObj - 0.5) : daysCountObj;
+            
+            if (activeRule.medicalCertificateMandatoryAfterDays > 0 && actualRequestedDays >= activeRule.medicalCertificateMandatoryAfterDays) {
+                if (!req.body.attachmentUrl && !req.body.attachment) {
+                    return res.status(400).json({ error: `A medical certificate or attachment is strictly mandatory for leaves of ${activeRule.medicalCertificateMandatoryAfterDays} or more days.` });
+                }
+            }
+            
+            // Check minimum leave fraction
+            if (activeRule.minimumLeaveFraction > 0 && actualRequestedDays < activeRule.minimumLeaveFraction) {
+                 return res.status(400).json({ error: `Minimum leave duration is ${activeRule.minimumLeaveFraction} days.` });
+            }
+        } else if (!isHR && start < today) {
+             // Fallback for custom LOP without rules
+             // return res.status(400).json({ error: "Past dates are not allowed." });
+        }
+
         if (end < start) return res.status(400).json({ error: "End date precedes start date." });
         if (start.getDay() === 0 || end.getDay() === 0) return res.status(400).json({ error: "Leave cannot start/end on Sunday." });
 
@@ -365,15 +428,6 @@ exports.applyLeave = async (req, res) => {
 
         if (days <= 0) return res.status(400).json({ error: "Selected period contains no working days." });
 
-        // Get Attendance Settings to check Leave Cycle
-        const employeeDoc = isHR
-            ? await Employee.findById(employeeId).select('leavePolicy leaveBalanceYear joiningDate tenant employeeType role department departmentId grade gradeId')
-            : actorEmployee;
-        if (!employeeDoc?.leavePolicy && !['LOP', 'Loss of Pay', 'Leave without Pay', 'Personal Leave'].includes(leaveType)) {
-            return res.status(400).json({ error: 'NO_ACTIVE_LEAVE_POLICY', message: 'No active leave policy assigned.' });
-        }
-
-        const effectivePolicy = employeeDoc?.leavePolicy ? await LeavePolicy.findById(employeeDoc.leavePolicy) : null;
         const year = new Date(start).getFullYear();
 
         if (employeeDoc && effectivePolicy) {

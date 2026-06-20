@@ -304,6 +304,7 @@ function applyAttendanceRules(params) {
         graceMin: graceMinOverride = null,
         lateMin: _lateMinOverride = null, // reserved for future use in policy expansion
         isNightShift: shiftIsNightShift = false,
+        shiftPolicy = null, // Dynamic ShiftPolicy from DB
     } = params;
 
     // Safety check for settings
@@ -411,7 +412,31 @@ function applyAttendanceRules(params) {
             // Always notify of late arrival regardless of penalty config
             meta.policyViolations.push(`Late Arrival Detected (${lateMinutes} min)`);
 
-            if (lateCfg.enabled) {
+            // Use Dynamic ShiftPolicy if available, otherwise fallback to settings
+            if (shiftPolicy?.attendanceRules) {
+                const currentLateCount = accumulatedLateCount + 1;
+                const convToHalfDay = shiftPolicy.attendanceRules.monthlyLateToHalfDayConversion;
+                const lateAction = shiftPolicy.attendanceRules.monthlyLateAction;
+                
+                if (convToHalfDay > 0 && currentLateCount % convToHalfDay === 0) {
+                    if (lateAction === 'HALF_DAY' && status !== 'absent') {
+                        status = 'half_day';
+                        lopDays = 0.5;
+                        meta.policyViolations.push(`Dynamic Policy: ${currentLateCount} late marks = Half Day`);
+                        meta.penaltyApplied = 'late_half_day';
+                    } else if (lateAction === 'DEDUCT_LEAVE') {
+                        // Keep present but signal to deduct leave
+                        meta.policyViolations.push(`Dynamic Policy: ${currentLateCount} late marks = Deduct ${shiftPolicy.attendanceRules.monthlyLateLeaveDeductType}`);
+                        meta.penaltyApplied = 'late_deduct_leave';
+                        meta.leaveDeductType = shiftPolicy.attendanceRules.monthlyLateLeaveDeductType;
+                    } else if (lateAction === 'LWP') {
+                        status = 'absent';
+                        lopDays = 1;
+                        meta.policyViolations.push(`Dynamic Policy: ${currentLateCount} late marks = 1 Day LOP`);
+                        meta.penaltyApplied = 'late_lop_full';
+                    }
+                }
+            } else if (lateCfg.enabled) {
                 const currentLateCount = accumulatedLateCount + 1;
 
                 // Check LOP Threshold First (Severity High)

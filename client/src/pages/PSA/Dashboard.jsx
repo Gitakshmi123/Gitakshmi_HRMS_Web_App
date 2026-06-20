@@ -13,6 +13,7 @@ import {
 } from 'recharts';
 import { normalizeEnabledModules } from "../../utils/moduleConfig";
 import { PSA_MODULES } from "../../constants/psaModuleCatalog";
+import { Dropdown } from "antd";
 
 // --- Sub-components ---
 
@@ -623,10 +624,21 @@ export default function Dashboard() {
                               </span>
                            </td>
                            {/* Actions */}
-                           <td className="px-4 py-4">
-                              <button className="text-slate-400 hover:text-slate-600">
-                                 <MoreHorizontal size={18} />
-                              </button>
+                           <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
+                              <Dropdown 
+                                menu={{ 
+                                  items: [
+                                    { key: 'view', label: 'View Details', onClick: () => navigate(`/psa/companies/view/${comp._id}`) },
+                                    { key: 'edit', label: 'Edit Company', onClick: () => navigate(`/psa/companies/edit/${comp._id}`) }
+                                  ] 
+                                }} 
+                                trigger={['click']}
+                                placement="bottomRight"
+                              >
+                                <button className="text-slate-400 hover:text-slate-600 p-1 rounded hover:bg-slate-100 transition-colors">
+                                   <MoreHorizontal size={18} />
+                                </button>
+                              </Dropdown>
                            </td>
                         </tr>
                       ))}

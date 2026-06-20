@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext';
 
 import HrmsRoutes from './HrmsRoutes';
 import { JobPortalCandidateRoutes, JobPortalJobsRoutes, JobPortalApplyRoutes } from './JobPortalRoutes';
+import SuperAdminRoutes from './SuperAdminRoutes';
 import PublicCareerPage from '../pages/PublicCareerPage';
 import EmployeeOnboardingPortal from '../pages/Onboarding/EmployeeOnboardingPortal';
 import OfferApprovalPortal from '../pages/Public/OfferApprovalPortal';
@@ -71,6 +72,9 @@ export default function RootRouter() {
       <Route path="/access-denied" element={<AccessDeniedPage />} />
       <Route path="/auth-error" element={<AuthErrorPage />} />
       <Route path="/unauthorized" element={<UnauthorizedPage />} />
+
+      {/* Super Admin System */}
+      <Route path="/super-admin/*" element={<SuperAdminRoutes />} />
 
       {/* HRMS System */}
       <Route path="/*" element={<HrmsRoutes />} />
