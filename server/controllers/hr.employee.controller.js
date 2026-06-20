@@ -2613,33 +2613,6 @@ exports.getHierarchy = async (req, res) => {
 //       { wch: 20 },
 //       { wch: 20 },
 //       { wch: 15 },
-//       { wch: 12 },
-//       { wch: 12 },
-//       { wch: 12 },
-//       { wch: 15 },
-//       { wch: 15 },
-//       { wch: 12 },
-//       { wch: 12 },
-//       { wch: 15 },
-//       { wch: 18 },
-//       { wch: 12 },
-//       { wch: 15 },
-//       { wch: 15 }
-//     ];
-
-//     // Add the worksheet to the workbook
-//     XLSX.utils.book_append_sheet(workbook, worksheet, 'Employee Template');
-
-//     // Generate buffer
-//     const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
-
-//     // Send file as response
-//     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-//     res.setHeader('Content-Disposition', `attachment; filename="Employee_Bulk_Upload_Template_${Date.now()}.xlsx"`);
-//     res.setHeader('Content-Length', buffer.length);
-//     res.end(buffer);
-//   } catch (err) {
-//     console.error('Error generating template:', err);
 //     res.status(500).json({
 //       success: false,
 //       error: 'template_generation_failed',
@@ -2666,149 +2639,443 @@ function autoFitColumns(worksheet, data) {
 exports.downloadBulkUploadTemp = async (req, res) => {
   try {
     const XLSX = require('@sheetjs/xlsx');
+    const wb   = XLSX.utils.book_new();
 
-    // Create workbook
-    const workbook = XLSX.utils.book_new();
-
-    // Headers (first row)
-    const headers = [
-      'Sr. No',
-      'Employee ID (Optional - Auto-generated if blank)',
-      'First Name (Required)',
-      'Middle Name',
-      'Last Name (Required)',
-      'Email (Required)',
-      'Contact No',
-      'Gender (M/F/Other)',
-      'Date of Birth (YYYY-MM-DD)',
-      'Marital Status',
-      'Blood Group',
-      'Nationality',
-      'Father Name',
-      'Mother Name',
-      'Emergency Contact Name',
-      'Emergency Contact Number',
-      'Temp Address Line 1',
-      'Temp Address Line 2',
-      'Temp City',
-      'Temp State',
-      'Temp Pin Code',
-      'Temp Country',
-      'Perm Address Line 1',
-      'Perm Address Line 2',
-      'Perm City',
-      'Perm State',
-      'Perm Pin Code',
-      'Perm Country',
-      'Joining Date (YYYY-MM-DD, Required)',
-      'Department',
-      'Role',
-      'Job Type',
-      'Password',
-      'Bank Name',
-      'Account Number',
-      'IFSC Code',
-      'Branch Name',
-      'Bank Location'
+    // ─────────────────────────────────────────────────────────────────────────
+    // SECTION DEFINITIONS — each section has a name + array of fields
+    // Row layout:
+    //   Row 0  →  Section heading (MERGED across all its columns)
+    //   Row 1  →  Field names
+    //   Row 2  →  Required / Optional / Conditional
+    //   Row 3+ →  Employee data (sample rows + blank entry rows)
+    // ─────────────────────────────────────────────────────────────────────────
+    const SECTIONS = [
+      {
+        name: 'Step 1 — Personal Information',
+        fields: [
+          { col: 'First Name',                    req: 'Required'    },
+          { col: 'Middle Name',                   req: 'Optional'    },
+          { col: 'Last Name',                     req: 'Required'    },
+          { col: 'Gender',                        req: 'Required'    },
+          { col: 'Date of Birth',                 req: 'Required'    },
+          { col: 'Contact Number',                req: 'Required'    },
+          { col: 'Blood Group',                   req: 'Required'    },
+          { col: 'Marital Status',                req: 'Required'    },
+          { col: 'Nationality',                   req: 'Required'    },
+          { col: 'Emergency Contact Name',        req: 'Required'    },
+          { col: 'Emergency Contact Number',      req: 'Required'    },
+          { col: 'Personal Email',                req: 'Optional'    },
+          { col: 'Place of Birth',                req: 'Optional'    },
+          { col: 'Height',                        req: 'Optional'    },
+          { col: 'Weight',                        req: 'Optional'    },
+          { col: 'Cast / Category',               req: 'Optional'    },
+          { col: 'Hobbies',                       req: 'Optional'    },
+          { col: 'Physical Disability / Sickness',req: 'Optional'    },
+          { col: 'Disability Details',            req: 'Conditional' },
+        ]
+      },
+      {
+        name: 'Step 2 — Job / Official Details',
+        fields: [
+          { col: 'Department',                    req: 'Required'    },
+          { col: 'Joining Date',                  req: 'Required'    },
+          { col: 'Grade',                         req: 'Required'    },
+          { col: 'Band',                          req: 'Required'    },
+          { col: 'Employee Type',                 req: 'Required'    },
+          { col: 'Employee ID',                   req: 'Conditional' },
+          { col: 'Designation',                   req: 'Optional'    },
+          { col: 'Manager Employee ID',           req: 'Optional'    },
+          { col: 'Work Mode',                     req: 'Optional'    },
+          { col: 'Employment Type',               req: 'Optional'    },
+          { col: 'Shift Name',                    req: 'Optional'    },
+          { col: 'Leave Policy',                  req: 'Optional'    },
+          { col: 'Sub Company',                   req: 'Optional'    },
+          { col: 'Branch',                        req: 'Optional'    },
+          { col: 'Division',                      req: 'Optional'    },
+        ]
+      },
+      {
+        name: 'Step 3 — Education Details',
+        fields: [
+          { col: 'Education Type',                req: 'Required'    },
+          { col: 'University / Institution',      req: 'Optional'    },
+          { col: '10th Marks / Percentage',       req: 'Optional'    },
+          { col: '12th Marks / Percentage',       req: 'Optional'    },
+          { col: 'Year of Passing',               req: 'Optional'    },
+          { col: 'CGPA or Percentage (Degree)',   req: 'Optional'    },
+          { col: 'Highest Qualification',         req: 'Optional'    },
+        ]
+      },
+      {
+        name: 'Step 4 — Identity Documents (KYC)',
+        fields: [
+          { col: 'Aadhar Number',                 req: 'Required'    },
+          { col: 'PAN Number',                    req: 'Required'    },
+        ]
+      },
+      {
+        name: 'Step 5 — Work Experience',
+        fields: [
+          { col: 'Last Company Name',             req: 'Optional'    },
+          { col: 'Experience From Date',          req: 'Conditional' },
+          { col: 'Experience To Date',            req: 'Conditional' },
+          { col: 'Last Drawn Salary',             req: 'Optional'    },
+          { col: 'Reporting Person Name',         req: 'Conditional' },
+          { col: 'Reporting Person Email',        req: 'Conditional' },
+          { col: 'Reporting Person Contact',      req: 'Optional'    },
+        ]
+      },
+      {
+        name: 'Step 6 — Bank Details',
+        fields: [
+          { col: 'Bank Name',                     req: 'Required'    },
+          { col: 'Account Number',                req: 'Required'    },
+          { col: 'IFSC Code',                     req: 'Required'    },
+          { col: 'Branch Name',                   req: 'Required'    },
+          { col: 'Bank Location / City',          req: 'Optional'    },
+        ]
+      },
+      {
+        name: 'Step 7 — Languages & Previous Interview',
+        fields: [
+          { col: 'Languages Known',               req: 'Optional'    },
+          { col: 'Language — Speak',              req: 'Optional'    },
+          { col: 'Language — Read',               req: 'Optional'    },
+          { col: 'Language — Write',              req: 'Optional'    },
+          { col: 'Previous Interview with Company', req: 'Optional'  },
+          { col: 'Previous Interview Date',       req: 'Conditional' },
+          { col: 'Previous Interview Dept / Location', req: 'Conditional' },
+          { col: 'Interviewed By',                req: 'Conditional' },
+          { col: 'Company Car Model',             req: 'Optional'    },
+          { col: 'Car Mileage (km)',               req: 'Optional'    },
+          { col: 'Car Petrol (Rs/Month)',          req: 'Optional'    },
+          { col: 'Leased Accommodation Details',  req: 'Optional'    },
+          { col: 'Monthly Rent (Rs)',              req: 'Optional'    },
+          { col: 'Security Deposit (Rs)',          req: 'Optional'    },
+          { col: 'Hard Furnishing Limits',        req: 'Optional'    },
+          { col: 'Incentive Particulars',         req: 'Optional'    },
+          { col: 'Telephone Details',             req: 'Optional'    },
+          { col: 'Tax at Source (Rs/Month)',       req: 'Optional'    },
+          { col: 'Any Related Employee in Company', req: 'Optional'  },
+          { col: 'Related Employee Name',         req: 'Conditional' },
+          { col: 'Related Employee Relationship', req: 'Conditional' },
+          { col: 'Related Employee Designation',  req: 'Optional'    },
+          { col: 'Reference 1 — Name',            req: 'Optional'    },
+          { col: 'Reference 1 — Company',         req: 'Optional'    },
+          { col: 'Reference 1 — Designation',     req: 'Optional'    },
+          { col: 'Reference 1 — Phone',           req: 'Optional'    },
+          { col: 'Reference 1 — Email',           req: 'Optional'    },
+          { col: 'Reference 1 — Period Known',    req: 'Optional'    },
+          { col: 'Reference 2 — Name',            req: 'Optional'    },
+          { col: 'Reference 2 — Company',         req: 'Optional'    },
+          { col: 'Reference 2 — Phone',           req: 'Optional'    },
+          { col: 'Reference 2 — Email',           req: 'Optional'    },
+        ]
+      },
+      {
+        name: 'Step 8 — Job History Annexure',
+        fields: [
+          { col: 'Company Name',                  req: 'Optional'    },
+          { col: 'Company Turnover (Rs)',          req: 'Optional'    },
+          { col: 'Total Employees',               req: 'Optional'    },
+          { col: 'Industry',                      req: 'Optional'    },
+          { col: 'Designation Held',              req: 'Optional'    },
+          { col: 'Duties & Responsibilities',     req: 'Optional'    },
+        ]
+      },
+      {
+        name: 'Step 9 — Address Details',
+        fields: [
+          { col: 'Temp Address Line 1',           req: 'Optional'    },
+          { col: 'Temp Address Line 2',           req: 'Optional'    },
+          { col: 'Temp City',                     req: 'Optional'    },
+          { col: 'Temp State',                    req: 'Optional'    },
+          { col: 'Temp Pin Code',                 req: 'Optional'    },
+          { col: 'Temp Country',                  req: 'Optional'    },
+          { col: 'Perm Address Line 1',           req: 'Optional'    },
+          { col: 'Perm Address Line 2',           req: 'Optional'    },
+          { col: 'Perm City',                     req: 'Optional'    },
+          { col: 'Perm State',                    req: 'Optional'    },
+          { col: 'Perm Pin Code',                 req: 'Optional'    },
+          { col: 'Perm Country',                  req: 'Optional'    },
+        ]
+      },
+      {
+        name: 'Step 10 — Login Credentials & Salary',
+        fields: [
+          { col: 'Official Email',                req: 'Required'    },
+          { col: 'Password',                      req: 'Required'    },
+          { col: 'Role / Access Level',           req: 'Optional'    },
+        ]
+      },
+      {
+        name: 'Family & Dependents',
+        fields: [
+          { col: 'Father First Name',             req: 'Optional'    },
+          { col: 'Father Last Name',              req: 'Optional'    },
+          { col: 'Father Blood Group',            req: 'Optional'    },
+          { col: 'Father Aadhar Number',          req: 'Optional'    },
+          { col: 'Mother First Name',             req: 'Optional'    },
+          { col: 'Mother Last Name',              req: 'Optional'    },
+          { col: 'Mother Blood Group',            req: 'Optional'    },
+          { col: 'Mother Aadhar Number',          req: 'Optional'    },
+          { col: 'Spouse Name',                   req: 'Optional'    },
+          { col: 'Spouse Relation',               req: 'Optional'    },
+          { col: 'Spouse Blood Group',            req: 'Optional'    },
+          { col: 'Spouse Date of Birth',          req: 'Optional'    },
+          { col: 'Spouse Contact No',             req: 'Optional'    },
+          { col: 'Marriage Date',                 req: 'Optional'    },
+          { col: 'Child 1 Name',                  req: 'Optional'    },
+          { col: 'Child 1 Gender',                req: 'Optional'    },
+          { col: 'Child 1 Date of Birth',         req: 'Optional'    },
+          { col: 'Child 2 Name',                  req: 'Optional'    },
+          { col: 'Child 2 Gender',                req: 'Optional'    },
+          { col: 'Child 2 Date of Birth',         req: 'Optional'    },
+          { col: 'Brother 1 Name',                req: 'Optional'    },
+          { col: 'Brother 1 Date of Birth',       req: 'Optional'    },
+          { col: 'Sister 1 Name',                 req: 'Optional'    },
+          { col: 'Sister 1 Date of Birth',        req: 'Optional'    },
+        ]
+      },
     ];
 
-    // Sample row (second row)
-    const sampleRow = [
-      '1',
-      '', // Leave blank for auto-generation
-      'Dhiren',
-      'Vinodbhai',
-      'Makwana',
-      'dhiren.makwana@gitakshmi.com',
-      '9876543210',
-      'Male',
-      '1990-01-15',
-      'Single',
-      'O+',
-      'Indian',
-      'Vinodbhai',
-      'Hemlattaben',
-      'Vinodbhai',
-      '9876543211',
-      '123 Main St',
-      'Apt 4B',
-      'Gandhinagar',
-      'Gujarat',
-      '382721',
-      'India',
-      '47 Kaivnna',
-      'Panchvati',
-      'Ahmedabad',
-      'Gujarat',
-      '380001',
-      'India',
-      '2025-12-31',
-      'Tech',
-      'employee',
-      'Full-Time',
-      '123456',
-      'State Bank',
-      '123456789',
-      'SBIN0001234',
-      'Main Branch',
-      'Ahmedabad'
-    ];
+    // ─── BUILD ROWS ───────────────────────────────────────────────────────────
+    const rowSections = [];   // Row 0 — merged section headings
+    const rowFields   = [];   // Row 1 — field names
+    const rowReq      = [];   // Row 2 — Required / Optional / Conditional
 
-    // Create worksheet (Array of Arrays)
-    const worksheet = XLSX.utils.aoa_to_sheet([
-      headers,
-      sampleRow
-    ]);
+    const merges = [];        // worksheet['!merges']
+    let colCursor = 0;
 
-    autoFitColumns(worksheet, [headers, sampleRow]);
-    // Style header row (bold + center)
-    const headerStyle = {
-      font: { bold: true },
-      alignment: { horizontal: 'center', vertical: 'center' }
-    };
+    for (const sec of SECTIONS) {
+      const startCol = colCursor;
+      // Row 0: section name in first cell, empty in rest
+      rowSections.push(sec.name);
+      for (let i = 1; i < sec.fields.length; i++) rowSections.push('');
 
-    // Apply style to each header cell
-    headers.forEach((_, index) => {
-      const cellAddress = XLSX.utils.encode_cell({ r: 0, c: index });
-      if (worksheet[cellAddress]) {
-        worksheet[cellAddress].s = headerStyle;
+      // Merge the section heading across all its columns
+      if (sec.fields.length > 1) {
+        merges.push({ s: { r: 0, c: startCol }, e: { r: 0, c: startCol + sec.fields.length - 1 } });
       }
-    });
 
-    // Column widths
-    worksheet['!cols'] = [
-      { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
-      { wch: 22 }, { wch: 14 }, { wch: 14 }, { wch: 18 },
-      { wch: 15 }, { wch: 12 }, { wch: 14 }, { wch: 16 },
-      { wch: 16 }, { wch: 22 }, { wch: 22 }, { wch: 22 },
-      { wch: 22 }, { wch: 16 }, { wch: 14 }, { wch: 14 },
-      { wch: 14 }, { wch: 22 }, { wch: 22 }, { wch: 16 },
-      { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 20 },
-      { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 16 },
-      { wch: 20 }, { wch: 16 }, { wch: 16 }, { wch: 16 }
+      for (const f of sec.fields) {
+        rowFields.push(f.col);
+        rowReq.push(f.req);
+        colCursor++;
+      }
+    }
+
+    // ─── SAMPLE DATA ──────────────────────────────────────────────────────────
+    // Values must align exactly with the column order above.
+    // Step 1 (19), Step 2 (15), Step 3 (7), Step 4 (2), Step 5 (7),
+    // Step 6 (5), Step 7 (32), Step 8 (6), Step 9 (12), Step 10 (3), Family (24)
+    const sample1 = [
+      // Step 1 — Personal Information (19)
+      'Dhiren','Vinodbhai','Makwana','Male','1990-01-15',
+      '9876543210','O+','Married','Indian',
+      'Vinodbhai Makwana','9876543211',
+      'dhiren.p@gmail.com','Ahmedabad','175','70','General','Reading','no','',
+      // Step 2 — Job / Official Details (15)
+      'Technology','2025-06-01','G1','B1','Full-Time',
+      '','Software Engineer','','Work From Office (WFO)','Permanent',
+      'Morning Shift','','','HQ Branch','',
+      // Step 3 — Education Details (7)
+      'Regular','Gujarat University','85%','78%','2012','8.5','B.E. Computer Engineering',
+      // Step 4 — Identity Documents KYC (2)
+      '123456789012','ABCDE1234F',
+      // Step 5 — Work Experience (7)
+      'Infosys Ltd','2018-01-01','2023-12-31','45000',
+      'Ramesh Shah','ramesh.shah@infosys.com','9988776655',
+      // Step 6 — Bank Details (5)
+      'State Bank of India','123456789012','SBIN0001234','SBI Main Branch','Ahmedabad',
+      // Step 7 — Languages & Previous Interview + Perquisites + References (32)
+      'English,Hindi,Gujarati','yes','yes','yes','no','','','',
+      '','','','','','','','','','',
+      'no','','','',
+      'Anil Shah','Wipro','Manager','9911223344','anil@wipro.com','5 years',
+      'Suresh Mehta','Tata','9922334455','suresh@tata.com',
+      // Step 8 — Job History Annexure (6)
+      'Infosys Ltd','5000Cr','10000','IT','Senior Developer','Development and coding',
+      // Step 9 — Address Details (12)
+      '123 Sector 14','Near Water Tank','Gandhinagar','Gujarat','382721','India',
+      '47 Panchvati','Opp School','Ahmedabad','Gujarat','380001','India',
+      // Step 10 — Login Credentials & Salary (3)
+      'dhiren.makwana@gitakshmi.com','Welcome@123','employee',
+      // Family & Dependents (24)
+      'Vinodbhai','Makwana','B+','987654321011',
+      'Hemlattaben','Makwana','A+','987654321012',
+      'Priya Makwana','Wife','B+','1992-05-20','9876541230','2015-11-12',
+      'Rohan','Male','2018-03-10',
+      'Raj','Male','2020-07-15',
+      'Mohan','1985-06-01',
+      'Gita','1988-09-15',
     ];
 
-    // Append sheet
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Employee Template');
+    const sample2 = [
+      // Step 1 (19)
+      'Priya','','Patel','Female','1995-07-22',
+      '8765432109','A+','Single','Indian',
+      'Ramesh Patel','9988776655',
+      'priya.p@gmail.com','Surat','162','55','OBC','Dancing','no','',
+      // Step 2 (15)
+      'Human Resources','2025-06-15','G2','B2','Part-Time',
+      '','HR Executive','','Hybrid','Contract',
+      '','','','','',
+      // Step 3 (7)
+      'Diploma','Surat Polytechnic','90%','','2016','','Diploma in HR Management',
+      // Step 4 (2)
+      '234567890123','FGHIJ5678K',
+      // Step 5 (7)
+      'TCS','2020-06-01','2024-05-31','35000',
+      'Sunita Gupta','sunita.gupta@tcs.com','',
+      // Step 6 (5)
+      'HDFC Bank','234567890123','HDFC0002345','HDFC Surat','Surat',
+      // Step 7 (32)
+      'English,Gujarati','yes','yes','no','yes','2023-01-15','HR Dept Surat','Mr. Joshi',
+      '','','','','','','','','','',
+      'no','','','',
+      'Meera Shah','Infosys','HR Lead','9833221100','meera@infosys.com','3 years',
+      'Kiran Patel','HCL','9744332211','kiran@hcl.com',
+      // Step 8 (6)
+      'TCS','8000Cr','25000','IT','HR Executive','Recruitment and onboarding',
+      // Step 9 (12)
+      '56 Park Avenue','','Surat','Gujarat','395001','India',
+      '56 Park Avenue','','Surat','Gujarat','395001','India',
+      // Step 10 (3)
+      'priya.patel@gitakshmi.com','Welcome@456','employee',
+      // Family (24)
+      'Ramesh','Patel','O+','876543210109',
+      'Anita','Patel','A+','876543210110',
+      '','','','','','',
+      '','','',
+      '','',
+      '','',
+      '','',
+    ];
 
-    // Generate buffer
-    const buffer = XLSX.write(workbook, {
-      bookType: 'xlsx',
-      type: 'buffer'
-    });
+    // Pad / truncate to exact column count
+    const totalCols = rowFields.length;
+    while (sample1.length < totalCols) sample1.push('');
+    while (sample2.length < totalCols) sample2.push('');
+    sample1.length = totalCols;
+    sample2.length = totalCols;
 
-    // Send response
-    res.setHeader(
-      'Content-Type',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    );
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="Employee_Bulk_Upload_Template_${Date.now()}.xlsx"`
-    );
+    const dataRows = [];
+
+    // User requested only one dummy row with all fields filled.
+    dataRows.push(sample1);
+
+
+    // ─── BUILD WORKSHEET ──────────────────────────────────────────────────────
+    const ws = XLSX.utils.aoa_to_sheet([rowSections, rowFields, rowReq, ...dataRows]);
+
+    // ─── STYLES ───────────────────────────────────────────────────────────────
+    // Section heading: dark navy, white bold
+    const S_SEC  = { font:{bold:true,color:{rgb:'FFFFFF'},sz:11}, fill:{fgColor:{rgb:'1E3A5F'}}, alignment:{horizontal:'center',vertical:'center',wrapText:false} };
+    // Field name row: slate
+    const S_FLD  = { font:{bold:true,color:{rgb:'1E293B'},sz:10}, fill:{fgColor:{rgb:'E2E8F0'}}, alignment:{horizontal:'center',vertical:'center',wrapText:true} };
+    // Req tag styles
+    const S_REQ  = { font:{bold:true,color:{rgb:'FFFFFF'},sz:9},  fill:{fgColor:{rgb:'B91C1C'}}, alignment:{horizontal:'center',vertical:'center'} };
+    const S_OPT  = { font:{bold:true,color:{rgb:'14532D'},sz:9},  fill:{fgColor:{rgb:'DCFCE7'}}, alignment:{horizontal:'center',vertical:'center'} };
+    const S_COND = { font:{bold:true,color:{rgb:'78350F'},sz:9},  fill:{fgColor:{rgb:'FEF3C7'}}, alignment:{horizontal:'center',vertical:'center'} };
+    // Sample data rows
+    const S_DATA = { font:{sz:10},                                fill:{fgColor:{rgb:'F8FAFC'}}, alignment:{horizontal:'left',  vertical:'center'} };
+
+    for (let c = 0; c < totalCols; c++) {
+      const a0 = XLSX.utils.encode_cell({r:0,c});
+      const a1 = XLSX.utils.encode_cell({r:1,c});
+      const a2 = XLSX.utils.encode_cell({r:2,c});
+      if (ws[a0]) ws[a0].s = S_SEC;
+      if (ws[a1]) ws[a1].s = S_FLD;
+      if (ws[a2]) {
+        const req = rowReq[c];
+        ws[a2].s = req === 'Required' ? S_REQ : req === 'Conditional' ? S_COND : S_OPT;
+      }
+      for (let r = 0; r < dataRows.length; r++) {
+        const cell = XLSX.utils.encode_cell({r: r + 3, c});
+        if (ws[cell]) ws[cell].s = S_DATA;
+      }
+    }
+
+    ws['!merges'] = merges;
+    ws['!rows']   = [
+      { hpt: 32 },  // Row 0 — section headings
+      { hpt: 36 },  // Row 1 — field names
+      { hpt: 20 },  // Row 2 — req/opt/cond
+      { hpt: 20 },  // Row 3 — sample 1
+      { hpt: 20 },  // Row 4 — sample 2
+    ];
+    ws['!cols']   = rowFields.map(f => ({ wch: Math.max(f.length + 3, 18) }));
+    // Freeze top 3 rows so headers always visible while scrolling data
+    ws['!freeze'] = { xSplit: 0, ySplit: 3, topLeftCell: 'A4', activePane: 'bottomLeft', state: 'frozen' };
+
+    // ─── LEGEND SHEET ─────────────────────────────────────────────────────────
+    const legendAoa = [
+      ['GT HRMS — Employee Master Bulk Import Template', ''],
+      ['', ''],
+      ['HOW TO USE THIS TEMPLATE', ''],
+      ['Row 1', 'Section heading (merged) — do NOT edit'],
+      ['Row 2', 'Field name — do NOT edit'],
+      ['Row 3', 'Required / Optional / Conditional — do NOT edit'],
+      ['Row 4+', 'Enter your employee data here (one employee per row)'],
+      ['', ''],
+      ['HEADER COLOUR GUIDE', ''],
+      ['🔴  Required  (Red)',      'MUST be filled. Upload will fail if missing.'],
+      ['🟡  Conditional  (Yellow)','Fill only under specific conditions (see below).'],
+      ['🟢  Optional  (Green)',    'Leave blank if not applicable. System uses defaults.'],
+      ['', ''],
+      ['FIELD FORMAT NOTES', ''],
+      ['Date fields (DOB, Joining Date, etc.)', 'YYYY-MM-DD  →  e.g. 1990-01-15'],
+      ['Gender',                               'Male / Female / Other'],
+      ['Blood Group',                          'A+ / A- / B+ / B- / O+ / O- / AB+ / AB-'],
+      ['Employee Type',                        'Full-Time / Part-Time / Intern / Internship / Contract / Consultant'],
+      ['Work Mode',                            'Work From Office (WFO) / Work From Home (WFH) / Hybrid / Field / Onsite'],
+      ['Employment Type',                      'Permanent / Contract'],
+      ['Education Type',                       'Regular / Diploma'],
+      ['Role / Access Level',                  'employee / hr / admin'],
+      ['Physical Disability / Sickness',       'yes  or  no'],
+      ['Previous Interview with Company',      'yes  or  no'],
+      ['Aadhar Number',                        'Exactly 12 digits  →  e.g. 123456789012'],
+      ['PAN Number',                           'Exactly 10 characters  →  e.g. ABCDE1234F'],
+      ['IFSC Code',                            'Format: AAAA0XXXXXX  →  e.g. SBIN0001234'],
+      ['Account Number',                       '9 to 18 digits'],
+      ['Languages Known',                      'Comma-separated  →  e.g. English,Hindi,Gujarati'],
+      ['Language Speak / Read / Write',        'yes  or  no'],
+      ['', ''],
+      ['CONDITIONAL FIELD RULES', ''],
+      ['Employee ID',                          'Leave blank — auto-generated. Fill only if your ID config is MANUAL.'],
+      ['Disability Details',                   'Fill only when Physical Disability / Sickness = yes'],
+      ['Experience From Date & To Date',       'Fill when Last Company Name is entered (From must be before To)'],
+      ['Reporting Person Name & Email',        'Fill when Last Company Name is entered'],
+      ['Previous Interview Date / Dept / By', 'Fill when Previous Interview with Company = yes'],
+      ['Related Employee Name & Relationship', 'Fill when Any Related Employee in Company = yes'],
+      ['', ''],
+      ['FIELDS THAT CANNOT BE IMPORTED VIA EXCEL (upload after employee creation)', ''],
+      ['Profile Photo',                        'Upload via employee profile page → Step 1'],
+      ['10th / 12th / Diploma / Degree Marksheets','Upload via employee profile page → Step 3'],
+      ['Aadhar Front & Back image',            'Upload via employee profile page → Step 4'],
+      ['PAN Card image',                       'Upload via employee profile page → Step 4'],
+      ['Bank Proof (Cancelled Cheque)',        'Upload via employee profile page → Step 6'],
+      ['Salary Template & Effective Date',     'Assign via employee profile page → Step 10'],
+    ];
+
+    const legendWs = XLSX.utils.aoa_to_sheet(legendAoa);
+    legendWs['!cols'] = [{ wch: 48 }, { wch: 65 }];
+    const LS = {font:{bold:true,color:{rgb:'FFFFFF'},sz:13},fill:{fgColor:{rgb:'1E3A5F'}},alignment:{wrapText:true}};
+    const LH = {font:{bold:true,sz:10},fill:{fgColor:{rgb:'DBEAFE'}}};
+    if (legendWs['A1']) legendWs['A1'].s = LS;
+    ['A3','A9','A14','A31','A38'].forEach(addr => { if (legendWs[addr]) legendWs[addr].s = LH; });
+
+    XLSX.utils.book_append_sheet(wb, ws,       'Employee Data');
+    XLSX.utils.book_append_sheet(wb, legendWs, 'Legend & Notes');
+
+    const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="HRMS_Employee_Master_Template_${Date.now()}.xlsx"`);
     res.setHeader('Content-Length', buffer.length);
-
     res.end(buffer);
+
   } catch (err) {
     console.error('Error generating template:', err);
     res.status(500).json({
@@ -2818,6 +3085,8 @@ exports.downloadBulkUploadTemp = async (req, res) => {
     });
   }
 };
+
+
 
 /* -----------------------------------------
    BULK UPLOAD EMPLOYEES
@@ -3151,9 +3420,9 @@ exports.bulkUploadEmployees = async (req, res) => {
           { field: 'middleName', patterns: ['middlename', 'middle'] },
           { field: 'lastName', patterns: ['lastname', 'last'] },
           { field: 'fullName', patterns: ['name', 'employeename', 'fullname', 'empname'] },
-          { field: 'email', patterns: ['email', 'emailaddress', 'companymailid', 'companyemail', 'workemail', 'mailid'] },
+          { field: 'email', patterns: ['officialemail', 'email', 'emailaddress', 'companymailid', 'companyemail', 'workemail', 'mailid'] },
           { field: 'personalEmail', patterns: ['personalemailid', 'personalemail', 'personalmailid'] },
-          { field: 'contactNo', patterns: ['contactno', 'phone', 'mobile', 'mobileno', 'phoneno'] },
+          { field: 'contactNo', patterns: ['contactnumber', 'contactno', 'phone', 'mobile', 'mobileno', 'phoneno'] },
           { field: 'gender', patterns: ['gender'] },
           { field: 'dob', patterns: ['dob', 'dateofbirth'] },
           { field: 'joiningDate', patterns: ['joiningdate', 'doj', 'dateofjoining', 'dateofjoin', 'dojdate', 'joining'] },
@@ -3163,23 +3432,23 @@ exports.bulkUploadEmployees = async (req, res) => {
           { field: 'maritalStatus', patterns: ['maritalstatus', 'marritalstatus'] },
           { field: 'nationality', patterns: ['nationality'] },
           { field: 'bloodGroup', patterns: ['bloodgroup'] },
-          { field: 'fatherName', patterns: ['fathername'] },
-          { field: 'motherName', patterns: ['mothername'] },
+          { field: 'fatherName', patterns: ['fathername', 'fatherfirstname'] },
+          { field: 'motherName', patterns: ['mothername', 'motherfirstname'] },
           { field: 'emergencyContactName', patterns: ['emergencycontactname', 'emergencycontactpersonname', 'emergencycontactperson', 'emergencycontact'] },
           { field: 'emergencyContactNumber', patterns: ['emergencycontactnumber', 'contactnumber', 'emergencymobile', 'emergencycontactno', 'emergencyphone'] },
           { field: 'bankName', patterns: ['bankname', 'bank'] },
           { field: 'accountNumber', patterns: ['accountnumber', 'acnumber', 'accno', 'accountno'] },
-          { field: 'ifscCode', patterns: ['ifscode', 'ifsc', 'ifsiccode', 'ifsciccode'] },
+          { field: 'ifscCode', patterns: ['ifsccode', 'ifscode', 'ifsc', 'ifsiccode', 'ifsciccode'] },
           { field: 'branchName', patterns: ['branchname', 'branch'] },
-          { field: 'bankLocation', patterns: ['banklocation', 'bankaddress'] },
+          { field: 'bankLocation', patterns: ['banklocation', 'banklocationcity', 'bankaddress'] },
           { field: 'policyName', patterns: ['leavepolicy'] },
           { field: 'password', patterns: ['password'] },
           { field: 'panNumber', patterns: ['pannumber', 'panno', 'pan'] },
-          { field: 'aadharNumber', patterns: ['aadhar', 'aadharno', 'aadharcard', 'aadharcardnumber', 'aadharnumber', 'aadhaar', 'aadhaarno', 'aadhaarnumber'] },
-          { field: 'manager', patterns: ['manager', 'reportingmanager', 'reportingto', 'managerid', 'employeemanager'] },
+          { field: 'aadharNumber', patterns: ['aadharnumber', 'aadhar', 'aadharno', 'aadharcard', 'aadharcardnumber', 'aadhaar', 'aadhaarno', 'aadhaarnumber'] },
+          { field: 'manager', patterns: ['manager', 'manageremployeeid', 'reportingmanager', 'reportingto', 'managerid', 'employeemanager'] },
           { field: 'qualification', patterns: ['qualification', 'highestqual', 'highestqualification', 'educationtype', 'degree'] },
           { field: 'yearOfPassing', patterns: ['yearofpassing', 'passingyear', 'yop'] },
-          { field: 'cgpaOrPercentage', patterns: ['cgpapercentage', 'cgpa', 'percentage', 'marks'] }
+          { field: 'cgpaOrPercentage', patterns: ['cgpapercentage', 'cgpaorpercentagedegree', 'cgpa', 'percentage', 'marks'] }
         ];
 
         const rowValues = {};
@@ -3512,18 +3781,21 @@ exports.bulkUploadEmployees = async (req, res) => {
           results.warnings.push(`Row ${rowIdx}: Invalid Employee ID "${oldId}" replaced with ${empId}`);
         }
 
-        // Check for duplicate Employee ID (within current batch or existing)
-        if (processedEmpIds.has(empIdLower) && !autoGeneratedMap.has(i)) {
-          const oldId = empId;
-          empId = generateUniqueEmployeeId();
-          empIdLower = empId.toLowerCase();
-          results.warnings.push(`Row ${rowIdx}: Duplicate Employee ID "${oldId}" replaced with ${empId}`);
-        }
+        // Check for existing Employee ID (Upsert logic)
+        let isUpdate = false;
+        let existingEmployeeDoc = null;
         if (existingEmpIds.has(empIdLower)) {
+          isUpdate = true;
+          existingEmployeeDoc = await Employee.findOne({ tenant: tenantId, employeeId: { $regex: new RegExp(`^${empId}$`, 'i') } });
+          results.warnings.push(`Row ${rowIdx}: Updating existing employee "${empId}"`);
+        }
+
+        // Check for duplicate Employee ID within current batch
+        if (!isUpdate && processedEmpIds.has(empIdLower) && !autoGeneratedMap.has(i)) {
           const oldId = empId;
           empId = generateUniqueEmployeeId();
           empIdLower = empId.toLowerCase();
-          results.warnings.push(`Row ${rowIdx}: Existing Employee ID "${oldId}" replaced with ${empId}`);
+          results.warnings.push(`Row ${rowIdx}: Duplicate Employee ID "${oldId}" in file replaced with ${empId}`);
         }
 
         // Email validation (auto-correct invalid email)
@@ -3542,9 +3814,13 @@ exports.bulkUploadEmployees = async (req, res) => {
           results.warnings.push(`Row ${rowIdx}: Duplicate email in file - changed to ${email}`);
         }
         if (existingEmails.has(emailLower)) {
-          email = `${empId.toLowerCase()}_${Date.now()}@placeholder.local`;
-          emailLower = email.toLowerCase();
-          results.warnings.push(`Row ${rowIdx}: Duplicate email found - changed to ${email}`);
+          if (isUpdate && existingEmployeeDoc && existingEmployeeDoc.email && existingEmployeeDoc.email.toLowerCase() === emailLower) {
+            // Keep the email, it belongs to the employee being updated
+          } else {
+            email = `${empId.toLowerCase()}_${Date.now()}@placeholder.local`;
+            emailLower = email.toLowerCase();
+            results.warnings.push(`Row ${rowIdx}: Duplicate email found - changed to ${email}`);
+          }
         }
 
         // First/Last Name length soft normalization
@@ -3674,102 +3950,163 @@ exports.bulkUploadEmployees = async (req, res) => {
           policyId = defaultPolicy;
         }
 
-        // Hash password if provided, or generate default password
+        // Hash password if provided, or generate default password for new users
         let hashedPassword = undefined;
         if (password) {
-          // User provided a password - hash it
           try {
             const bcrypt = require('bcryptjs');
             const salt = await bcrypt.genSalt(10);
             hashedPassword = await bcrypt.hash(password, salt);
           } catch (hashErr) {
-            results.warnings.push(`Row ${rowIdx}: Failed to hash password - will use default password`);
-            // Fall through to generate default password
+            results.warnings.push(`Row ${rowIdx}: Failed to hash password`);
           }
         }
 
-        // If no password provided or hashing failed, generate default password
-        if (!hashedPassword) {
+        // If no password provided and it's a new user, generate default password
+        if (!isUpdate && !hashedPassword) {
           try {
             const bcrypt = require('bcryptjs');
             const salt = await bcrypt.genSalt(10);
-            // Use employeeId as default password (e.g., EMP0001)
             const defaultPassword = empId;
             hashedPassword = await bcrypt.hash(defaultPassword, salt);
             results.warnings.push(`Row ${rowIdx}: No password provided - default password set to Employee ID (${empId})`);
           } catch (hashErr) {
-            results.warnings.push(`Row ${rowIdx}: Failed to generate default password - employee may not be able to log in`);
+            results.warnings.push(`Row ${rowIdx}: Failed to generate default password`);
           }
         }
 
         assertTenantUserLimit(tenantUserLimit, 1, results.uploadedCount);
 
-        // ====== CREATE EMPLOYEE DOCUMENT ======
-        const newEmployee = new Employee({
-          mainCompanyId: tenantId,
-          tenant: tenantId,
-          employeeId: empId,
-          employeeCode: empId,
-          firstName,
-          middleName: middleName || undefined,
-          lastName,
-          email,
-          personalEmail: personalEmail || undefined,
-          password: hashedPassword,
-          contactNo: contactNo || undefined,
-          gender: validGender || undefined,
-          dob: dobDate,
-          joiningDate: joiningDateObj,
-          departmentId,
-          department: departmentName || undefined,
-          role: role || undefined,
-          designation: role || undefined,
-          employeeType: validJobType,
-          maritalStatus: maritalStatus || undefined,
-          nationality: nationality || undefined,
-          bloodGroup: bloodGroup || undefined,
-          fatherName: fatherName || undefined,
-          motherName: motherName || undefined,
-          marriageDate: marriageDate || undefined,
-          highestQualification: highestQualification || undefined,
-          education: {
-            type: highestQualification || undefined,
-            class10Marks: cgpaOrPercentage || undefined,
-            class12Marks: cgpaOrPercentage || undefined,
-            yearOfPassing: yearOfPassing || undefined,
-            cgpaOrPercentage: cgpaOrPercentage || undefined
-          },
-          manager: managerId || undefined,
-          reportingManagerId: managerId || undefined,
-          spouseDetails: spouseDetails || undefined,
-          children: children.length > 0 ? children : undefined,
-          brothers: brothers.length > 0 ? brothers : undefined,
-          sisters: sisters.length > 0 ? sisters : undefined,
-          experience: experience.length > 0 ? experience : undefined,
-          emergencyContactName: emergencyContactName || undefined,
-          emergencyContactNumber: emergencyContactNumber || undefined,
-          leavePolicy: policyId,
-          bankDetails: (bankName || accountNumber || ifscCode) ? {
-            bankName: bankName || undefined,
-            accountNumber: accountNumber || undefined,
-            ifsc: ifscCode || undefined,
-            branchName: branchName || undefined,
-            location: bankLocation || undefined
-          } : undefined,
-          tempAddress: Object.keys(tempAddr).length > 0 ? tempAddr : undefined,
-          permAddress: Object.keys(permAddr).length > 0 ? permAddr : undefined,
-          documents: (panNumber || aadharNumber) ? {
-            panNumber: panNumber || undefined,
-            aadharNumber: aadharNumber || undefined
-          } : undefined,
-          status: 'active',
-          lastStep: 6 // Mark as completed
-        });
+        let finalEmployee;
+
+        if (isUpdate && existingEmployeeDoc) {
+          // UPDATE EXISTING EMPLOYEE
+          existingEmployeeDoc.firstName = firstName;
+          existingEmployeeDoc.middleName = middleName || undefined;
+          existingEmployeeDoc.lastName = lastName;
+          existingEmployeeDoc.email = email;
+          if (personalEmail) existingEmployeeDoc.personalEmail = personalEmail;
+          if (hashedPassword) existingEmployeeDoc.password = hashedPassword;
+          
+          existingEmployeeDoc.contactNo = contactNo || existingEmployeeDoc.contactNo;
+          existingEmployeeDoc.gender = validGender || existingEmployeeDoc.gender;
+          if (dobDate) existingEmployeeDoc.dob = dobDate;
+          if (joiningDateObj) existingEmployeeDoc.joiningDate = joiningDateObj;
+          if (departmentId) existingEmployeeDoc.departmentId = departmentId;
+          existingEmployeeDoc.department = departmentName || existingEmployeeDoc.department;
+          existingEmployeeDoc.role = role || existingEmployeeDoc.role;
+          existingEmployeeDoc.designation = role || existingEmployeeDoc.designation;
+          existingEmployeeDoc.employeeType = validJobType || existingEmployeeDoc.employeeType;
+          existingEmployeeDoc.maritalStatus = maritalStatus || existingEmployeeDoc.maritalStatus;
+          existingEmployeeDoc.nationality = nationality || existingEmployeeDoc.nationality;
+          existingEmployeeDoc.bloodGroup = bloodGroup || existingEmployeeDoc.bloodGroup;
+          existingEmployeeDoc.fatherName = fatherName || existingEmployeeDoc.fatherName;
+          existingEmployeeDoc.motherName = motherName || existingEmployeeDoc.motherName;
+          if (marriageDate) existingEmployeeDoc.marriageDate = marriageDate;
+          existingEmployeeDoc.highestQualification = highestQualification || existingEmployeeDoc.highestQualification;
+          
+          if (!existingEmployeeDoc.education) existingEmployeeDoc.education = {};
+          if (highestQualification) existingEmployeeDoc.education.type = highestQualification;
+          if (cgpaOrPercentage) existingEmployeeDoc.education.class10Marks = cgpaOrPercentage;
+          if (cgpaOrPercentage) existingEmployeeDoc.education.class12Marks = cgpaOrPercentage;
+          if (yearOfPassing) existingEmployeeDoc.education.yearOfPassing = yearOfPassing;
+          if (cgpaOrPercentage) existingEmployeeDoc.education.cgpaOrPercentage = cgpaOrPercentage;
+
+          existingEmployeeDoc.manager = managerId || existingEmployeeDoc.manager;
+          existingEmployeeDoc.reportingManagerId = managerId || existingEmployeeDoc.reportingManagerId;
+          if (spouseDetails) existingEmployeeDoc.spouseDetails = spouseDetails;
+          if (children.length > 0) existingEmployeeDoc.children = children;
+          if (brothers.length > 0) existingEmployeeDoc.brothers = brothers;
+          if (sisters.length > 0) existingEmployeeDoc.sisters = sisters;
+          if (experience.length > 0) existingEmployeeDoc.experience = experience;
+          existingEmployeeDoc.emergencyContactName = emergencyContactName || existingEmployeeDoc.emergencyContactName;
+          existingEmployeeDoc.emergencyContactNumber = emergencyContactNumber || existingEmployeeDoc.emergencyContactNumber;
+          if (policyId) existingEmployeeDoc.leavePolicy = policyId;
+          
+          if (bankName || accountNumber || ifscCode) {
+            existingEmployeeDoc.bankDetails = {
+              bankName: bankName || existingEmployeeDoc.bankDetails?.bankName,
+              accountNumber: accountNumber || existingEmployeeDoc.bankDetails?.accountNumber,
+              ifsc: ifscCode || existingEmployeeDoc.bankDetails?.ifsc,
+              branchName: branchName || existingEmployeeDoc.bankDetails?.branchName,
+              location: bankLocation || existingEmployeeDoc.bankDetails?.location
+            };
+          }
+          if (Object.keys(tempAddr).length > 0) existingEmployeeDoc.tempAddress = tempAddr;
+          if (Object.keys(permAddr).length > 0) existingEmployeeDoc.permAddress = permAddr;
+          if (panNumber || aadharNumber) {
+            existingEmployeeDoc.documents = existingEmployeeDoc.documents || {};
+            if (panNumber) existingEmployeeDoc.documents.panNumber = panNumber;
+            if (aadharNumber) existingEmployeeDoc.documents.aadharNumber = aadharNumber;
+          }
+          finalEmployee = existingEmployeeDoc;
+        } else {
+          // CREATE NEW EMPLOYEE
+          finalEmployee = new Employee({
+            mainCompanyId: tenantId,
+            tenant: tenantId,
+            employeeId: empId,
+            employeeCode: empId,
+            firstName,
+            middleName: middleName || undefined,
+            lastName,
+            email,
+            personalEmail: personalEmail || undefined,
+            password: hashedPassword,
+            contactNo: contactNo || undefined,
+            gender: validGender || undefined,
+            dob: dobDate,
+            joiningDate: joiningDateObj,
+            departmentId,
+            department: departmentName || undefined,
+            role: role || undefined,
+            designation: role || undefined,
+            employeeType: validJobType,
+            maritalStatus: maritalStatus || undefined,
+            nationality: nationality || undefined,
+            bloodGroup: bloodGroup || undefined,
+            fatherName: fatherName || undefined,
+            motherName: motherName || undefined,
+            marriageDate: marriageDate || undefined,
+            highestQualification: highestQualification || undefined,
+            education: {
+              type: highestQualification || undefined,
+              class10Marks: cgpaOrPercentage || undefined,
+              class12Marks: cgpaOrPercentage || undefined,
+              yearOfPassing: yearOfPassing || undefined,
+              cgpaOrPercentage: cgpaOrPercentage || undefined
+            },
+            manager: managerId || undefined,
+            reportingManagerId: managerId || undefined,
+            spouseDetails: spouseDetails || undefined,
+            children: children.length > 0 ? children : undefined,
+            brothers: brothers.length > 0 ? brothers : undefined,
+            sisters: sisters.length > 0 ? sisters : undefined,
+            experience: experience.length > 0 ? experience : undefined,
+            emergencyContactName: emergencyContactName || undefined,
+            emergencyContactNumber: emergencyContactNumber || undefined,
+            leavePolicy: policyId,
+            bankDetails: (bankName || accountNumber || ifscCode) ? {
+              bankName: bankName || undefined,
+              accountNumber: accountNumber || undefined,
+              ifsc: ifscCode || undefined,
+              branchName: branchName || undefined,
+              location: bankLocation || undefined
+            } : undefined,
+            tempAddress: Object.keys(tempAddr).length > 0 ? tempAddr : undefined,
+            permAddress: Object.keys(permAddr).length > 0 ? permAddr : undefined,
+            documents: (panNumber || aadharNumber) ? {
+              panNumber: panNumber || undefined,
+              aadharNumber: aadharNumber || undefined
+            } : undefined,
+            status: 'active',
+            lastStep: 6 // Mark as completed
+          });
+        }
 
         // Save with detailed error logging
-        // Save with detailed error logging
         try {
-          await newEmployee.save();
+          await finalEmployee.save();
 
           // Keep GT ONE/global auth in sync for employee email login (non-fatal on failure)
           try {
@@ -3781,7 +4118,7 @@ exports.bulkUploadEmployees = async (req, res) => {
                 await User.create({
                   name: `${firstName || ''} ${lastName || ''}`.trim() || empId,
                   email: normalizedEmail,
-                  password: hashedPassword || newEmployee.password,
+                  password: hashedPassword || finalEmployee.password,
                   role: 'employee',
                   mainCompanyId: tenantId,
                   tenant: tenantId,
@@ -3791,7 +4128,7 @@ exports.bulkUploadEmployees = async (req, res) => {
                 await User.findByIdAndUpdate(existingUser._id, {
                   $set: {
                     name: `${firstName || ''} ${lastName || ''}`.trim() || existingUser.name || empId,
-                    password: hashedPassword || newEmployee.password,
+                    password: hashedPassword || finalEmployee.password,
                     mainCompanyId: tenantId,
                     tenant: tenantId,
                     companyId: tenantId
@@ -3806,31 +4143,33 @@ exports.bulkUploadEmployees = async (req, res) => {
           }
           
           // Soft leave policy assignment for bulk upload (do not fail employee creation)
-          try {
-            const LeavePolicy = req.tenantDB.model('LeavePolicy');
-            const LeaveBalance = req.tenantDB.model('LeaveBalance');
-            const selectedPolicy = newEmployee.leavePolicy
-              ? await LeavePolicy.findOne({ _id: newEmployee.leavePolicy, tenant: tenantId })
-              : null;
-            if (selectedPolicy) {
-              await leaveManagementService.assignPolicyToEmployee({
-                employee: newEmployee,
-                tenantId,
-                policy: selectedPolicy,
-                year: newEmployee.joiningDate.getFullYear(),
-                prorate: true,
-                models: { Employee, LeavePolicy, LeaveBalance }
-              });
-            } else {
-              results.warnings.push(`Row ${rowIdx}: No active leave policy found - employee created without policy assignment`);
+          if (!isUpdate) {
+            try {
+              const LeavePolicy = req.tenantDB.model('LeavePolicy');
+              const LeaveBalance = req.tenantDB.model('LeaveBalance');
+              const selectedPolicy = finalEmployee.leavePolicy
+                ? await LeavePolicy.findOne({ _id: finalEmployee.leavePolicy, tenant: tenantId })
+                : null;
+              if (selectedPolicy) {
+                await leaveManagementService.assignPolicyToEmployee({
+                  employee: finalEmployee,
+                  tenantId,
+                  policy: selectedPolicy,
+                  year: finalEmployee.joiningDate.getFullYear(),
+                  prorate: true,
+                  models: { Employee, LeavePolicy, LeaveBalance }
+                });
+              } else {
+                results.warnings.push(`Row ${rowIdx}: No active leave policy found - employee created without policy assignment`);
+              }
+            } catch (pErr) {
+              console.error(`Row ${rowIdx}: Policy auto-assignment warning (bulk):`, pErr.message);
+              results.warnings.push(`Row ${rowIdx}: Leave policy assignment skipped (${pErr.message})`);
             }
-          } catch (pErr) {
-            console.error(`Row ${rowIdx}: Policy auto-assignment warning (bulk):`, pErr.message);
-            results.warnings.push(`Row ${rowIdx}: Leave policy assignment skipped (${pErr.message})`);
           }
 
           results.uploadedCount++;
-          results.processedIds.push(empId);
+          results.processedIds.push(finalEmployee._id || empId);
           processedEmpIds.add(empIdLower);
           processedEmails.add(emailLower);
         } catch (saveErr) {

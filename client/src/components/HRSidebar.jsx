@@ -558,6 +558,16 @@ export default function HRSidebar({
     ensureSingleModule('Reports', `${pathPrefix}/reports`, 'history', 'reports', 'reports.staffing');
     ensureSingleModule('Offboarding', `${pathPrefix}/exit-management`, 'exit', 'hr', 'offboarding.exit');
     ensureSingleModule('Organization', `${pathPrefix}/organization`, 'organization', 'hr', 'people.org');
+    ensureSingleModule(
+      'Shift Management',
+      `${pathPrefix}/shift-management`,
+      'runHistory',
+      'attendance',
+      'attendance.dashboard',
+      [
+        `${pathPrefix}/shift-management`
+      ]
+    );
 
     // Ensure EMP Service pages exist in HR sidebar (7 ESS pages)
     if (!hasEmpServiceModule && hasCompanyModule('employeePortal')) {

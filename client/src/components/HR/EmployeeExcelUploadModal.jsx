@@ -6,15 +6,47 @@ import { showToast } from '../../utils/uiNotifications';
 
 const BACKEND_URL = API_ROOT || '';
 
-// Validation rules for required columns
-const REQUIRED_COLUMNS = ['First Name', 'Last Name', 'Email', 'Joining Date'];
-const OPTIONAL_COLUMNS = ['Employee ID', 'Middle Name', 'Contact No', 'Gender', 'Date of Birth', 'Department', 'Role', 'Job Type', 'Password', 'PAN No', 'Aadhar No'];
+// Validation rules for required columns (matches new comprehensive template)
+const REQUIRED_COLUMNS = [
+  'First Name', 'Last Name', 'Official Email', 'Joining Date',
+  'Gender', 'Date of Birth', 'Contact Number', 'Blood Group',
+  'Marital Status', 'Nationality', 'Emergency Contact Name', 'Emergency Contact Number',
+  'Department', 'Grade', 'Band', 'Employee Type',
+  'Education Type', 'Aadhar Number', 'PAN Number',
+  'Bank Name', 'Account Number', 'IFSC Code', 'Branch Name', 'Password'
+];
+const OPTIONAL_COLUMNS = [
+  'Employee ID', 'Middle Name', 'Personal Email', 'Place of Birth', 'Height', 'Weight',
+  'Cast Category', 'Hobbies', 'Physical Disability Sickness', 'Disability Details',
+  'Designation', 'Manager Employee ID', 'Work Mode', 'Employment Type', 'Shift Name',
+  'Leave Policy', 'Sub Company', 'Branch', 'Division',
+  'University Institution', '10th Marks Percentage', '12th Marks Percentage',
+  'Year of Passing', 'CGPA or Percentage Degree', 'Highest Qualification',
+  'Last Company Name', 'Experience From Date', 'Experience To Date', 'Last Drawn Salary',
+  'Reporting Person Name', 'Reporting Person Email', 'Reporting Person Contact',
+  'Bank Location City', 'Languages Known', 'Language Speak', 'Language Read', 'Language Write',
+  'Previous Interview with Company', 'Role Access Level'
+];
 
 // Validation patterns
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const PHONE_REGEX = /^[+]?[\d\s\-()]{7,}$/;
 const EMPLOYEE_ID_REGEX = /^[A-Za-z0-9\-_]{1,50}$/;
+const AADHAR_REGEX = /^\d{12}$/;
+const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+const IFSC_REGEX = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+const ACCOUNT_REGEX = /^\d{9,18}$/;
+
+// Known valid values for enum fields
+const VALID_GENDER = ['male','female','other'];
+const VALID_BLOOD_GROUP = ['a+','a-','b+','b-','o+','o-','ab+','ab-'];
+const VALID_MARITAL = ['single','married','divorced','widowed'];
+const VALID_EMP_TYPE = ['full-time','part-time','intern','internship','contract','consultant'];
+const VALID_EDU_TYPE = ['regular','diploma'];
+const VALID_WORK_MODE = ['work from office (wfo)','wfo','work from home (wfh)','wfh','hybrid','field','onsite'];
+const VALID_ROLE = ['employee','hr','admin'];
+const VALID_YES_NO = ['yes','no'];
 
 export default function EmployeeExcelUploadModal({ isOpen, onClose, onSuccess }) {
   const fileInputRef = useRef(null);
@@ -75,158 +107,169 @@ export default function EmployeeExcelUploadModal({ isOpen, onClose, onSuccess })
     return null;
   };
 
+  // Helper: get a cell value from a row by normalized key patterns
+  const getFieldValue = (row, patterns) => {
+    for (const key of Object.keys(row)) {
+      const normKey = normalizeColumnName(key);
+      if (patterns.some(p => normKey === p || normKey.startsWith(p))) {
+        const val = String(row[key] || '').trim();
+        if (val) return val;
+      }
+    }
+    return '';
+  };
+
   // Validate individual row data
   const validateRow = (row, rowIndex) => {
     const errors = [];
     const warnings = [];
 
-    // Field pattern definitions - must match validateFileStructure patterns
-    const fieldPatterns = [
-      { field: 'empId', patterns: ['employeeid', 'empid', 'employeecode', 'empcode'] },
-      { field: 'firstName', patterns: ['firstname', 'first'] },
-      { field: 'middleName', patterns: ['middlename', 'middle'] },
-      { field: 'lastName', patterns: ['lastname', 'last'] },
-      { field: 'fullName', patterns: ['name', 'employeename', 'fullname', 'empname'] },
-      { field: 'email', patterns: ['email', 'emailaddress', 'companymailid', 'personalemailid', 'mailid'] },
-      { field: 'joiningDate', patterns: ['joiningdate', 'doj', 'dateofjoining', 'dateofjoin', 'dojdate', 'joining'] }
-    ];
+    // ── Extract key fields ──────────────────────────────────────────────────
+    const firstName    = getFieldValue(row, ['firstname','first']);
+    const lastName     = getFieldValue(row, ['lastname','last']);
+    const officialEmail= getFieldValue(row, ['officialemail','email','companymailid','mailid','emailaddress']);
+    const joiningDate  = getFieldValue(row, ['joiningdate','joining','doj','dateofjoining']);
+    const gender       = getFieldValue(row, ['gender']);
+    const dob          = getFieldValue(row, ['dateofbirth','dob','birthdate']);
+    const contact      = getFieldValue(row, ['contactnumber','contactno','mobile','phone']);
+    const bloodGroup   = getFieldValue(row, ['bloodgroup','blood']);
+    const marital      = getFieldValue(row, ['maritalstatus','marital']);
+    const nationality  = getFieldValue(row, ['nationality']);
+    const ecName       = getFieldValue(row, ['emergencycontactname','emergencyname','ecname']);
+    const ecNumber     = getFieldValue(row, ['emergencycontactnumber','emergencynumber','ecnumber','eccontact']);
+    const dept         = getFieldValue(row, ['department','dept']);
+    const grade        = getFieldValue(row, ['grade']);
+    const band         = getFieldValue(row, ['band']);
+    const empType      = getFieldValue(row, ['employeetype','emptype','jobtype']);
+    const eduType      = getFieldValue(row, ['educationtype','education']);
+    const aadhar       = getFieldValue(row, ['aadharnumber','aadhar','adhaar']);
+    const pan          = getFieldValue(row, ['pannumber','pan','panno']);
+    const bankName     = getFieldValue(row, ['bankname','bank']);
+    const accountNo    = getFieldValue(row, ['accountnumber','accountno','acno']);
+    const ifsc         = getFieldValue(row, ['ifsccode','ifsc']);
+    const branchName   = getFieldValue(row, ['branchname','branch']);
+    const password     = getFieldValue(row, ['password','pwd']);
+    const empId        = getFieldValue(row, ['employeeid', 'empid', 'employeecode']);
 
-    const rowValues = {};
-    for (const key of Object.keys(row)) {
-      const normKey = normalizeColumnName(key);
-      const val = row[key];
+    // ── Required field checks ────────────────────────────────────────────────
+    if (!firstName)         errors.push('First Name is missing (Required)');
+    else if (firstName.length < 2) warnings.push('First Name should be at least 2 characters');
 
-      for (const { field, patterns } of fieldPatterns) {
-        if (patterns.includes(normKey)) {
-          if (!rowValues[field]) rowValues[field] = [];
-          rowValues[field].push({ key: normKey, value: val });
-        }
-      }
+    if (!lastName)          errors.push('Last Name is missing (Required)');
+    else if (lastName.length < 2)  warnings.push('Last Name should be at least 2 characters');
+
+    if (!officialEmail)     errors.push('Official Email is missing (Required)');
+    else if (!EMAIL_REGEX.test(officialEmail)) errors.push(`Official Email format invalid: "${officialEmail}"`);
+
+    // If Employee ID exists, it's an update, so password is not strictly required.
+    if (!password && !empId) {
+      errors.push('Password is missing (Required for new employees)');
+    } else if (password && password.length < 6) {
+      warnings.push('Password should be at least 6 characters');
     }
 
-    let empId = '';
-    if (rowValues['empId']) empId = rowValues['empId'][0].value ? rowValues['empId'][0].value.toString().trim() : '';
-
-    let firstName = '';
-    let middleName = '';
-    let lastName = '';
-    if (rowValues['firstName']) firstName = rowValues['firstName'][0].value ? rowValues['firstName'][0].value.toString().trim() : '';
-    if (rowValues['middleName']) middleName = rowValues['middleName'][0].value ? rowValues['middleName'][0].value.toString().trim() : '';
-    if (rowValues['lastName']) lastName = rowValues['lastName'][0].value ? rowValues['lastName'][0].value.toString().trim() : '';
-
-    // Handle full name column split if needed
-    if ((!firstName || !lastName) && rowValues['fullName']) {
-      const fullName = rowValues['fullName'][0].value ? rowValues['fullName'][0].value.toString().trim() : '';
-      if (fullName) {
-        const parts = fullName.split(/\s+/).filter(Boolean);
-        if (parts.length >= 3) {
-          firstName = parts[0];
-          middleName = parts[1];
-          lastName = parts.slice(2).join(' ');
-        } else if (parts.length === 2) {
-          firstName = parts[0];
-          lastName = parts[1];
-        } else if (parts.length === 1) {
-          firstName = parts[0];
-          lastName = 'Doe';
-        }
-      }
-    }
-
-    let email = '';
-    if (rowValues['email']) {
-      const companyEmail = rowValues['email'].find(m => (m.key.includes('company') || m.key.includes('work')) && String(m.value || '').trim() !== '');
-      const chosenEmail = companyEmail || rowValues['email'].find(m => String(m.value || '').trim() !== '');
-      email = chosenEmail && chosenEmail.value ? chosenEmail.value.toString().trim().toLowerCase() : '';
-    }
-
-    let joiningDate = null;
-    if (rowValues['joiningDate']) joiningDate = rowValues['joiningDate'][0].value;
-
-    // Employee ID validation (optional - will be auto-generated if missing)
-    if (empId && !EMPLOYEE_ID_REGEX.test(empId)) {
-      warnings.push('Employee ID format invalid (alphanumeric, dash, underscore only) - will be auto-corrected');
-    }
-
-    // First Name validation
-    if (!firstName) {
-      warnings.push('First Name is missing (will be auto-filled)');
-    } else if (firstName.length < 2) {
-      warnings.push('First Name should be at least 2 characters');
-    }
-
-    // Last Name validation
-    if (!lastName) {
-      warnings.push('Last Name is missing (will be auto-filled)');
-    } else if (lastName.length < 2) {
-      warnings.push('Last Name should be at least 2 characters');
-    }
-
-    // Email validation
-    if (!email) {
-      warnings.push('Email is missing (will be auto-generated)');
-    } else if (!EMAIL_REGEX.test(email)) {
-      warnings.push('Invalid email format (will be auto-corrected)');
-    }
-
-    // Joining Date validation
+    // Joining Date
     const parsedJoinDate = parseFlexibleDate(joiningDate);
-    if (!parsedJoinDate) {
-      warnings.push('Joining Date is missing or has invalid format (will default to today)');
-    } else {
-      if (parsedJoinDate > new Date()) {
-        warnings.push('Joining Date is in the future');
-      }
+    if (!joiningDate)       errors.push('Joining Date is missing (Required) — use format YYYY-MM-DD');
+    else if (!parsedJoinDate) errors.push(`Joining Date format invalid: "${joiningDate}" — use YYYY-MM-DD`);
+
+    // Date of Birth
+    if (dob) {
+      const parsedDob = parseFlexibleDate(dob);
+      if (!parsedDob) warnings.push(`Date of Birth format invalid: "${dob}" — use YYYY-MM-DD`);
+    }
+
+    // Gender
+    if (gender && !VALID_GENDER.includes(gender.toLowerCase())) {
+      warnings.push(`Gender value "${gender}" not recognized — use: Male / Female / Other`);
+    }
+
+    // Blood Group
+    if (bloodGroup && !VALID_BLOOD_GROUP.includes(bloodGroup.toLowerCase())) {
+      warnings.push(`Blood Group "${bloodGroup}" not recognized — use: A+ / A- / B+ / B- / O+ / O- / AB+ / AB-`);
+    }
+
+    // Marital Status
+    if (marital && !VALID_MARITAL.includes(marital.toLowerCase())) {
+      warnings.push(`Marital Status "${marital}" not recognized — use: Single / Married / Divorced / Widowed`);
+    }
+
+    // Employee Type
+    if (empType && !VALID_EMP_TYPE.includes(empType.toLowerCase())) {
+      warnings.push(`Employee Type "${empType}" not recognized — use: Full-Time / Part-Time / Intern / Contract / Consultant`);
+    }
+
+    // Education Type
+    if (eduType && !VALID_EDU_TYPE.includes(eduType.toLowerCase())) {
+      warnings.push(`Education Type "${eduType}" not recognized — use: Regular / Diploma`);
+    }
+
+    // Aadhar Number
+    if (aadhar && !AADHAR_REGEX.test(aadhar.replace(/\s/g,''))) {
+      warnings.push(`Aadhar Number "${aadhar}" must be exactly 12 digits`);
+    }
+
+    // PAN Number
+    if (pan && !PAN_REGEX.test(pan.toUpperCase())) {
+      warnings.push(`PAN Number "${pan}" format invalid — example: ABCDE1234F`);
+    }
+
+    // IFSC Code
+    if (ifsc && !IFSC_REGEX.test(ifsc.toUpperCase())) {
+      warnings.push(`IFSC Code "${ifsc}" format invalid — example: SBIN0001234`);
+    }
+
+    // Account Number
+    if (accountNo && !ACCOUNT_REGEX.test(accountNo.replace(/\s/g,''))) {
+      warnings.push(`Account Number "${accountNo}" should be 9-18 digits`);
+    }
+
+    // Contact Number
+    if (contact && !PHONE_REGEX.test(contact)) {
+      warnings.push(`Contact Number "${contact}" format appears invalid`);
     }
 
     return { errors, warnings };
   };
 
-  // Validate file structure
+  // Validate file structure — checks that the template matches the expected columns
   const validateFileStructure = (data) => {
     const errors = [];
     const warnings = [];
 
     if (!data || data.length === 0) {
-      errors.push('Excel file is empty');
+      errors.push('Excel file is empty. Please fill in the downloaded template and upload it.');
       return { errors, warnings };
     }
 
-    // Check required columns (flexible matching)
+    // Check required columns (flexible matching via normalized names)
     const firstRow = data[0];
-    const availableColumns = Object.keys(firstRow || {}).filter((col) => col !== undefined && col !== null && String(col).trim() !== '');
-    const normalizedAvailable = availableColumns.map((col) => normalizeColumnName(col)).filter(Boolean);
+    const availableColumns = Object.keys(firstRow || {}).filter(col => col !== undefined && col !== null && String(col).trim() !== '');
+    const normalizedAvailable = availableColumns.map(col => normalizeColumnName(col)).filter(Boolean);
 
-    // Check if full name column exists
-    const hasFullNameCol = normalizedAvailable.some((norm) => 
-      ['name', 'employeename', 'fullname', 'empname'].includes(norm)
-    );
-
-    // Required columns (Employee ID is optional)
+    // Minimum required column presence checks
     const requiredChecks = [
-      { display: 'First Name', patterns: ['firstname', 'first'] },
-      { display: 'Last Name', patterns: ['lastname', 'last'] },
-      { display: 'Email', patterns: ['email', 'emailaddress', 'companymailid', 'personalemailid', 'mailid'] },
-      { display: 'Joining Date', patterns: ['joiningdate', 'doj', 'dateofjoining', 'dateofjoin', 'dojdate', 'joining'] }
+      { display: 'First Name',              patterns: ['firstname','first'] },
+      { display: 'Last Name',               patterns: ['lastname','last'] },
+      { display: 'Official Email / Email',  patterns: ['officialemail','email','emailaddress','companymailid','mailid'] },
+      { display: 'Joining Date',            patterns: ['joiningdate','doj','dateofjoining','joining'] },
+      { display: 'Department',              patterns: ['department','dept'] },
+      { display: 'Employee Type',           patterns: ['employeetype','emptype','jobtype'] },
+      { display: 'Password',               patterns: ['password','pwd'] },
     ];
 
+    const missingCols = [];
     requiredChecks.forEach(({ display, patterns }) => {
-      // If full name column exists, it satisfies both First Name and Last Name
-      if (hasFullNameCol && (display === 'First Name' || display === 'Last Name')) {
-        return;
-      }
-      const found = normalizedAvailable.some((norm) => patterns.includes(norm));
-      if (!found) {
-        errors.push(`Missing required column: ${display}`);
-      }
+      const found = normalizedAvailable.some(norm => patterns.some(p => norm === p || norm.startsWith(p)));
+      if (!found) missingCols.push(display);
     });
 
-    // If columns are missing, don't validate individual rows yet
-    if (errors.length > 0) {
+    if (missingCols.length > 0) {
+      errors.push(`Missing required columns: ${missingCols.join(', ')}. Please use the official GT HRMS template downloaded from this screen.`);
       return { errors, warnings };
     }
 
-    // Validate each row
+    // Validate each data row
     data.forEach((row, idx) => {
       const { errors: rowErrors, warnings: rowWarnings } = validateRow(row, idx + 2);
       rowErrors.forEach(err => errors.push(`Row ${idx + 2}: ${err}`));
@@ -299,9 +342,12 @@ export default function EmployeeExcelUploadModal({ isOpen, onClose, onSuccess })
         const workbook = XLSX.read(data, { type: 'array', cellDates: true });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        const rawData = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+        const rawData = XLSX.utils.sheet_to_json(worksheet, { range: 1, defval: '' });
+        // The new template has [Required]/[Optional] tags in the first data row (Excel Row 3), skip it
+        const dataRows = rawData.length > 0 ? rawData.slice(1) : [];
+
         // Filter out blank/non-employee rows (e.g. rows with only a serial number or blank padding)
-        const jsonData = rawData.filter(row => {
+        const jsonData = dataRows.filter(row => {
           if (!row || typeof row !== 'object') return false;
           const identityPatterns = [
             'name', 'employeename', 'fullname', 'empname', 
@@ -749,43 +795,37 @@ export default function EmployeeExcelUploadModal({ isOpen, onClose, onSuccess })
 
           {/* Required Columns Info */}
           <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-3.5">
-            <div className="mb-2 flex items-center gap-2">
-              <Info className="w-4 h-4 text-slate-600 dark:text-slate-300" />
-              <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">Upload Instructions</p>
-            </div>
-
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-              <div className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2">
-                <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-200 mb-1">Required Columns</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {['First Name', 'Last Name', 'Email', 'Joining Date'].map((item) => (
-                    <span key={item} className="rounded-full bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 px-2 py-0.5 text-[10px] font-medium">
-                      {item}
-                    </span>
+            <div className="grid grid-cols-1 gap-2">
+              {/* Required */}
+              <div className="rounded-lg bg-white dark:bg-slate-900 border border-red-200 dark:border-red-800 p-2">
+                <p className="text-[11px] font-bold text-red-700 dark:text-red-400 mb-1.5 uppercase tracking-wider">🔴 Required Fields (Must Fill)</p>
+                <div className="flex flex-wrap gap-1">
+                  {['First Name','Last Name','Official Email','Password','Joining Date','Department','Grade','Band','Employee Type','Gender','Date of Birth','Contact Number','Blood Group','Marital Status','Nationality','Emergency Contact Name','Emergency Contact Number','Education Type','Aadhar Number','PAN Number','Bank Name','Account Number','IFSC Code','Branch Name'].map(item => (
+                    <span key={item} className="rounded-full bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300 px-2 py-0.5 text-[10px] font-medium border border-red-200">{item}</span>
                   ))}
-                  <span className="rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 px-2 py-0.5 text-[10px] font-medium">
-                    YYYY-MM-DD format
-                  </span>
                 </div>
               </div>
 
+              {/* Conditional */}
+              <div className="rounded-lg bg-white dark:bg-slate-900 border border-yellow-200 dark:border-yellow-800 p-2">
+                <p className="text-[11px] font-bold text-yellow-700 dark:text-yellow-400 mb-1.5 uppercase tracking-wider">🟡 Conditional Fields (Fill when applicable)</p>
+                <div className="flex flex-wrap gap-1">
+                  {['Disability Details (if disability=yes)','Employee ID (if manual config)','Experience From/To Date (if company filled)','Reporting Person Name & Email (if company filled)','Previous Interview Date/Location (if prev interview=yes)','Related Employee Name & Relation (if related=yes)'].map(item => (
+                    <span key={item} className="rounded-full bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300 px-2 py-0.5 text-[10px] font-medium border border-yellow-200">{item}</span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Notes */}
               <div className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2">
-                <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-200 mb-0.5">Auto Generated</p>
-                <p className="text-[11px] text-slate-600 dark:text-slate-300">Employee ID is auto-generated when blank.</p>
-              </div>
-
-              <div className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2 md:col-span-2">
-                <p className="text-[11px] font-black text-blue-600 dark:text-blue-400 mb-1 uppercase tracking-wider">Important: Intern ID Generation</p>
-                <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
-                  Use the <strong>Job Type</strong> column to control ID sequences. Enter <strong>Internship</strong> to generate an <strong>INTN</strong> ID, or <strong>Full-Time</strong> for a standard <strong>EMP</strong> ID.
-                </p>
-              </div>
-
-              <div className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2 md:col-span-2">
-                <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-200 mb-1">Other Optional Columns</p>
-                <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
-                  Middle Name, Contact No, Gender, DOB, Department, Role, Marital Status, Bank Details, Address (Current & Permanent), PAN No, Aadhar No, Personal Email ID, Qualification, Year of passing, CGPA/Percentage, Last Compant, from, To, Last CTC, Anniversary Date, and Repeating Family Details.
-                </p>
+                <p className="text-[11px] font-bold text-slate-700 dark:text-slate-200 mb-1 uppercase tracking-wider">📋 Important Notes</p>
+                <ul className="text-[11px] text-slate-600 dark:text-slate-300 space-y-0.5 list-disc list-inside">
+                  <li>Use <strong>YYYY-MM-DD</strong> for all dates (e.g. 1990-01-15)</li>
+                  <li>Employee ID is auto-generated if blank</li>
+                  <li>Employee Type controls ID prefix: <strong>Internship → INTN</strong>, others → <strong>EMP</strong></li>
+                  <li>Aadhar = 12 digits &nbsp;|&nbsp; PAN = 10 chars (e.g. ABCDE1234F) &nbsp;|&nbsp; IFSC = SBIN0001234</li>
+                  <li>File uploads (photos, documents) must be done after employee creation</li>
+                </ul>
               </div>
             </div>
           </div>
