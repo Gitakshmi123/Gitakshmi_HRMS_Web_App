@@ -262,12 +262,11 @@ export default function EmailTemplates() {
         <>
 
       <Alert 
-        message={<span className="font-bold text-base">System Manual: Connecting Templates to Automations</span>}
+        message={<span className="font-bold text-base">System Manual: Connecting Templates to System Events</span>}
         description={<div className="mt-2 text-gray-700">
           <ul className="list-disc pl-5 space-y-1">
             <li><strong>Design:</strong> Create your email here and assign it a unique <strong>Trigger Type</strong> (e.g., <code>WELCOME_EMAIL</code>).</li>
-            <li><strong>Connect:</strong> Go to the <a href="/hr/organization" className="text-blue-600 underline">Organization</a> page and open the <strong>Automations Engine</strong>.</li>
-            <li><strong>Trigger:</strong> In the Automation Action, specify the exact same <strong>Trigger Type</strong> so the system knows to send this specific template.</li>
+            <li><strong>Trigger:</strong> System events will automatically use this template matching the specified <strong>Trigger Type</strong>.</li>
           </ul>
         </div>}
         type="info"

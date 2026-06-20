@@ -15,6 +15,13 @@ const QUOTA_FIELDS = [
   'minimumTenureMonths',
   'prorateForNewJoiners',
   'color',
+  'advanceNoticeDays',
+  'halfDayAllowed',
+  'postFactoAllowed',
+  'maxPostFactoCount',
+  'medicalCertRequiredAfterDays',
+  'applicableGender',
+  'maxChildrenLimit',
 ];
 
 function normalizeLeaveType(value) {

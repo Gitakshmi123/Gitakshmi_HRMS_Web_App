@@ -93,6 +93,7 @@ function registerModels(db, tenantId, forceRefresh = false) {
     const LeavePolicyCustomMappingSchema = require("../models/LeavePolicyCustomMapping");
     const LeaveBalanceSchema = require("../models/LeaveBalance");
     const LeaveAccrualLogSchema = require("../models/LeaveAccrualLog");
+    const LeaveLedgerSchema = require("../models/LeaveLedger");
     const BandSchema = require("../models/Band");
     const DesignationGradeMapSchema = require("../models/DesignationGradeMap");
     const PromotionHistorySchema = require("../models/PromotionHistory");
@@ -232,6 +233,7 @@ function registerModels(db, tenantId, forceRefresh = false) {
     register("Branch", BranchSchema);
     register("LeaveBalance", LeaveBalanceSchema);
     register("LeaveAccrualLog", LeaveAccrualLogSchema);
+    register("LeaveLedger", LeaveLedgerSchema);
     register("Notification", NotificationSchema);
     register("Regularization", RegularizationSchema);
     register("AuditLog", AuditLogSchema);
@@ -413,23 +415,22 @@ async function ensureLeavePolicy(employee, db, tenantIdOverride = null) {
   });
 
   // Step 2: Resolve the best active policy for the employee based on scope.
-  // Existing employee.leavePolicy is treated as a stored result, not as the source of truth,
-  // so HR updates to Grade/Band/Department/Personal policies immediately win over stale links.
+  // The explicitly assigned policy takes precedence over automatic matching.
   try {
-    if (activePolicies.length > 0) {
-      resolvedPolicy = leaveManagementService.selectBestPolicyForEmployee({
-        policies: activePolicies.filter((policy) => Array.isArray(policy.rules) && policy.rules.length > 0),
-        employee,
-        grade: resolvedGrade
-      });
-    }
-
-    if (!resolvedPolicy && employee.leavePolicy) {
+    if (employee.leavePolicy) {
       try {
         resolvedPolicy = await leaveManagementService.getAssignedLeavePolicyForEmployee({ LeavePolicy, tenantId, employee });
       } catch (e) {
         console.error(`[POLICY_ENFORCEMENT] Verification error:`, e.message);
       }
+    }
+
+    if (!resolvedPolicy && activePolicies.length > 0) {
+      resolvedPolicy = leaveManagementService.selectBestPolicyForEmployee({
+        policies: activePolicies.filter((policy) => Array.isArray(policy.rules) && policy.rules.length > 0),
+        employee,
+        grade: resolvedGrade
+      });
     }
 
     if (resolvedPolicy) {

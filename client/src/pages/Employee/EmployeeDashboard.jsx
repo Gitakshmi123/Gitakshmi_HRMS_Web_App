@@ -161,7 +161,21 @@ const mergeBalancesWithEffectivePolicy = ({ balances, policies, effectivePolicyI
     merged.push(balance);
   }
 
-  return merged;
+  // filter Maternity and Paternity based on eligibility
+  const profileGender = String(profile?.gender || '').trim().toLowerCase();
+  const profileMarital = String(profile?.maritalStatus || '').trim().toLowerCase();
+  const profileIsMarried = profileMarital === 'married';
+
+  return merged.filter(opt => {
+    const lt = String(opt.leaveType || '').toUpperCase();
+    if (lt === 'MATERNITY') {
+      return profileGender === 'female' && profileIsMarried;
+    }
+    if (lt === 'PATERNITY') {
+      return profileGender === 'male' && profileIsMarried;
+    }
+    return true;
+  });
 };
 
 export default function EmployeeDashboard() {

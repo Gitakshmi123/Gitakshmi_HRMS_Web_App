@@ -333,6 +333,56 @@ function isPolicyApplicableToEmployee(policy, employee, resolvedGrade = null) {
         return match;
     }
 
+    if (policy.applicableTo === 'Custom') {
+        // Evaluate Branch Match
+        if (Array.isArray(policy.branchIds) && policy.branchIds.length > 0) {
+            const empBranchId = employee.branchId?._id || employee.branchId;
+            if (!empBranchId || !policy.branchIds.some(id => String(id) === String(empBranchId))) {
+                console.log(`[POLICY_MATCH] Custom match failed: Branch mismatch`);
+                return false;
+            }
+        }
+        // Evaluate Department Match
+        if (Array.isArray(policy.departmentIds) && policy.departmentIds.length > 0) {
+            const empDepartmentId = employee.departmentId?._id || employee.departmentId;
+            if (!empDepartmentId || !policy.departmentIds.some(id => String(id) === String(empDepartmentId))) {
+                console.log(`[POLICY_MATCH] Custom match failed: Department mismatch`);
+                return false;
+            }
+        }
+        // Evaluate Designation Match
+        if (Array.isArray(policy.designations) && policy.designations.length > 0) {
+            const empDesignation = String(employee.designation || employee.role || '').toLowerCase().trim();
+            if (!empDesignation || !policy.designations.some(d => String(d).toLowerCase().trim() === empDesignation)) {
+                console.log(`[POLICY_MATCH] Custom match failed: Designation mismatch`);
+                return false;
+            }
+        }
+        // Evaluate Grade Match
+        if ((Array.isArray(policy.gradeIds) && policy.gradeIds.length > 0) || (Array.isArray(policy.gradeCodes) && policy.gradeCodes.length > 0)) {
+            const empGradeValue = String(resolvedGrade?.gradeCode || resolvedGrade?.gradeValue || employee.grade || '').toLowerCase().trim();
+            const empGradeId = employee.gradeId?._id || employee.gradeId || resolvedGrade?._id;
+            
+            const idMatch = Array.isArray(policy.gradeIds) && policy.gradeIds.length > 0 && empGradeId && policy.gradeIds.some(id => String(id) === String(empGradeId));
+            const codeMatch = Array.isArray(policy.gradeCodes) && policy.gradeCodes.length > 0 && empGradeValue && policy.gradeCodes.some(c => String(c).toLowerCase().trim() === empGradeValue);
+            
+            if (!idMatch && !codeMatch) {
+                console.log(`[POLICY_MATCH] Custom match failed: Grade mismatch`);
+                return false;
+            }
+        }
+        // Evaluate Employee Type Match
+        if (Array.isArray(policy.applicableEmployeeTypes) && policy.applicableEmployeeTypes.length > 0) {
+            const empType = String(employee.employeeType || '').toLowerCase().trim();
+            if (!empType || !policy.applicableEmployeeTypes.some(t => String(t).toLowerCase().trim() === empType)) {
+                console.log(`[POLICY_MATCH] Custom match failed: EmployeeType mismatch`);
+                return false;
+            }
+        }
+        console.log(`[POLICY_MATCH] Custom match: true (All criteria satisfied)`);
+        return true;
+    }
+
     console.log(`[POLICY_MATCH] No match found for applicableTo="${policy.applicableTo}"`);
     return false;
 }
@@ -451,6 +501,11 @@ async function resolveLeavePolicyForEmployee({ LeavePolicy, tenantId, employee, 
         return null;
     }
 
+    const assignedPolicy = await getAssignedLeavePolicyForEmployee({ LeavePolicy, tenantId, employee });
+    if (assignedPolicy) {
+        return assignedPolicy;
+    }
+
     const activePolicies = Array.isArray(policies)
         ? policies
         : await getActiveLeavePolicies({ LeavePolicy, tenantId });
@@ -463,12 +518,7 @@ async function resolveLeavePolicyForEmployee({ LeavePolicy, tenantId, employee, 
         date: new Date()
     });
 
-    const bestMatchingPolicy = selectBestPolicyForEmployee({ policies: activePolicies, employee, grade: resolvedGrade });
-    if (bestMatchingPolicy) {
-        return bestMatchingPolicy;
-    }
-
-    return getAssignedLeavePolicyForEmployee({ LeavePolicy, tenantId, employee });
+    return selectBestPolicyForEmployee({ policies: activePolicies, employee, grade: resolvedGrade });
 }
 
 async function syncEmployeeLeaveSnapshotFromDocuments({ employee, tenantId, LeaveBalance, year }) {
@@ -567,19 +617,27 @@ async function syncEmployeeLeaveDocuments({
             ? new Date(effectiveYear, 0 + Number(rule.expiryMonths), 0)
             : null;
         const maxLeaveCap = Number(rule.maxLeaveCap || 0);
-
         if (existing) {
             const used = existing.used || 0;
             const pending = existing.pending || 0;
-            const totalWithUsage = expected.locked ? Math.max(total, used + pending) : total;
+            
             existing.policy = policy._id;
             existing.leaveType = leaveKey;
-            existing.total = totalWithUsage;
-            if (!expected.locked && maxLeaveCap > 0) {
-                existing.total = Math.max(used + pending, Math.min(totalWithUsage, maxLeaveCap));
+            
+            if (existing.isOpeningManual) {
+                // Keep existing.opening and accrued
+                existing.total = existing.opening + (existing.accrued || 0);
+            } else {
+                const totalWithUsage = expected.locked ? Math.max(total, used + pending) : total;
+                existing.opening = expected.locked ? Math.max(total, used + pending) : total;
+                existing.total = existing.opening + (existing.accrued || 0);
+                if (!expected.locked && maxLeaveCap > 0) {
+                    existing.total = Math.max(used + pending, Math.min(existing.total, maxLeaveCap));
+                }
             }
+            
             existing.available = Math.max(0, existing.total - used - pending);
-            if (!expected.locked && maxLeaveCap > 0) {
+            if (!existing.isOpeningManual && !expected.locked && maxLeaveCap > 0) {
                 existing.available = Math.min(existing.available, maxLeaveCap);
             }
             if (expected.locked) {
@@ -597,7 +655,6 @@ async function syncEmployeeLeaveDocuments({
             try {
                 await existing.save();
             } catch (saveErr) {
-                // If the document was deleted concurrently by another sync process, ignore it.
                 if (saveErr.name === 'DocumentNotFoundError' || saveErr.message.includes('No document found')) {
                     console.warn(`[LEAVE_SYNC] Balance document ${existing._id} was removed concurrently. Skipping save.`);
                 } else {
@@ -608,16 +665,20 @@ async function syncEmployeeLeaveDocuments({
             continue;
         }
 
-        await LeaveBalance.create({
+        const initialTotal = !expected.locked && maxLeaveCap > 0 ? Math.min(total, maxLeaveCap) : total;
+        const newBalDoc = await LeaveBalance.create({
             tenant: tenantId,
             employee: employee._id,
             policy: policy._id,
             leaveType: leaveKey,
             year: effectiveYear,
-            total: !expected.locked && maxLeaveCap > 0 ? Math.min(total, maxLeaveCap) : total,
+            opening: initialTotal,
+            accrued: 0,
+            isOpeningManual: false,
+            total: initialTotal,
             used: 0,
             pending: 0,
-            available: expected.locked ? 0 : (!expected.locked && maxLeaveCap > 0 ? Math.min(total, maxLeaveCap) : total),
+            available: expected.locked ? 0 : initialTotal,
             locked: expected.locked,
             eligibleFrom: expected.eligibleFrom,
             expiresAt: expiryAt,
@@ -627,6 +688,24 @@ async function syncEmployeeLeaveDocuments({
                 quotaSource: grade ? 'grade' : 'policy'
             }
         });
+
+        try {
+            const LeaveLedger = LeaveBalance.db.model('LeaveLedger');
+            await LeaveLedger.create({
+                tenant: tenantId,
+                employee: employee._id,
+                leaveType: leaveKey,
+                year: effectiveYear,
+                actionType: 'Opening',
+                days: initialTotal,
+                previousBalance: 0,
+                newBalance: expected.locked ? 0 : initialTotal,
+                remarks: `Initial policy balance allocation`,
+                date: new Date()
+            });
+        } catch (ledgerErr) {
+            console.error('[SYNC_DOCS_LEDGER_ERROR]', ledgerErr.message);
+        }
     }
 
     if (docsByType.size > 0) {
@@ -896,7 +975,7 @@ async function ensureEmployeeLeaveBalanceForYear({
     });
     const bestMatchingPolicy = selectBestPolicyForEmployee({ policies: activePolicies, employee, grade });
     const assignedPolicy = await getAssignedLeavePolicyForEmployee({ LeavePolicy, tenantId, employee });
-    let targetPolicy = policy || bestMatchingPolicy || assignedPolicy;
+    let targetPolicy = policy || assignedPolicy || bestMatchingPolicy;
     
     if (targetPolicy && String(targetPolicy.tenant) !== String(tenantId)) {
         console.log(`[LEAVE_SYNC] Target policy ${targetPolicy._id} tenant mismatch: ${targetPolicy.tenant} vs ${tenantId}.`);
@@ -947,7 +1026,7 @@ async function ensureEmployeeLeaveBalanceForYear({
         tenant: tenantId,
         employee: employee._id,
         year
-    }).select('leaveType policy total locked eligibleFrom').lean();
+    }).select('leaveType policy total locked eligibleFrom isOpeningManual').lean();
     const existingLeaveKeys = new Set(existingBalances.map((balance) => normalizeLeaveKey(balance.leaveType)));
     const hasMissingBalances = policyLeaveKeys.some((leaveKey) => !existingLeaveKeys.has(leaveKey));
     const hasExtraBalances = existingBalances.some((balance) => !policyLeaveKeys.includes(normalizeLeaveKey(balance.leaveType)));
@@ -960,6 +1039,10 @@ async function ensureEmployeeLeaveBalanceForYear({
         const expected = expectedSnapshot[leaveKey];
 
         if (!expected) {
+            return false;
+        }
+
+        if (balance.isOpeningManual) {
             return false;
         }
 

@@ -96,7 +96,7 @@ export default function HRLayout() {
   const sectionTabs = useMemo(() => {
     const sections = [
       {
-        match: ['/organization', '/org', '/departments', '/grades', '/organization-policies', '/leave-policies', '/leave-approvals', '/leave-requests', '/organization/automations'],
+        match: ['/organization', '/org', '/departments', '/grades', '/organization-policies', '/leave-policies', '/leave-approvals', '/leave-requests'],
         tabs: [
           { label: 'Organization', to: `${pathPrefix}/organization`, icon: MapPin, permission: 'people.org' },
           { label: 'Org Structure', to: `${pathPrefix}/org`, icon: Users, permission: 'people.org' },
@@ -105,7 +105,6 @@ export default function HRLayout() {
           { label: 'Policies', to: `${pathPrefix}/leave-policies`, icon: Settings2, permission: 'leave.policies' },
           { label: 'Custom', to: `${pathPrefix}/leave-policies/custom`, icon: Settings2, permission: 'leave.custom' },
           { label: 'Requests', to: `${pathPrefix}/leave-approvals`, icon: Plane, permission: 'leave.requests' },
-          { label: 'Automations', to: `${pathPrefix}/organization/automations`, icon: Settings2, permission: 'people.org' },
         ],
       },
       {

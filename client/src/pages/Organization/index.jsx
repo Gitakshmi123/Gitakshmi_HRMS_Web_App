@@ -907,15 +907,7 @@ export default function Organization() {
         <div className="max-w-5xl mx-auto p-8">
           {selectedNode ? (
             <div className="animate-fade-in space-y-8">
-              <div className="flex justify-end mb-4">
-                <Button 
-                  type="primary" 
-                  ghost 
-                  onClick={() => navigate('/hr/organization/automations')}
-                >
-                  Manage Automations Engine
-                </Button>
-              </div>
+
               <OrganizationHeader 
                 node={selectedNode} 
                 breadcrumb={breadcrumb} 
@@ -974,15 +966,7 @@ export default function Organization() {
                 </p>
               </div>
               
-              <div className="flex gap-4 mt-6">
-                <Button 
-                  type="primary" 
-                  size="large"
-                  onClick={() => navigate('/hr/organization/automations')}
-                >
-                  Go to Automation Engine
-                </Button>
-              </div>
+
             </div>
           )}
         </div>

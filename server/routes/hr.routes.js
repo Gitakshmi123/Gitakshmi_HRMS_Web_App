@@ -13,6 +13,7 @@ const empCtrl = require('../controllers/hr.employee.controller');
 const deptCtrl = require('../controllers/hr.department.controller');
 const policyCtrl = require('../controllers/leavePolicy.controller');
 const requestCtrl = require('../controllers/leaveRequest.controller');
+const leaveAnalyticsCtrl = require('../controllers/leaveAnalytics.controller');
 const applicantCtrl = require('../controllers/applicant.controller');
 const trackerCtrl = require('../controllers/trackerController');
 const reqCtrl = require('../controllers/requirement.controller');
@@ -120,6 +121,30 @@ router.post('/hr/regularization/:id/reject', auth.authenticate, checkPermission(
 router.get('/hr/leaves/requests', auth.authenticate, checkPermission('leave.requests', 'view'), requestCtrl.getAllLeaves);
 router.post('/hr/leaves/requests/:id/approve', auth.authenticate, checkPermission('leave.requests', 'edit'), requestCtrl.approveLeave);
 router.post('/hr/leaves/requests/:id/reject', auth.authenticate, checkPermission('leave.requests', 'edit'), requestCtrl.rejectLeave);
+
+// Leave Analytics Endpoints
+router.get('/hr/leaves/analytics/policy-assignments', auth.authenticate, checkPermission('leave.policies', 'view'), leaveAnalyticsCtrl.getPolicyAssignmentAnalytics);
+router.get('/hr/leaves/analytics/policy-assignments/:policyId/employees', auth.authenticate, checkPermission('leave.policies', 'view'), leaveAnalyticsCtrl.getEmployeesForPolicy);
+router.get('/hr/leaves/analytics/balances', auth.authenticate, checkPermission('leave.policies', 'view'), leaveAnalyticsCtrl.getLeaveBalanceAnalytics);
+router.get('/hr/leaves/analytics/utilization', auth.authenticate, checkPermission('leave.policies', 'view'), leaveAnalyticsCtrl.getLeaveUtilizationReport);
+router.get('/hr/leaves/analytics/pending', auth.authenticate, checkPermission('leave.requests', 'view'), leaveAnalyticsCtrl.getPendingLeaveReport);
+router.get('/hr/leaves/analytics/ledger-audit', auth.authenticate, checkPermission('leave.policies', 'view'), leaveAnalyticsCtrl.getLeaveLedgerAuditReport);
+router.get('/hr/leaves/analytics/monthly-trends', auth.authenticate, checkPermission('leave.policies', 'view'), leaveAnalyticsCtrl.getMonthlyLeaveTrends);
+router.get('/hr/leaves/analytics/high-users', auth.authenticate, checkPermission('leave.policies', 'view'), leaveAnalyticsCtrl.getHighLeaveUsers);
+router.get('/hr/leaves/analytics/sick-leave', auth.authenticate, checkPermission('leave.policies', 'view'), leaveAnalyticsCtrl.getSickLeaveAnalysis);
+router.get('/hr/leaves/analytics/liability', auth.authenticate, checkPermission('leave.policies', 'view'), leaveAnalyticsCtrl.getLeaveLiability);
+router.get('/hr/leaves/analytics/all-requests', auth.authenticate, checkPermission('leave.requests', 'view'), leaveAnalyticsCtrl.getAllLeaveRequestsReport);
+router.get('/hr/leaves/analytics/employee-summary', auth.authenticate, checkPermission('leave.policies', 'view'), leaveAnalyticsCtrl.getEmployeeLeaveSummary);
+router.get('/hr/leaves/analytics/master-report', auth.authenticate, checkPermission('leave.policies', 'view'), leaveAnalyticsCtrl.getMasterLeaveReport);
+router.post('/hr/leaves/analytics/import-opening-balances', auth.authenticate, checkPermission('leave.policies', 'edit'), auth.requireHr, leaveAnalyticsCtrl.importOpeningBalances);
+
+// Leave Encashment (HR)
+const encashmentCtrl = require('../controllers/leaveEncashment.controller');
+router.get('/hr/leaves/encashment/config', auth.authenticate, checkPermission('leave.policies', 'view'), encashmentCtrl.getConfig);
+router.post('/hr/leaves/encashment/config', auth.authenticate, checkPermission('leave.policies', 'edit'), auth.requireHr, encashmentCtrl.saveConfig);
+router.get('/hr/leaves/encashment/requests', auth.authenticate, checkPermission('leave.requests', 'view'), encashmentCtrl.getAllRequests);
+router.post('/hr/leaves/encashment/requests/:id/approve', auth.authenticate, checkPermission('leave.requests', 'edit'), auth.requireHr, encashmentCtrl.approveRequest);
+router.post('/hr/leaves/encashment/requests/:id/reject', auth.authenticate, checkPermission('leave.requests', 'edit'), auth.requireHr, encashmentCtrl.rejectRequest);
 
 // Calendar (HR) - Month overview and day detail
 const calendarCtrl = require('../controllers/calendar.controller');

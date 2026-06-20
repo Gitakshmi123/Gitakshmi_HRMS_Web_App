@@ -33,6 +33,8 @@ const upload = multer({
 const ctrl = require('../controllers/upload.controller');
 
 router.use(auth.authenticate);
+router.post('/medical-cert', upload.single('file'), ctrl.uploadLogo);
+
 router.use(auth.requireAdminOrHr);
 
 router.post('/logo', upload.single('file'), ctrl.uploadLogo);
