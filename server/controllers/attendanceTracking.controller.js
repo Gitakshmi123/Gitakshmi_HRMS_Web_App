@@ -25,7 +25,7 @@ const {
   buildGradeAttendanceSettings,
   fetchEmployeeGrade
 } = require('../services/gradeAttendancePolicy.service');
-const { buildEffectiveAttendanceSettings } = require('../utils/shiftRuntime');
+const { buildEffectiveAttendanceSettings, translateShiftPolicyToLegacyConfig } = require('../utils/shiftRuntime');
 
 const faceService = new RealFaceRecognitionService();
 const FACE_EMBEDDING_KEY =
@@ -1831,10 +1831,40 @@ exports.markAttendance = async (req, res) => {
     if (!attendanceSettings) {
       attendanceSettings = await AttendanceSettings.create({ tenant: tenantId });
     }
-    const shiftConfig = employee.shiftId
-      ? await Shift.findOne({ _id: employee.shiftId, isActive: true, isDeleted: false }).lean()
-      : null;
-    const employeeGrade = shiftConfig ? null : await fetchEmployeeGrade({
+    let activeShiftId = employee.shiftId ? employee.shiftId : null;
+    let shiftConfig = null;
+    let shiftMaster = null;
+    let shiftPolicy = null;
+
+    try {
+      const RosterAssignment = req.tenantDB.model('RosterAssignment');
+      const currentRoster = await RosterAssignment.findOne({
+          employeeId: employee._id,
+          status: 'Published',
+          startDate: { $lte: attendanceDate },
+          endDate: { $gte: attendanceDate }
+      }).lean();
+      if (currentRoster && currentRoster.shiftId) {
+          activeShiftId = currentRoster.shiftId;
+      }
+    } catch (err) {
+      console.error('Roster lookup error in face tracking:', err.message);
+    }
+
+    if (activeShiftId) {
+      shiftConfig = await Shift.findOne({ _id: activeShiftId, isActive: true, isDeleted: false }).lean();
+      if (!shiftConfig) {
+          const ShiftMaster = req.tenantDB.model('ShiftMaster');
+          const ShiftPolicy = req.tenantDB.model('ShiftPolicy');
+          shiftMaster = await ShiftMaster.findOne({ _id: activeShiftId, status: 'Active' }).lean();
+          if (shiftMaster) {
+              shiftPolicy = await ShiftPolicy.findOne({ shiftMasterId: shiftMaster._id, isCurrent: true }).lean();
+              shiftConfig = translateShiftPolicyToLegacyConfig(shiftMaster, shiftPolicy);
+          }
+      }
+    }
+
+    const employeeGrade = (shiftConfig || shiftMaster) ? null : await fetchEmployeeGrade({
       employee,
       Grade,
       tenantId,
@@ -2198,7 +2228,8 @@ exports.markAttendance = async (req, res) => {
         baseStatus: attendance.status,
         settings: effectiveSettings,
         accumulatedLateCount,
-        accumulatedEarlyExitCount
+        accumulatedEarlyExitCount,
+        shiftPolicy: shiftPolicy
       });
 
       attendance.status = rulesResult.status;
@@ -2211,7 +2242,19 @@ exports.markAttendance = async (req, res) => {
       attendance.isOnDuty = !!rulesResult.isOnDuty;
       attendance.isCompOffDay = !!rulesResult.isCompOffDay;
       attendance.isNightShift = !!rulesResult.isNightShift;
-      attendance.lopDays = typeof rulesResult.lopDays === 'number' ? rulesResult.lopDays : attendance.lopDays;
+      attendance.lopDays = rulesResult.lopDays;
+      
+      if (rulesResult.otMinutes > 0) {
+          attendance.overtimeHours = parseFloat((rulesResult.otMinutes / 60).toFixed(2));
+          if (rulesResult.meta) {
+              rulesResult.meta.otMultiplierApplied = rulesResult.otMultiplierApplied;
+          }
+      } else {
+          attendance.overtimeHours = 0;
+      }
+
+      attendance.ruleEngineVersion = rulesResult.engineVersion;
+      attendance.ruleEngineMeta = rulesResult.meta;
     } else {
       const lateEarly = evaluateLateAndEarly({
         date: attendanceDate,

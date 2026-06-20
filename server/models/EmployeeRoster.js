@@ -42,6 +42,10 @@ const employeeRosterSchema = new mongoose.Schema(
             type: Boolean,
             default: false
         },
+        isHalfDay: {
+            type: Boolean,
+            default: false
+        },
         isHoliday: {
             type: Boolean,
             default: false

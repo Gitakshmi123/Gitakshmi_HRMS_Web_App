@@ -6,7 +6,7 @@ const mongoose = require('mongoose');
  * This supports versioning (Effective Date) for Audit Replay.
  */
 const ShiftPolicySchema = new mongoose.Schema({
-    tenant: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', required: true, index: true },
+    tenant: { type: String, required: true, index: true },
     shiftMasterId: { type: mongoose.Schema.Types.ObjectId, ref: 'ShiftMaster', required: true, index: true },
     
     // Policy Versioning
@@ -20,20 +20,20 @@ const ShiftPolicySchema = new mongoose.Schema({
         lateMarks: [{
             conditionType: { type: String, enum: ['GREATER_THAN', 'LESS_THAN'] },
             minutes: { type: Number },
-            action: { type: String, enum: ['LATE_MARK', 'HALF_DAY', 'ABSENT', 'DEDUCT_LEAVE'] },
+            action: { type: String, enum: ['LATE_MARK', 'HALF_DAY', 'FULL_DAY', 'ABSENT', 'DEDUCT_LEAVE'] },
             leaveTypeToDeduct: { type: String } // Optional: CL, PL, SL
         }],
         // Example: IF Early Exit > 30 Min THEN Half Day
         earlyExit: [{
             conditionType: { type: String, enum: ['GREATER_THAN', 'LESS_THAN'] },
             minutes: { type: Number },
-            action: { type: String, enum: ['LATE_MARK', 'HALF_DAY', 'ABSENT', 'DEDUCT_LEAVE'] }
+            action: { type: String, enum: ['LATE_MARK', 'HALF_DAY', 'FULL_DAY', 'ABSENT', 'DEDUCT_LEAVE'] }
         }],
         
         // --- Dynamic Monthly Late Rule ---
         // e.g. 3 late marks -> 1 half day (or '0.5' leave deduction)
         monthlyLateToHalfDayConversion: { type: Number, default: 0 }, // 0 means disabled
-        monthlyLateAction: { type: String, enum: ['HALF_DAY', 'DEDUCT_LEAVE', 'LWP'], default: 'HALF_DAY' },
+        monthlyLateAction: { type: String, enum: ['HALF_DAY', 'FULL_DAY', 'DEDUCT_LEAVE', 'LWP'], default: 'HALF_DAY' },
         monthlyLateLeaveDeductType: { type: String, default: '' }, // If action is DEDUCT_LEAVE (e.g. 'CL')
 
         // Minimum hours thresholds

@@ -9,7 +9,7 @@ exports.validateConflicts = async (tenantDb, assignments) => {
     for (const assignment of assignments) {
         // 1. Leave Conflict Check
         const leaves = await LeaveRequest.find({
-            employeeId: assignment.employeeId,
+            employee: assignment.employeeId,
             status: 'Approved',
             $or: [
                 { startDate: { $lte: assignment.endDate }, endDate: { $gte: assignment.startDate } }

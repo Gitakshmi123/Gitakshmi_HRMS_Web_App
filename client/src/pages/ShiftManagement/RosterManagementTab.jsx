@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Button, Table, DatePicker, message, Spin, Tag, Tooltip, Select, Modal, Form, Input, Space, Alert, Drawer, Badge } from 'antd';
-import { CalendarDays, Settings2, RefreshCw, Plus, ShieldAlert, Sparkles, CheckCircle2, Save, FileText, Layers, Trash2 } from 'lucide-react';
+import { CalendarDays, Settings2, RefreshCw, Plus, ShieldAlert, Sparkles, CheckCircle2, Save, FileText, Layers, Trash2, UserCheck, Users, Briefcase, Building2, Activity, ShieldCheck } from 'lucide-react';
 import dayjs from 'dayjs';
 import api from '../../utils/api';
 import shiftMasterService from '../../services/shiftMasterService';
@@ -19,6 +19,11 @@ export default function RosterManagementTab() {
   const [employees, setEmployees] = useState([]);
   const [rotations, setRotations] = useState([]);
   const [rosters, setRosters] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [designations, setDesignations] = useState([]);
+  const [branches, setBranches] = useState([]);
+  const [locations, setLocations] = useState([]);
+  const [grades, setGrades] = useState([]);
   
   // Current active roster & assignments
   const [activeRoster, setActiveRoster] = useState(null);
@@ -35,6 +40,9 @@ export default function RosterManagementTab() {
 
   const [newRosterForm] = Form.useForm();
   const [newPatternForm] = Form.useForm();
+  
+  const newRosterEntityType = Form.useWatch('entityType', newRosterForm);
+  const newRosterMode = Form.useWatch('rosterType', newRosterForm);
 
   // Load shifts, employees, rotations, and rosters on mount
   useEffect(() => {
@@ -63,17 +71,27 @@ export default function RosterManagementTab() {
   const fetchInitialData = async () => {
     try {
       setLoading(true);
-      const [shiftRes, empRes, rotationRes, rosterRes] = await Promise.all([
+      const [shiftRes, empRes, rotationRes, rosterRes, deptRes, desigRes, branchRes, gradeRes, locRes] = await Promise.all([
         shiftMasterService.getAllShifts('Active'),
         api.get('/hr/employees?limit=1000').then(res => res.data?.data || res.data).catch(() => []),
         api.get('/enterprise-roster/rotations').then(res => res.data?.data || res.data).catch(() => []),
-        api.get('/enterprise-roster').then(res => res.data?.data || res.data).catch(() => [])
+        api.get('/enterprise-roster').then(res => res.data?.data || res.data).catch(() => []),
+        api.get('/hierarchy/departments').then(res => res.data).catch(() => ({ success: false })),
+        api.get('/hierarchy/designations').then(res => res.data).catch(() => ({ success: false })),
+        api.get('/hierarchy/branches').then(res => res.data).catch(() => ({ success: false })),
+        api.get('/grades').then(res => res.data).catch(() => ({ success: false })),
+        api.get('/locations').then(res => res.data).catch(() => ({ success: false }))
       ]);
 
       if (shiftRes.success) setShifts(shiftRes.data);
       setEmployees(Array.isArray(empRes) ? empRes : []);
       setRotations(Array.isArray(rotationRes) ? rotationRes : []);
       setRosters(Array.isArray(rosterRes) ? rosterRes : []);
+      if (deptRes?.success) setDepartments(deptRes.data);
+      if (desigRes?.success) setDesignations(desigRes.data);
+      if (branchRes?.success) setBranches(branchRes.data);
+      if (gradeRes?.success) setGrades(gradeRes.data);
+      if (locRes?.success) setLocations(locRes.data);
     } catch (err) {
       message.error("Failed to load initial data");
     } finally {
@@ -90,8 +108,8 @@ export default function RosterManagementTab() {
         setActiveRoster(data);
         setAssignments(data.assignments || []);
         
-        // Calculate weeks for the selected month
-        const calculatedWeeks = calculateMonthWeeks(data.year, data.month);
+        // Calculate weeks for the selected date range
+        const calculatedWeeks = calculateWeeks(data.startDate, data.endDate);
         setWeeks(calculatedWeeks);
 
         // Run validation on load if there are assignments
@@ -106,19 +124,19 @@ export default function RosterManagementTab() {
     }
   };
 
-  // Helper: Calculate weeks of a month
-  const calculateMonthWeeks = (year, month) => {
-    const startOfMonth = dayjs(new Date(year, month - 1, 1));
-    const endOfMonth = startOfMonth.endOf('month');
+  // Helper: Calculate weeks from startDate to endDate
+  const calculateWeeks = (startDateStr, endDateStr) => {
+    const startOfRange = dayjs(startDateStr).startOf('day');
+    const endOfRange = dayjs(endDateStr).endOf('day');
     const calculated = [];
     
-    let currentStart = startOfMonth;
+    let currentStart = startOfRange;
     let weekNo = 1;
 
-    while (currentStart.isBefore(endOfMonth) || currentStart.isSame(endOfMonth, 'day')) {
+    while (currentStart.isBefore(endOfRange) || currentStart.isSame(endOfRange, 'day')) {
       let currentEnd = currentStart.endOf('week');
-      if (currentEnd.isAfter(endOfMonth)) {
-        currentEnd = endOfMonth;
+      if (currentEnd.isAfter(endOfRange)) {
+        currentEnd = endOfRange;
       }
       calculated.push({
         weekNo,
@@ -134,13 +152,44 @@ export default function RosterManagementTab() {
   const handleCreateRoster = async (values) => {
     try {
       setLoading(true);
-      const date = dayjs(values.month);
+      const startDate = values.dateRange[0];
+      const endDate = values.dateRange[1];
+      
+      let selectedEmployees = [];
+      if (values.entityType === 'Company') {
+        selectedEmployees = employees.map(e => e._id);
+      } else if (values.entityType === 'Employee') {
+        selectedEmployees = Array.isArray(values.entityId) ? values.entityId : [values.entityId];
+      } else {
+        const entityIdList = Array.isArray(values.entityId) ? values.entityId : [values.entityId];
+        selectedEmployees = employees.filter(e => {
+            if (values.entityType === 'Department') return entityIdList.includes(e.departmentId?._id || e.departmentId);
+            if (values.entityType === 'Designation') return entityIdList.includes(e.designationId?._id || e.designationId);
+            if (values.entityType === 'Branch') return entityIdList.includes(e.branchId?._id || e.branchId);
+            if (values.entityType === 'Location') return entityIdList.includes(e.location);
+            if (values.entityType === 'Grade') return entityIdList.includes(e.gradeId?._id || e.gradeId);
+            return false;
+        }).map(e => e._id);
+      }
+
+      if (selectedEmployees.length === 0) {
+         message.error("No employees found for the selected assignment level.");
+         setLoading(false);
+         return;
+      }
+
       const payload = {
         rosterName: values.rosterName,
-        month: date.month() + 1,
-        year: date.year(),
+        month: startDate.month() + 1,
+        year: startDate.year(),
+        startDate: startDate.toDate(),
+        endDate: endDate.toDate(),
+        weeklyOffDays: values.weeklyOffDays || [],
+        halfDayOfWeek: values.halfDayOfWeek || [],
         rosterType: values.rosterType,
-        employees: values.employees
+        rotationId: values.rotationId,
+        fixedShiftId: values.fixedShiftId,
+        employees: selectedEmployees
       };
 
       const res = await api.post('/enterprise-roster', payload);
@@ -154,7 +203,7 @@ export default function RosterManagementTab() {
         setRosters(updatedRosters);
         
         // Set selected month to newly created roster
-        setSelectedMonth(date);
+        setSelectedMonth(startDate);
       }
     } catch (err) {
       message.error(err.response?.data?.message || "Failed to initialize roster");
@@ -326,13 +375,39 @@ export default function RosterManagementTab() {
           );
           const currentShiftId = assign?.shiftId?._id || assign?.shiftId;
 
+          if (activeRoster?.rosterType !== 'Manual' || activeRoster?.status === 'Published') {
+            if (!assign || !assign.shiftId) {
+              return <div className="text-xs text-slate-400 p-2">No Shift</div>;
+            }
+            
+            // assign.shiftId is populated, so it has code, name, colorCode
+            const s = assign.shiftId.code ? assign.shiftId : shifts.find(sh => sh._id === currentShiftId);
+            if (!s) return <div className="text-xs text-slate-400">{currentShiftId}</div>;
+
+            return (
+              <div 
+                className="w-full text-xs font-medium p-1.5 px-3 flex items-center gap-2"
+                style={{
+                  backgroundColor: s.colorCode ? `${s.colorCode}15` : '#f8fafc',
+                  borderRadius: '6px',
+                  color: '#475569'
+                }}
+              >
+                <span 
+                  className="w-2.5 h-2.5 rounded-full inline-block shrink-0" 
+                  style={{ backgroundColor: s.colorCode || '#1890ff' }}
+                />
+                <span className="truncate">{s.code} ({s.name})</span>
+              </div>
+            );
+          }
+
           return (
             <Select
               className="w-full text-xs font-medium"
               placeholder="Select Shift"
               value={currentShiftId}
               onChange={(val) => handleCellChange(empId, w.weekNo, val)}
-              disabled={activeRoster?.status === 'Published'}
               bordered={false}
               style={{
                 backgroundColor: assign?.shiftId?.colorCode ? `${assign.shiftId.colorCode}15` : 'transparent',
@@ -573,28 +648,125 @@ export default function RosterManagementTab() {
             <Input placeholder="e.g. HR Dept June 2026 Roster" />
           </Form.Item>
 
-          <div className="grid grid-cols-2 gap-4">
-            <Form.Item name="month" label="Select Month/Year" rules={[{ required: true, message: 'Select month' }]}>
-              <DatePicker picker="month" className="w-full" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Form.Item name="dateRange" label={<span className="font-semibold text-slate-700">Roster Date Range <span className="text-red-500">*</span></span>} rules={[{ required: true, message: 'Select start and end dates' }]}>
+              <DatePicker.RangePicker className="w-full" />
             </Form.Item>
 
-            <Form.Item name="rosterType" label="Roster Mode" initialValue="Weekly Rotation" rules={[{ required: true }]}>
+            <Form.Item name="weeklyOffDays" label={<span className="font-semibold text-slate-700">Weekly Off Days</span>} initialValue={[0]}>
+              <Select mode="multiple" placeholder="Select weekends/off days" allowClear>
+                <Option value={1}>Monday</Option>
+                <Option value={2}>Tuesday</Option>
+                <Option value={3}>Wednesday</Option>
+                <Option value={4}>Thursday</Option>
+                <Option value={5}>Friday</Option>
+                <Option value={6}>Saturday</Option>
+                <Option value={0}>Sunday</Option>
+              </Select>
+            </Form.Item>
+
+            <Form.Item name="halfDayOfWeek" label={<span className="font-semibold text-slate-700">Half Day (5.5 Days)</span>}>
+              <Select mode="multiple" placeholder="Select half days" allowClear>
+                <Option value={1}>Monday</Option>
+                <Option value={2}>Tuesday</Option>
+                <Option value={3}>Wednesday</Option>
+                <Option value={4}>Thursday</Option>
+                <Option value={5}>Friday</Option>
+                <Option value={6}>Saturday</Option>
+                <Option value={0}>Sunday</Option>
+              </Select>
+            </Form.Item>
+            
+            <Form.Item name="rosterType" label={<span className="font-semibold text-slate-700">Roster Mode <span className="text-red-500">*</span></span>} initialValue="Fixed Shift" rules={[{ required: true }]}>
               <Select>
                 <Option value="Manual">Manual Entry</Option>
+                <Option value="Fixed Shift">Fixed Shift (Same for all)</Option>
                 <Option value="Weekly Rotation">Weekly Shift Rotation</Option>
                 <Option value="Team Rotation">Team Shift Rotation</Option>
                 <Option value="Fair Rotation">Fair Balancing Rotation</Option>
               </Select>
             </Form.Item>
+
+            {newRosterMode === 'Fixed Shift' && (
+              <Form.Item name="fixedShiftId" label={<span className="font-semibold text-slate-700">Select Shift <span className="text-red-500">*</span></span>} rules={[{ required: true, message: 'Please select a shift' }]}>
+                <Select placeholder="Select Shift">
+                  {shifts.map(s => (
+                    <Option key={s._id} value={s._id}>
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: s.colorCode || '#1890ff' }} />
+                        <span>{s.code} ({s.name})</span>
+                      </div>
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            )}
+
+            {newRosterMode !== 'Manual' && newRosterMode !== 'Fixed Shift' && (
+              <Form.Item name="rotationId" label={<span className="font-semibold text-slate-700">Select Rotation Pattern <span className="text-red-500">*</span></span>} rules={[{ required: true, message: 'Please select a rotation pattern' }]}>
+                <Select placeholder="Select Pattern">
+                  {rotations.map(r => (
+                    <Option key={r._id} value={r._id}>{r.patternName}</Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            )}
           </div>
 
-          <Form.Item name="employees" label="Select Employees for Roster" rules={[{ required: true, message: 'Select at least one employee' }]}>
-            <Select mode="multiple" showSearch placeholder="Search and select employees" optionFilterProp="children">
-              {employees.map(e => (
-                <Option key={e._id} value={e._id}>{e.firstName} {e.lastName} ({e.employeeId})</Option>
-              ))}
-            </Select>
-          </Form.Item>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Form.Item name="entityType" label={<span className="font-semibold text-slate-700">Assignment Level <span className="text-red-500">*</span></span>} rules={[{ required: true }]}>
+              <Select>
+                <Option value="Employee"><span className="flex items-center gap-2"><UserCheck size={14}/> Employee Specific</span></Option>
+                <Option value="Department"><span className="flex items-center gap-2"><Users size={14}/> Department Wide</span></Option>
+                <Option value="Designation"><span className="flex items-center gap-2"><Briefcase size={14}/> Designation Wide</span></Option>
+                <Option value="Branch"><span className="flex items-center gap-2"><Building2 size={14}/> Branch Wide</span></Option>
+                <Option value="Location"><span className="flex items-center gap-2"><Activity size={14}/> Location Wide</span></Option>
+                <Option value="Grade"><span className="flex items-center gap-2"><Briefcase size={14}/> Grade Wide</span></Option>
+                <Option value="Company"><span className="flex items-center gap-2"><ShieldCheck size={14}/> Company Default</span></Option>
+              </Select>
+            </Form.Item>
+            
+            {newRosterEntityType !== 'Company' && newRosterEntityType !== undefined && (
+               <Form.Item name="entityId" label={<span className="font-semibold text-slate-700">Select {newRosterEntityType} <span className="text-red-500">*</span></span>} rules={[{ required: true, message: `Select ${newRosterEntityType}` }]}>
+                  {newRosterEntityType === 'Employee' && (
+                    <Select mode="multiple" showSearch placeholder="Search Employees" optionFilterProp="children">
+                      {employees.map(e => <Option key={e._id} value={e._id}>{e.firstName} {e.lastName} ({e.employeeId})</Option>)}
+                    </Select>
+                  )}
+                  {newRosterEntityType === 'Department' && (
+                    <Select mode="multiple" showSearch placeholder="Select Departments" optionFilterProp="children">
+                      {departments.map(d => <Option key={d._id} value={d._id}>{d.name}</Option>)}
+                    </Select>
+                  )}
+                  {newRosterEntityType === 'Designation' && (
+                    <Select mode="multiple" showSearch placeholder="Select Designations" optionFilterProp="children">
+                      {designations.map(d => <Option key={d._id} value={d._id}>{d.name}</Option>)}
+                    </Select>
+                  )}
+                  {newRosterEntityType === 'Branch' && (
+                    <Select mode="multiple" showSearch placeholder="Select Branches" optionFilterProp="children">
+                      {branches.map(b => <Option key={b._id} value={b._id}>{b.name}</Option>)}
+                    </Select>
+                  )}
+                  {newRosterEntityType === 'Location' && (
+                    <Select mode="multiple" showSearch placeholder="Select Locations" optionFilterProp="children">
+                      {locations.map(l => <Option key={l._id} value={l._id}>{l.name}</Option>)}
+                    </Select>
+                  )}
+                  {newRosterEntityType === 'Grade' && (
+                    <Select mode="multiple" showSearch placeholder="Select Grades" optionFilterProp="children">
+                      {grades.map(g => <Option key={g._id} value={g._id}>{g.name}</Option>)}
+                    </Select>
+                  )}
+               </Form.Item>
+            )}
+            
+            {newRosterEntityType === 'Company' && (
+               <div className="pt-[34px] text-sm text-emerald-600 font-medium flex items-center gap-2">
+                 <CheckCircle2 size={16}/> Applies to ALL employees
+               </div>
+            )}
+          </div>
 
           <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
             <Button onClick={() => setIsNewRosterOpen(false)}>Cancel</Button>
