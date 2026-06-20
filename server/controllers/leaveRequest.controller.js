@@ -444,18 +444,7 @@ exports.applyLeave = async (req, res) => {
             }
         }
 
-        // Fetch effective policy early for validations
-        const employeeDoc = isHR
-            ? await Employee.findById(employeeId).select('leavePolicy leaveBalanceYear joiningDate tenant employeeType role department departmentId grade gradeId')
-            : actorEmployee;
-            
-        if (!employeeDoc?.leavePolicy && !['LOP', 'Loss of Pay', 'Leave without Pay', 'Personal Leave'].includes(leaveType)) {
-            return res.status(400).json({ error: 'NO_ACTIVE_LEAVE_POLICY', message: 'No active leave policy assigned.' });
-        }
-
-        const effectivePolicy = employeeDoc?.leavePolicy ? await LeavePolicy.findById(employeeDoc.leavePolicy) : null;
-        const activeRule = effectivePolicy?.rules?.find(r => r.leaveType === leaveType);
-
+        // Fetch effective policy and resolve rules for validations
         const start = new Date(startDate);
         const end = new Date(endDate || startDate);
         const today = new Date();
@@ -514,53 +503,34 @@ exports.applyLeave = async (req, res) => {
             }
         }
 
-        // 1. Notice Days / Post Facto Validations
-        if (!isHR && activeRule) {
-            if (start >= today) {
-                const diffTime = start.getTime() - today.getTime();
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                if (diffDays < activeRule.advanceNoticeDays) {
-                    return res.status(400).json({ error: `Advance notice of ${activeRule.advanceNoticeDays} days is required for ${leaveType} leave.` });
-                }
-            } else {
-                // Past date
-                if (!activeRule.postFactoAllowed) {
-                    return res.status(400).json({ error: "Past dates are not allowed for this leave type." });
-                }
-                if (activeRule.maxPostFactoCount > 0) {
-                    const yearStart = new Date(year, 0, 1);
-                    const yearEnd = new Date(year, 11, 31, 23, 59, 59);
-                    const postFactoCount = await LeaveRequest.countDocuments({
-                        tenant: req.tenantId,
-                        employee: employeeId,
-                        leaveType,
-                        $expr: { $lt: ["$startDate", "$createdAt"] },
-                        status: { $ne: 'Rejected' },
-                        createdAt: { $gte: yearStart, $lte: yearEnd }
-                    });
-                    if (postFactoCount >= activeRule.maxPostFactoCount) {
-                        return res.status(400).json({ error: `You have reached the maximum limit of ${activeRule.maxPostFactoCount} post-facto applications for ${leaveType} this year.` });
-                    }
-                }
-            }
         // 1. Dynamic Date & Policy Validations
         if (!isHR && activeRule) {
             // Check Advance Notice
             if (activeRule.advanceNoticeDays > 0) {
-                const noticeDate = new Date(today);
-                noticeDate.setDate(noticeDate.getDate() + activeRule.advanceNoticeDays);
-                if (start < noticeDate) {
-                    return res.status(400).json({ error: `This leave type requires at least ${activeRule.advanceNoticeDays} days of advance notice.` });
+                if (start >= today) {
+                    const diffTime = start.getTime() - today.getTime();
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    if (diffDays < activeRule.advanceNoticeDays) {
+                        return res.status(400).json({ error: `Advance notice of ${activeRule.advanceNoticeDays} days is required for ${leaveType} leave.` });
+                    }
+                } else {
+                    const noticeDate = new Date(today);
+                    noticeDate.setDate(noticeDate.getDate() + activeRule.advanceNoticeDays);
+                    if (start < noticeDate) {
+                        return res.status(400).json({ error: `This leave type requires at least ${activeRule.advanceNoticeDays} days of advance notice.` });
+                    }
                 }
             }
 
             // Check Post-Facto
             if (start < today) {
-                if (!activeRule.allowPostFacto) {
+                const isPostFactoAllowed = activeRule.postFactoAllowed || activeRule.allowPostFacto;
+                if (!isPostFactoAllowed) {
                     return res.status(400).json({ error: "Applying for leave in the past (post-facto) is not allowed for this leave type." });
                 }
                 
-                if (activeRule.maxPostFactoLimit > 0) {
+                const limit = activeRule.maxPostFactoCount || activeRule.maxPostFactoLimit || 0;
+                if (limit > 0) {
                     // Check how many post-facto leaves were applied this year
                     const startOfYear = new Date(today.getFullYear(), 0, 1);
                     const pastPostFactoLeaves = await LeaveRequest.countDocuments({
@@ -571,8 +541,8 @@ exports.applyLeave = async (req, res) => {
                         createdAt: { $gte: startOfYear } // Rough heuristic for applied post-facto
                     });
                     
-                    if (pastPostFactoLeaves >= activeRule.maxPostFactoLimit) {
-                        return res.status(400).json({ error: `You have exceeded the maximum allowed post-facto applications (${activeRule.maxPostFactoLimit}) for this leave type.` });
+                    if (pastPostFactoLeaves >= limit) {
+                        return res.status(400).json({ error: `You have exceeded the maximum allowed post-facto applications (${limit}) for this leave type.` });
                     }
                 }
             }
@@ -581,9 +551,10 @@ exports.applyLeave = async (req, res) => {
             const daysCountObj = await calculateNetDays(req, startDate, endDate || startDate, employeeId);
             const actualRequestedDays = isHalfDay ? (daysCountObj - 0.5) : daysCountObj;
             
-            if (activeRule.medicalCertificateMandatoryAfterDays > 0 && actualRequestedDays >= activeRule.medicalCertificateMandatoryAfterDays) {
+            const medDays = activeRule.medicalCertRequiredAfterDays || activeRule.medicalCertificateMandatoryAfterDays || 0;
+            if (medDays > 0 && actualRequestedDays >= medDays) {
                 if (!req.body.attachmentUrl && !req.body.attachment) {
-                    return res.status(400).json({ error: `A medical certificate or attachment is strictly mandatory for leaves of ${activeRule.medicalCertificateMandatoryAfterDays} or more days.` });
+                    return res.status(400).json({ error: `A medical certificate or attachment is strictly mandatory for leaves of ${medDays} or more days.` });
                 }
             }
             
@@ -645,7 +616,7 @@ exports.applyLeave = async (req, res) => {
                 return res.status(400).json({ error: `Medical certificate is mandatory for ${leaveType} leave of ${activeRule.medicalCertRequiredAfterDays} days or more.` });
             }
         }
-        const year = new Date(start).getFullYear();
+
 
         if (employeeDoc && effectivePolicy) {
             await leaveManagementService.ensureEmployeeLeaveBalanceForYear({
