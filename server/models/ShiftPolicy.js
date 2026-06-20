@@ -30,7 +30,21 @@ const ShiftPolicySchema = new mongoose.Schema({
             action: { type: String, enum: ['LATE_MARK', 'HALF_DAY', 'ABSENT', 'DEDUCT_LEAVE'] }
         }],
         // Minimum hours thresholds
-        absentThresholdMinutes: { type: Number, default: 240 } // IF Working Hours < 4 (240 min) THEN Absent
+        absentThresholdMinutes: { type: Number, default: 240 }, // IF Working Hours < 4 (240 min) THEN Absent
+        
+        // Punch Window Limits
+        punchWindow: {
+            maxAdvancePunchInMinutes: { type: Number, default: 120 }, // How early can they punch in (minutes)
+            maxLatePunchOutMinutes: { type: Number, default: 120 }    // How late can they punch out (minutes)
+        },
+        
+        // Absent & Sandwich Config
+        absentCfg: {
+            autoMarkAbsentOnNoPunch: { type: Boolean, default: true },
+            sandwichLeaveEnabled: { type: Boolean, default: false },
+            sandwichWeekendFill: { type: Boolean, default: false },
+            sandwichHolidayFill: { type: Boolean, default: false }
+        }
     },
 
     // TAB 3: PERMISSION ENGINE

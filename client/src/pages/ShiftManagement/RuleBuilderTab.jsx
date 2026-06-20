@@ -41,19 +41,59 @@ export default function RuleBuilderTab({ activeShiftId }) {
     try {
       setLoading(true);
       const res = await shiftMasterService.getShiftById(shiftId);
-      if (res.success && res.data.currentPolicy) {
-        setCurrentPolicy(res.data.currentPolicy);
-        
-        // Transform backend data to form data
-        const p = res.data.currentPolicy;
-        form.setFieldsValue({
-          attendanceRules: p.attendanceRules || { lateMarks: [], earlyExit: [], absentThresholdMinutes: 240 },
-          permissionEngine: p.permissionEngine || { allowedDurations: [15, 30], monthlyLimitCount: 2, monthlyLimitMinutes: 120, yearlyLimitCount: 24, requiresApproval: true },
-          overtimeEngine: p.overtimeEngine || { isEligible: false, minimumMinutesToQualify: 60, maximumMinutesPerDay: 240, normalMultiplier: 1.0, holidayMultiplier: 2.0, weeklyOffMultiplier: 2.0, nightShiftMultiplier: 1.5, requiresApproval: true }
-        });
-      } else {
-        setCurrentPolicy(null);
-        form.resetFields();
+      if (res.success) {
+        const shiftData = res.data;
+        if (shiftData.currentPolicy) {
+          setCurrentPolicy(shiftData.currentPolicy);
+          const p = shiftData.currentPolicy;
+          form.setFieldsValue({
+            attendanceRules: p.attendanceRules || { lateMarks: [], earlyExit: [], absentThresholdMinutes: 240, absentCfg: { autoMarkAbsentOnNoPunch: true, sandwichLeaveEnabled: false, sandwichWeekendFill: false, sandwichHolidayFill: false } },
+            permissionEngine: p.permissionEngine || { allowedDurations: [15, 30], monthlyLimitCount: 2, monthlyLimitMinutes: 120, yearlyLimitCount: 24, requiresApproval: true },
+            overtimeEngine: p.overtimeEngine || { isEligible: false, minimumMinutesToQualify: 60, maximumMinutesPerDay: 240, normalMultiplier: 1.0, holidayMultiplier: 2.0, weeklyOffMultiplier: 2.0, nightShiftMultiplier: 1.5, requiresApproval: true }
+          });
+        } else {
+          setCurrentPolicy(null);
+          // Auto-fill template based on Shift Type instead of just resetting
+          const shiftType = shiftData.type;
+          
+          let defaultLateMarks = [{ conditionType: 'GREATER_THAN', minutes: 15, action: 'LATE_MARK' }];
+          let absentThreshold = 240; // 4 hours
+          let isOtEligible = false;
+
+          if (shiftType === 'Support' || shiftType === '24x7 Support') {
+            defaultLateMarks = [{ conditionType: 'GREATER_THAN', minutes: 5, action: 'HALF_DAY' }];
+            isOtEligible = true;
+          } else if (shiftType === 'Short Shift') {
+            absentThreshold = 120; // 2 hours
+          } else if (shiftType === 'Flexible' || shiftType === 'Project Based') {
+            defaultLateMarks = []; // No strict late marks
+          }
+
+          form.setFieldsValue({
+            attendanceRules: {
+              lateMarks: defaultLateMarks,
+              earlyExit: [{ conditionType: 'GREATER_THAN', minutes: 10, action: 'LATE_MARK' }],
+              absentThresholdMinutes: absentThreshold,
+              absentCfg: {
+                autoMarkAbsentOnNoPunch: true,
+                sandwichLeaveEnabled: false,
+                sandwichWeekendFill: false,
+                sandwichHolidayFill: false
+              }
+            },
+            permissionEngine: { allowedDurations: [15, 30, 60], monthlyLimitCount: 2, monthlyLimitMinutes: 120, yearlyLimitCount: 24, requiresApproval: true },
+            overtimeEngine: { 
+              isEligible: isOtEligible, 
+              minimumMinutesToQualify: 60, 
+              maximumMinutesPerDay: 240, 
+              normalMultiplier: 1.0, 
+              holidayMultiplier: 2.0, 
+              weeklyOffMultiplier: 2.0, 
+              nightShiftMultiplier: 1.5, 
+              requiresApproval: true 
+            }
+          });
+        }
       }
     } catch (error) {
       message.error("Failed to load policy rules");
@@ -128,6 +168,17 @@ export default function RuleBuilderTab({ activeShiftId }) {
               <div className="flex gap-4 mb-6">
                  <Form.Item name={['attendanceRules', 'absentThresholdMinutes']} label="Mark Absent if Working Hours < (Minutes)" className="mb-0">
                     <InputNumber min={0} />
+                 </Form.Item>
+              </div>
+
+              {/* Punch Window Limits */}
+              <Divider orientation="left" plain>Punch Timing Limits</Divider>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                 <Form.Item name={['attendanceRules', 'punchWindow', 'maxAdvancePunchInMinutes']} label="Max Advance Punch In (Minutes Before Shift)" tooltip="e.g. 120 means they can punch in up to 2 hours before the shift starts.">
+                    <InputNumber min={0} className="w-full" placeholder="e.g. 120" />
+                 </Form.Item>
+                 <Form.Item name={['attendanceRules', 'punchWindow', 'maxLatePunchOutMinutes']} label="Max Late Punch Out (Minutes After Shift)" tooltip="e.g. 120 means they can punch out up to 2 hours after the shift ends.">
+                    <InputNumber min={0} className="w-full" placeholder="e.g. 120" />
                  </Form.Item>
               </div>
 
@@ -206,6 +257,57 @@ export default function RuleBuilderTab({ activeShiftId }) {
                   </>
                 )}
               </Form.List>
+
+              {/* ── Absent & Sandwich Leave Rules ──────────────────── */}
+              <Divider orientation="left" plain>Absent & Sandwich Leave Rules</Divider>
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-2">
+                <div className="mb-4">
+                  <p className="text-sm text-amber-700 font-medium mb-1">🥪 What is Sandwich Leave?</p>
+                  <p className="text-xs text-amber-600">If an employee takes leave on Friday and Monday, then Saturday (Weekend) and Sunday (Weekly Off) are also counted as Leave/Absent days. This prevents misuse of leaves around weekends or holidays.</p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <Form.Item
+                    name={['attendanceRules', 'absentCfg', 'autoMarkAbsentOnNoPunch']}
+                    valuePropName="checked"
+                    label="Auto Mark Absent on No Punch"
+                  >
+                    <Switch checkedChildren="Yes" unCheckedChildren="No" />
+                  </Form.Item>
+
+                  <Form.Item
+                    name={['attendanceRules', 'absentCfg', 'sandwichLeaveEnabled']}
+                    valuePropName="checked"
+                    label="Enable Sandwich Leave Rule"
+                  >
+                    <Switch checkedChildren="Enabled" unCheckedChildren="Disabled" />
+                  </Form.Item>
+
+                  <Form.Item noStyle shouldUpdate={(prev, cur) => prev.attendanceRules?.absentCfg?.sandwichLeaveEnabled !== cur.attendanceRules?.absentCfg?.sandwichLeaveEnabled}>
+                    {({ getFieldValue }) =>
+                      getFieldValue(['attendanceRules', 'absentCfg', 'sandwichLeaveEnabled']) ? (
+                        <div className="flex flex-col gap-3">
+                          <Form.Item
+                            name={['attendanceRules', 'absentCfg', 'sandwichWeekendFill']}
+                            valuePropName="checked"
+                            label="Apply to Weekends Between Absences"
+                            className="mb-0"
+                          >
+                            <Switch checkedChildren="Yes" unCheckedChildren="No" />
+                          </Form.Item>
+                          <Form.Item
+                            name={['attendanceRules', 'absentCfg', 'sandwichHolidayFill']}
+                            valuePropName="checked"
+                            label="Apply to Holidays Between Absences"
+                            className="mb-0"
+                          >
+                            <Switch checkedChildren="Yes" unCheckedChildren="No" />
+                          </Form.Item>
+                        </div>
+                      ) : null
+                    }
+                  </Form.Item>
+                </div>
+              </div>
             </Card>
 
             {/* ============================== */}

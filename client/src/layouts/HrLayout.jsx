@@ -122,8 +122,7 @@ export default function HRLayout() {
           { label: 'History', to: `${pathPrefix}/attendance-history`, icon: History, permission: 'attendance.history' },
           { label: 'Live Tracking', to: `${pathPrefix}/attendance/live-tracking`, icon: MapPin, permission: 'attendance.liveTracking' },
           { label: 'Calendar', to: `${pathPrefix}/attendance-calendar`, icon: CalendarDays, permission: 'attendance.calendar' },
-          { label: 'Face Updates', to: `${pathPrefix}/face-update-requests`, icon: Fingerprint, permission: 'attendance.face' },
-          { label: 'Settings', to: `${pathPrefix}/attendance/settings`, icon: Settings2, permission: 'attendance.settings' },
+          { label: 'Face Updates', to: `${pathPrefix}/face-update-requests`, icon: Fingerprint, permission: 'attendance.face' }
         ],
       },
       {

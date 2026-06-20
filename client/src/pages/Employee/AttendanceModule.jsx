@@ -390,6 +390,32 @@ export default function AttendanceModule({
                 </div>
               </div>
 
+              {/* Shift Information Banner */}
+              {settings?.effectiveShift && (
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100/50 shadow-sm flex items-center justify-between animate-in fade-in slide-in-from-bottom-2 duration-500">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-white rounded-lg shadow-sm flex items-center justify-center text-blue-600">
+                      <Clock size={20} />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-800">{settings.effectiveShift.name}</h3>
+                      <p className="text-xs font-medium text-slate-500">Your currently assigned shift schedule</p>
+                    </div>
+                  </div>
+                  <div className="bg-white px-4 py-2 rounded-lg border border-slate-100 shadow-sm">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                      <span className="text-sm font-bold text-slate-700">
+                        {settings.effectiveShift.startTime} to {settings.effectiveShift.endTime}
+                      </span>
+                      {settings.effectiveShift.isNightShift && (
+                        <span className="ml-2 text-[10px] font-bold bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full uppercase tracking-wider">Night Shift</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <ClientMeetingTracker
                 isCheckedIn={isCheckedIn}
                 isCheckedOut={isCheckedOut}

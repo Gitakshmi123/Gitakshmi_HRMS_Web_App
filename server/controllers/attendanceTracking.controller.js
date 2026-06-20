@@ -1885,6 +1885,43 @@ exports.markAttendance = async (req, res) => {
       );
     }
 
+    // ==== ENTERPRISE SHIFT POLICY: PUNCH WINDOW LIMITS ====
+    if (nextPunchType === 'IN' && employee.shiftId) {
+      try {
+        const ShiftMaster = req.tenantDB.model('ShiftMaster');
+        const ShiftPolicy = req.tenantDB.model('ShiftPolicy');
+        
+        const shiftMaster = await ShiftMaster.findById(employee.shiftId).lean();
+        if (shiftMaster && shiftMaster.coreTiming && shiftMaster.coreTiming.startTime) {
+          const shiftPolicy = await ShiftPolicy.findOne({ shiftMasterId: shiftMaster._id, tenant: tenantId, isCurrent: true }).lean();
+          
+          if (shiftPolicy?.attendanceRules?.punchWindow) {
+            const { maxAdvancePunchInMinutes } = shiftPolicy.attendanceRules.punchWindow;
+            if (maxAdvancePunchInMinutes !== undefined && maxAdvancePunchInMinutes !== null) {
+              const dayjs = require('dayjs');
+              const now = dayjs();
+              const [hours, minutes] = shiftMaster.coreTiming.startTime.split(':');
+              const shiftStartTimeToday = dayjs().hour(hours).minute(minutes).second(0);
+              
+              const diffMinutes = shiftStartTimeToday.diff(now, 'minute');
+              
+              if (diffMinutes > maxAdvancePunchInMinutes) {
+                return res.status(403).json({
+                  success: false,
+                  status: 'REJECTED',
+                  error: 'punch_in_too_early',
+                  message: `You cannot punch in yet. You are only allowed to punch in ${maxAdvancePunchInMinutes} minutes before your shift starts (${shiftMaster.coreTiming.startTime}).`
+                });
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Error evaluating punch window limits:", err);
+      }
+    }
+    // ======================================================
+
     if (nextPunchType === 'OUT' && !lastLogType && !attendance?.checkIn) {
       return sendAttendanceConflict(
         'missing_check_in',

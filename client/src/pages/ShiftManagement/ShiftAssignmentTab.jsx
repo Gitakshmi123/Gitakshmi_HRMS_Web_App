@@ -3,6 +3,8 @@ import { Table, Button, Modal, Form, Select, DatePicker, message, Space, Popconf
 import { Plus, Trash2, CalendarDays } from 'lucide-react';
 import shiftAssignmentService from '../../services/shiftAssignmentService';
 import shiftMasterService from '../../services/shiftMasterService';
+import orgService from '../../services/organizationService';
+import api from '../../utils/api';
 import dayjs from 'dayjs';
 
 const { Option } = Select;
@@ -10,6 +12,13 @@ const { Option } = Select;
 export default function ShiftAssignmentTab() {
   const [assignments, setAssignments] = useState([]);
   const [shifts, setShifts] = useState([]);
+  
+  // Organization Data for Dropdowns
+  const [employees, setEmployees] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [designations, setDesignations] = useState([]);
+  const [branches, setBranches] = useState([]);
+
   const [loading, setLoading] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [form] = Form.useForm();
@@ -20,13 +29,21 @@ export default function ShiftAssignmentTab() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [assignRes, shiftRes] = await Promise.all([
+      const [assignRes, shiftRes, empRes, deptRes, desigRes, branchRes] = await Promise.all([
         shiftAssignmentService.getAssignments(),
-        shiftMasterService.getAllShifts('Active')
+        shiftMasterService.getAllShifts('Active'),
+        api.get('/hr/employees?limit=1000').then(res => ({ success: true, data: res.data?.data || res.data })).catch(() => ({ success: false })),
+        api.get('/hierarchy/departments').then(res => res.data).catch(() => ({ success: false })),
+        api.get('/hierarchy/designations').then(res => res.data).catch(() => ({ success: false })),
+        api.get('/hierarchy/branches').then(res => res.data).catch(() => ({ success: false }))
       ]);
       
       if (assignRes.success) setAssignments(assignRes.data);
       if (shiftRes.success) setShifts(shiftRes.data);
+      if (empRes.success) setEmployees(empRes.data);
+      if (deptRes.success) setDepartments(deptRes.data);
+      if (desigRes.success) setDesignations(desigRes.data);
+      if (branchRes.success) setBranches(branchRes.data);
     } catch (error) {
       message.error("Failed to load data");
     } finally {
@@ -100,9 +117,28 @@ export default function ShiftAssignmentTab() {
       render: type => <Tag color={getPriorityColor(type)}>{type}</Tag>
     },
     { 
-      title: 'Target (ID)', 
+      title: 'Target', 
       key: 'target',
-      render: (_, record) => record.entityType === 'Company' ? 'All Employees (Default)' : record.entityId
+      render: (_, record) => {
+        if (record.entityType === 'Company') return 'All Employees (Default)';
+        if (record.entityType === 'Employee') {
+          const emp = employees.find(e => e._id === record.entityId);
+          return emp ? `${emp.firstName} ${emp.lastName}` : record.entityId;
+        }
+        if (record.entityType === 'Department') {
+          const dept = departments.find(d => d._id === record.entityId);
+          return dept ? dept.name : record.entityId;
+        }
+        if (record.entityType === 'Designation') {
+          const desig = designations.find(d => d._id === record.entityId);
+          return desig ? desig.name : record.entityId;
+        }
+        if (record.entityType === 'Branch') {
+          const branch = branches.find(b => b._id === record.entityId);
+          return branch ? branch.name : record.entityId;
+        }
+        return record.entityId;
+      }
     },
     { 
       title: 'Assigned Shift', 
@@ -190,7 +226,26 @@ export default function ShiftAssignmentTab() {
             
             {entityType !== 'Company' && (
                <Form.Item name="entityId" label={`Select ${entityType}`} rules={[{ required: true }]}>
-                  <Input placeholder={`Enter ${entityType} ID (Mock)`} />
+                  {entityType === 'Employee' && (
+                    <Select showSearch placeholder="Select Employee" optionFilterProp="children">
+                      {employees.map(e => <Option key={e._id} value={e._id}>{e.firstName} {e.lastName} ({e.employeeId})</Option>)}
+                    </Select>
+                  )}
+                  {entityType === 'Department' && (
+                    <Select showSearch placeholder="Select Department" optionFilterProp="children">
+                      {departments.map(d => <Option key={d._id} value={d._id}>{d.name}</Option>)}
+                    </Select>
+                  )}
+                  {entityType === 'Designation' && (
+                    <Select showSearch placeholder="Select Designation" optionFilterProp="children">
+                      {designations.map(d => <Option key={d._id} value={d._id}>{d.name}</Option>)}
+                    </Select>
+                  )}
+                  {entityType === 'Branch' && (
+                    <Select showSearch placeholder="Select Branch" optionFilterProp="children">
+                      {branches.map(b => <Option key={b._id} value={b._id}>{b.name}</Option>)}
+                    </Select>
+                  )}
                </Form.Item>
             )}
           </div>

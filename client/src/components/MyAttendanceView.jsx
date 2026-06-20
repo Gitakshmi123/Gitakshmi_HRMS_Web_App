@@ -176,10 +176,18 @@ export default function MyAttendanceView() {
                        </div>
                        <div>
                           <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-[0.3em] glow-text-indigo">My Attendance</h2>
-                          <div className="flex items-center gap-1.5 mt-0.5">
+                          <div className="flex items-center gap-1.5 mt-0.5 mb-1.5">
                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
                              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">System Status: Online</p>
                           </div>
+                          {settings?.effectiveShift && (
+                              <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded-lg">
+                                  <Clock size={10} className="text-indigo-500" />
+                                  <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">
+                                      Shift: {settings.effectiveShift.name} ({settings.effectiveShift.startTime} - {settings.effectiveShift.endTime})
+                                  </span>
+                              </div>
+                          )}
                        </div>
                     </div>
 

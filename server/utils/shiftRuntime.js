@@ -138,7 +138,57 @@ function buildEffectiveAttendanceSettings(baseSettings, shiftConfig) {
     return settings;
 }
 
+function translateShiftPolicyToLegacyConfig(shiftMaster, shiftPolicy) {
+    if (!shiftMaster) return null;
+
+    const legacyConfig = {
+        startTime: shiftMaster.coreTiming?.startTime,
+        endTime: shiftMaster.coreTiming?.endTime,
+        graceMinutes: shiftMaster.coreTiming?.graceMinutes,
+        isNightShift: shiftMaster.isNightShift,
+        punchMode: { mode: shiftMaster.punchMode || 'single' },
+        
+        workingHoursCfg: {
+            halfDayThresholdHours: shiftPolicy?.attendanceRules?.absentThresholdMinutes ? (shiftPolicy.attendanceRules.absentThresholdMinutes / 60) : 4,
+            fullDayThresholdHours: 8,
+            graceLateMinutes: shiftMaster.coreTiming?.graceMinutes,
+        },
+        
+        lateMarkRules: {
+            enabled: shiftPolicy?.attendanceRules?.lateMarks?.length > 0,
+            allowedLateMinutesPerDay: shiftPolicy?.attendanceRules?.lateMarks?.[0]?.minutes || 0,
+            lateMarksToHalfDay: shiftPolicy?.attendanceRules?.lateMarks?.find(r => r.action === 'HALF_DAY')?.minutes ? 3 : 0,
+            autoLeaveDeduction: false
+        },
+        
+        earlyExitRules: {
+            enabled: shiftPolicy?.attendanceRules?.earlyExit?.length > 0,
+            allowedEarlyMinutesPerDay: shiftPolicy?.attendanceRules?.earlyExit?.[0]?.minutes || 0,
+        },
+
+        overtimeCfg: {
+            enabled: !!shiftPolicy?.overtimeEngine?.isEligible,
+            startAfterMinutes: shiftPolicy?.overtimeEngine?.minimumMinutesToQualify || 30
+        },
+
+        absentCfg: {
+            autoMarkAbsentOnNoPunch: shiftPolicy?.attendanceRules?.absentCfg?.autoMarkAbsentOnNoPunch ?? true,
+            sandwichLeaveEnabled: shiftPolicy?.attendanceRules?.absentCfg?.sandwichLeaveEnabled ?? false,
+            sandwichWeekendFill: shiftPolicy?.attendanceRules?.absentCfg?.sandwichWeekendFill ?? false,
+            sandwichHolidayFill: shiftPolicy?.attendanceRules?.absentCfg?.sandwichHolidayFill ?? false
+        },
+
+        locationCfg: {
+            geoFencingEnabled: false,
+            ipRestrictionEnabled: false
+        }
+    };
+
+    return legacyConfig;
+}
+
 module.exports = {
     buildEffectiveAttendanceSettings,
     normalizePunchMode,
+    translateShiftPolicyToLegacyConfig,
 };

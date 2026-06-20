@@ -572,7 +572,7 @@ export default function EmployeeForm({
 
   const loadShifts = useCallback(async () => {
     try {
-      const res = await api.get('/attendance/shifts');
+      const res = await api.get('/shift-master?status=Active');
       setShifts(res.data?.data || []);
     } catch (err) {
       if (err.response?.status === 403 || err.response?.status === 404) return;
