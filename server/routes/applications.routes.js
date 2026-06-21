@@ -12,6 +12,18 @@ router.use(auth.authenticate);
 // GET /api/applications/:id — Fetch single application with status
 router.get('/:id', applicantCtrl.getApplicantById);
 
+// POST /api/applications/:id/request-documents — HR requests documents from candidate
+router.post('/:id/request-documents', applicantCtrl.requestDocuments);
+
+// POST /api/applications/:id/approve-profile - HR approves profile
+router.post('/:id/approve-profile', applicantCtrl.approveProfile);
+
+// POST /api/applications/:id/request-reupload - HR requests profile re-upload
+router.post('/:id/request-reupload', applicantCtrl.requestReupload);
+
+// POST /api/applications/:id/convert-to-employee - Convert to Employee
+router.post('/:id/convert-to-employee', applicantCtrl.convertToEmployee);
+
 router.patch('/:id/status', (req, res, next) => {
   // Enforce strict flow on this alias endpoint
   try {

@@ -279,6 +279,8 @@ export default function EmployeeExcelUploadModal({ isOpen, onClose, onSuccess })
 
     if (!hasFullName && (!hasFirstName || !hasLastName)) {
       errors.push('Name column is missing. The spreadsheet must contain either "First Name" and "Last Name", or a single "Name" column.');
+    }
+
     // Minimum required column presence checks
     const requiredChecks = [
       { display: 'First Name (or Name)',    patterns: ['firstname','first', 'name', 'employeename', 'fullname'] },
@@ -298,7 +300,18 @@ export default function EmployeeExcelUploadModal({ isOpen, onClose, onSuccess })
     const columnChecks = [
       { display: 'Official Email', patterns: ['officialemail','email','emailaddress','companymailid','mailid','personalemail','personalemailid','personalmailid'], warnMsg: 'Email column is missing - system will auto-generate placeholder emails.' },
       { display: 'Joining Date', patterns: ['joiningdate','doj','dateofjoining','joining'], warnMsg: 'Joining Date is missing - will default to today\'s date.' },
-      { display: 'Department', patterns: ['department','dept'], warnMsg: 'Department is missing - can be assigned later.' },
+      { display: 'Department', patterns: ['department','dept'], warnMsg: 'Department is missing - can be assigned later.' }
+    ];
+
+    columnChecks.forEach(({ display, patterns, warnMsg }) => {
+      const found = normalizedAvailable.some(norm => patterns.some(p => norm === p));
+      if (!found && warnMsg) warnings.push(warnMsg);
+    });
+
+    // Validate first 50 rows for warnings
+    const rowsToValidate = data.slice(0, 50);
+    rowsToValidate.forEach((row, idx) => {
+      const { errors: rowErrors, warnings: rowWarnings } = validateRow(row, idx);
       rowWarnings.forEach(warn => warnings.push(`Row ${idx + 2}: ${warn}`));
     });
 
@@ -407,6 +420,7 @@ export default function EmployeeExcelUploadModal({ isOpen, onClose, onSuccess })
             const norm = localNormalize(cell);
             if (norm && HEADER_INDICATORS.some(ind => norm === ind || norm.includes(ind))) {
               matches++;
+            }
           });
 
           if (matches > maxMatches && matches >= 2) {
@@ -436,113 +450,7 @@ export default function EmployeeExcelUploadModal({ isOpen, onClose, onSuccess })
             dataRows = rawData.slice(1);
           }
         }
-        const rawAoA = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
-        
-        let headerRowIndex = -1;
-        const searchPatterns = [
-          'name', 'employeename', 'fullname', 'empname', 
-          'firstname', 'lastname', 'email', 'emailaddress', 
-          'companymailid', 'personalemailid', 'mailid',
-          'department', 'role', 'gender', 'dob', 'dateofbirth'
-        ];
-
-        for (let i = 0; i < rawAoA.length; i++) {
-          const row = rawAoA[i];
-          if (!Array.isArray(row)) continue;
-          
-          let matchCount = 0;
-          for (let j = 0; j < row.length; j++) {
-            const cellVal = String(row[j] || '').replace(/\([^)]*\)/g, '').trim().toLowerCase().replace(/\s/g, '').replace(/[^a-z0-9]/g, '');
-            if (searchPatterns.includes(cellVal)) {
-              matchCount++;
-            }
-          }
-          
-          // Consider it the header row if we find at least 2 matching key columns
-          if (matchCount >= 2) {
-            headerRowIndex = i;
-            break;
-          }
-        }
-
-        if (headerRowIndex === -1) {
-          setUploadErrors(['Could not find valid headers (like First Name, Email) in the Excel file. Please use the downloaded template.']);
-          setUploadedFile(null);
-          return;
-        }
-
-        const headers = rawAoA[headerRowIndex].map(h => String(h || '').trim());
-        const dataRows = [];
-        
-          let password = '';
-          let fn = row[fnKey] ? String(row[fnKey]).trim() : '';
-          let ln = row[lnKey] ? String(row[lnKey]).trim() : '';
-          
-          if (!fn && !ln && nameKey && row[nameKey]) {
-             const parts = String(row[nameKey]).trim().split(/\s+/);
-             fn = parts[0] || '';
-             ln = parts.slice(1).join(' ') || 'Unknown';
-          }
-          
-          const dob = row[dobKey] ? String(row[dobKey]).trim() : '';
-          
-          if (!password && dobKey && row[dobKey]) {
-             const dobStr = String(row[dobKey]).trim();
-             const dateObj = parseFlexibleDate(dobStr);
-             const birthYearStr = dateObj ? dateObj.getFullYear().toString() : '2026';
-             
-             let word1 = fn;
-             let word2 = ln;
-             
-             if (!fn && nameKey && row[nameKey]) {
-                const nameStr = String(row[nameKey]).trim();
-                const parts = nameStr.split(/\s+/);
-                word1 = parts[0] || '';
-                word2 = parts.length > 1 ? parts[1] : '';
-             }
-             
-             const w1_3 = word1.substring(0, 3).toLowerCase();
-             const w2_3 = word2.substring(0, 3).toLowerCase();
-             
-             password = `${w1_3}${w2_3}@${birthYearStr}`;
-          }
-          if (!pwdKey) pwdKey = 'Password';
-          if (!emailKey) emailKey = 'Official Email';
-          
-          if (password) {
-             row[pwdKey] = password;
-          }
-          
-          // Find the first email candidate that has a non-empty value
-          let finalEmail = '';
-          for (const key of emailCandidates) {
-             if (row[key] && String(row[key]).trim()) {
-                finalEmail = String(row[key]).trim();
-                emailKey = key;
-                break;
-             }
-          }
-          
-          if (!finalEmail) {
-             const empCodeStr = row[empIdKey] ? String(row[empIdKey]).trim().toLowerCase() : '';
-             if (empCodeStr) {
-                finalEmail = `${empCodeStr}@gitakshmi.com`;
-             } else if (fn) {
-                finalEmail = `${fn.toLowerCase()}.${ln.toLowerCase().replace(/\s/g, '')}@gitakshmi.com`;
-             }
-             if (emailKey) row[emailKey] = finalEmail;
-             else {
-                emailKey = 'Official Email';
-                row[emailKey] = finalEmail;
-             }
-          }
-          
-          row._generatedEmail = finalEmail;
-          row._generatedPassword = password;
-          row._generatedName = `${fn} ${ln}`.trim();
-          row._generatedEmpCode = row[empIdKey] || 'Auto-generated';
-          return row;
-        });
+        const filteredData = dataRows.filter(row => Object.values(row).some(v => v !== null && String(v).trim() !== ''));
 
         // Pre-process and enrich rows
         const jsonData = filteredData.map(row => {

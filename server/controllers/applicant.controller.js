@@ -26,14 +26,19 @@ const companyIdConfig = require('./companyIdConfig.controller');
 function getModels(req) {
     if (!req.tenantDB) throw new Error("Tenant database connection not available");
     const db = req.tenantDB;
+    
+    const safeGetModel = (modelName, modelPath) => {
+        return db.models[modelName] || db.model(modelName, require(`../models/${modelPath || modelName}`));
+    };
+
     return {
-        Applicant: db.model("Applicant"),
-        SalaryTemplate: db.model("SalaryTemplate"),
-        CompanyProfile: db.model("CompanyProfile"),
-        TrackerCandidate: db.model("TrackerCandidate"),
-        CandidateStatusLog: db.model("CandidateStatusLog"),
-        Requirement: db.model("Requirement"),
-        Employee: db.model("Employee")
+        Applicant: safeGetModel("Applicant"),
+        SalaryTemplate: safeGetModel("SalaryTemplate"),
+        CompanyProfile: safeGetModel("CompanyProfile"),
+        TrackerCandidate: safeGetModel("TrackerCandidate"),
+        CandidateStatusLog: safeGetModel("CandidateStatusLog"),
+        Requirement: safeGetModel("Requirement"),
+        Employee: safeGetModel("Employee")
     };
 }
 
@@ -1058,3 +1063,107 @@ exports.rescoreAllApplicants = async (req, res) => {
     }
 };
 
+
+
+exports.requestDocuments = async (req, res) => { try { const Applicant = req.tenantDB.model('Applicant'); const app = await Applicant.findById(req.params.id); if (!app) return res.status(404).json({success: false, message: 'Application not found'}); app.status = 'Document Requested'; await app.save(); res.json({success: true, message: 'Documents requested successfully', application: app}); } catch (err) { res.status(500).json({success: false, message: err.message}); } };
+
+exports.approveProfile = async (req, res) => { 
+    try { 
+        const Applicant = req.tenantDB.model('Applicant'); 
+        const app = await Applicant.findById(req.params.id); 
+        if (!app) return res.status(404).json({success: false, message: 'Application not found'}); 
+        app.status = 'Document Verified'; 
+        if (!app.timeline) app.timeline = [];
+        app.timeline.push({
+            status: 'Document Verified',
+            message: 'HR has approved your profile and documents.',
+            updatedBy: req.user?.name || "HR",
+            timestamp: new Date()
+        });
+        await app.save(); 
+        res.json({success: true, message: 'Profile approved successfully', application: app}); 
+    } catch (err) { 
+        res.status(500).json({success: false, message: err.message}); 
+    } 
+};
+
+exports.requestReupload = async (req, res) => { 
+    try { 
+        const Applicant = req.tenantDB.model('Applicant'); 
+        const app = await Applicant.findById(req.params.id); 
+        if (!app) return res.status(404).json({success: false, message: 'Application not found'}); 
+        const { reason } = req.body;
+        app.status = 'Re-upload Required'; 
+        app.rejectionReason = reason;
+        if (!app.timeline) app.timeline = [];
+        app.timeline.push({
+            status: 'Re-upload Required',
+            message: `HR requested document re-upload. Reason: ${reason || 'Not specified'}`,
+            updatedBy: req.user?.name || "HR",
+            timestamp: new Date()
+        });
+        await app.save(); 
+        res.json({success: true, message: 'Re-upload requested successfully', application: app}); 
+    } catch (err) { 
+        res.status(500).json({success: false, message: err.message}); 
+    } 
+};
+
+exports.convertToEmployee = async (req, res) => {
+    try {
+        const { Applicant, Employee } = getModels(req);
+        const app = await Applicant.findById(req.params.id);
+        if (!app) return res.status(404).json({ success: false, message: 'Application not found' });
+        
+        if (app.employeeId) {
+            return res.status(400).json({ success: false, message: 'Candidate already converted to employee.' });
+        }
+
+        const employeeData = app.customData?.employeeData || {};
+        const personalInfo = employeeData.personalInfo || {};
+
+        const firstName = personalInfo.firstName || app.name.split(' ')[0] || '';
+        const lastName = personalInfo.lastName || app.name.split(' ').slice(1).join(' ') || '';
+
+        const count = await Employee.countDocuments({ tenant: req.tenantId });
+        const employeeCode = `EMP-${Math.floor(Math.random() * 10000)}-${count + 1}`;
+
+        const newEmployee = new Employee({
+            tenant: req.tenantId,
+            mainCompanyId: req.tenantId,
+            firstName,
+            lastName,
+            email: personalInfo.email || app.email,
+            contactNo: personalInfo.mobile || app.mobile,
+            gender: personalInfo.gender || 'Other',
+            dob: personalInfo.dob,
+            bloodGroup: personalInfo.bloodGroup,
+            maritalStatus: personalInfo.maritalStatus,
+            fatherName: personalInfo.fatherName,
+            emergencyContactName: personalInfo.emergencyContactName,
+            emergencyContactNumber: personalInfo.emergencyContactNumber,
+            employeeId: employeeCode,
+            employeeCode: employeeCode,
+            status: 'Active',
+            joiningDate: new Date()
+        });
+
+        await newEmployee.save();
+
+        app.employeeId = newEmployee._id;
+        app.status = 'Hired';
+        if (!app.timeline) app.timeline = [];
+        app.timeline.push({
+            status: 'Hired',
+            message: 'Candidate converted to Employee automatically.',
+            updatedBy: req.user?.name || "System",
+            timestamp: new Date()
+        });
+
+        await app.save();
+
+        res.json({ success: true, message: 'Candidate successfully converted to Employee.', employee: newEmployee });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+};

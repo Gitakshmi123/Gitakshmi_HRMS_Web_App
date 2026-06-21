@@ -184,6 +184,7 @@ export default function EmployeeForm({
   const [ifscLoading, setIfscLoading] = useState(false);
   const [passwordLock, setPasswordLock] = useState(!!employee?._id);
   const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
+  const [passwordEdited, setPasswordEdited] = useState(false);
   const [bypassValidation, setBypassValidation] = useState(false); // Developer bypass mode
 
   // Reset password input whenever switching to an existing employee record

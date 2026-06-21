@@ -1905,7 +1905,8 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
             loadApplicants();
             return true;
         } catch (error) {
-            showToast('error', 'Error', "Failed: " + error.message);
+            const errorMsg = error.response?.data?.message || error.message;
+            showToast('error', 'Error', "Failed: " + errorMsg);
             return false;
         }
     };
@@ -5829,6 +5830,80 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
                                     >
                                         <Download size={16} /> Download Resume
                                     </button>
+                                    {(selectedApplicant.status === 'Applied' || selectedApplicant.status === 'Shortlisted') && (
+                                        <button
+                                            onClick={async () => {
+                                                try {
+                                                    const res = await api.post(`/applications/${selectedApplicant._id}/request-documents`);
+                                                    if (res.data.success) {
+                                                        showToast('success', 'Documents Requested', 'Candidate has been notified to complete their profile.');
+                                                        loadApplicants(); // Refresh list
+                                                    }
+                                                } catch (err) {
+                                                    showToast('error', 'Request Failed', err.response?.data?.message || 'Failed to request documents');
+                                                }
+                                            }}
+                                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm flex items-center gap-2 shadow-sm transition"
+                                        >
+                                            <FileText size={16} /> Request Profile & Documents
+                                        </button>
+                                    )}
+                                    {selectedApplicant.status === 'Profile Submitted' && (
+                                        <>
+                                            <button
+                                                onClick={async () => {
+                                                    try {
+                                                        const res = await api.post(`/applications/${selectedApplicant._id}/approve-profile`);
+                                                        if (res.data.success) {
+                                                            showToast('success', 'Profile Approved', 'Candidate profile and documents have been verified.');
+                                                            loadApplicants();
+                                                        }
+                                                    } catch (err) {
+                                                        showToast('error', 'Approval Failed', err.response?.data?.message || 'Failed to approve profile');
+                                                    }
+                                                }}
+                                                className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium text-sm flex items-center gap-2 shadow-sm transition"
+                                            >
+                                                <CheckCircle size={16} /> Approve Profile
+                                            </button>
+                                            <button
+                                                onClick={async () => {
+                                                    const reason = window.prompt("Enter reason for requesting re-upload:");
+                                                    if (reason === null) return;
+                                                    try {
+                                                        const res = await api.post(`/applications/${selectedApplicant._id}/request-reupload`, { reason });
+                                                        if (res.data.success) {
+                                                            showToast('success', 'Re-upload Requested', 'Candidate has been notified to re-upload documents.');
+                                                            loadApplicants();
+                                                        }
+                                                    } catch (err) {
+                                                        showToast('error', 'Request Failed', err.response?.data?.message || 'Failed to request re-upload');
+                                                    }
+                                                }}
+                                                className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 font-medium text-sm flex items-center gap-2 shadow-sm transition"
+                                            >
+                                                <AlertCircle size={16} /> Request Re-upload
+                                            </button>
+                                        </>
+                                    )}
+                                    {selectedApplicant.status === 'Document Verified' && (
+                                        <button
+                                            onClick={async () => {
+                                                try {
+                                                    const res = await api.post(`/applications/${selectedApplicant._id}/convert-to-employee`);
+                                                    if (res.data.success) {
+                                                        showToast('success', 'Candidate Hired!', 'Candidate successfully converted to Employee.');
+                                                        loadApplicants();
+                                                    }
+                                                } catch (err) {
+                                                    showToast('error', 'Conversion Failed', err.response?.data?.message || 'Failed to convert to employee');
+                                                }
+                                            }}
+                                            className="px-6 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg hover:from-emerald-600 hover:to-teal-600 font-bold text-sm flex items-center gap-2 shadow-lg shadow-emerald-200"
+                                        >
+                                            <UserCheck size={16} /> Convert to Employee
+                                        </button>
+                                    )}
                                     {(selectedApplicant.offerStatus === 'REQUESTED' || selectedApplicant.offerRevisionRequested) && (
                                         <button
                                             onClick={() => {
