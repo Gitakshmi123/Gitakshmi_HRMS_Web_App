@@ -275,7 +275,7 @@ export const PermissionProvider = ({ children }) => {
 
     if (entry && typeof entry[normalizedAction] === 'boolean') return entry[normalizedAction];
 
-    if (!entry && !(permMap && Object.keys(permMap).length > 0) && ['employee', 'manager', 'staff', 'user'].includes(roleName)) {
+    if (!entry && ['employee', 'manager', 'staff', 'user'].includes(roleName)) {
       return checkPermission(getLegacyPermissionMap(roleName), pageKey, normalizedAction);
     }
 

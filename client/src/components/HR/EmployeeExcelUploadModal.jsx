@@ -469,25 +469,36 @@ export default function EmployeeExcelUploadModal({ isOpen, onClose, onSuccess })
           
           const dob = row[dobKey] ? String(row[dobKey]).trim() : '';
           
-          if (!password && dobKey && row[dobKey]) {
-             const dobStr = String(row[dobKey]).trim();
-             const dateObj = parseFlexibleDate(dobStr);
-             const birthYearStr = dateObj ? dateObj.getFullYear().toString() : '2026';
+          if (!password) {
+             // Fallback to 1234 if DOB is missing or invalid
+             let birthYearStr = '1234';
+             if (dobKey && row[dobKey]) {
+                const dateObj = parseFlexibleDate(row[dobKey]);
+                if (dateObj) {
+                   birthYearStr = dateObj.getFullYear().toString();
+                } else {
+                   const match = String(row[dobKey]).match(/(19|20)\d{2}/);
+                   if (match) birthYearStr = match[0];
+                }
+             }
              
              let word1 = fn;
              let word2 = ln;
              
-             if (!fn && nameKey && row[nameKey]) {
+             if (!fn && !ln && nameKey && row[nameKey]) {
                 const nameStr = String(row[nameKey]).trim();
                 const parts = nameStr.split(/\s+/);
                 word1 = parts[0] || '';
-                word2 = parts.length > 1 ? parts[1] : '';
+                word2 = parts.length > 1 ? parts[parts.length - 1] : '';
              }
              
-             const w1_3 = word1.substring(0, 3).toLowerCase();
-             const w2_3 = word2.substring(0, 3).toLowerCase();
+             if (!word1) word1 = 'Git';
+             if (!word2) word2 = 'Hrms';
              
-             password = `${w1_3}${w2_3}@${birthYearStr}`;
+             const w1_3 = word1.padEnd(3, 'a').substring(0, 3).toLowerCase();
+             const w2_3 = word2.padEnd(3, 'b').substring(0, 3).toLowerCase();
+             
+             password = `${w2_3}${w1_3}@${birthYearStr}`;
           }
           if (!pwdKey) pwdKey = 'Password';
           if (!emailKey) emailKey = 'Official Email';
@@ -498,11 +509,27 @@ export default function EmployeeExcelUploadModal({ isOpen, onClose, onSuccess })
           
           // Find the first email candidate that has a non-empty value
           let finalEmail = '';
-          for (const key of emailCandidates) {
-             if (row[key] && String(row[key]).trim()) {
-                finalEmail = String(row[key]).trim();
-                emailKey = key;
+          
+          // Prioritize official emails to match backend logic
+          const officialPatterns = ['officialemail', 'email', 'companymailid', 'companyemail', 'workemail', 'emailaddress', 'emailid', 'loginemail', 'employeeemail', 'mailid'];
+          
+          for (const pattern of officialPatterns) {
+             const keyMatch = emailCandidates.find(k => normalizeColumnName(k) === pattern);
+             if (keyMatch && row[keyMatch] && String(row[keyMatch]).trim()) {
+                finalEmail = String(row[keyMatch]).trim();
+                emailKey = keyMatch;
                 break;
+             }
+          }
+          
+          // Fallback to personal email or any other candidate
+          if (!finalEmail) {
+             for (const key of emailCandidates) {
+                if (row[key] && String(row[key]).trim()) {
+                   finalEmail = String(row[key]).trim();
+                   emailKey = key;
+                   break;
+                }
              }
           }
           

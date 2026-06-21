@@ -769,7 +769,7 @@ export default function AttendanceModule({
                   </div>
                 </div>
               </div>
-            )})}
+            )}
 
             {leavesSubTab === 'encashment' && encashConfig?.allowed && (
               <div className="space-y-6 animate-in slide-in-from-bottom-3 duration-300">
