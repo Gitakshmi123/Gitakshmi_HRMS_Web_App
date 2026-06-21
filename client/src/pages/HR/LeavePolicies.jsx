@@ -1018,7 +1018,7 @@ function LeaveLedgerPanel({ employees }) {
                                                 { header: 'Date', key: row => row.date ? new Date(row.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '' },
                                                 { header: 'Leave Type', key: 'leaveType' },
                                                 { header: 'Action', key: 'actionType' },
-                                                { header: 'Days', key: row => { const isPos = ['Opening','Accrual','Reversal','Credit'].includes(row.actionType); return `${isPos ? '+' : '-'}${Math.abs(row.days)}`; } },
+                                                { header: 'Days', key: row => Math.abs(row.days) },
                                                 { header: 'Previous Balance', key: row => row.previousBalance ?? 0 },
                                                 { header: 'New Balance', key: row => row.newBalance ?? 0 },
                                                 { header: 'Remarks', key: 'remarks' }
@@ -1060,7 +1060,7 @@ function LeaveLedgerPanel({ employees }) {
                                         {ledger.map(log => {
                                             const formattedDate = log.date ? new Date(log.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
                                             const isPositive = ['Opening', 'Accrual', 'Reversal', 'Credit'].includes(log.actionType);
-                                            const daysStr = `${isPositive ? '+' : '-'}${Math.abs(log.days)}`;
+                                            const daysStr = `${Math.abs(log.days)}`;
                                             
                                             return (
                                                 <tr key={log._id || log.createdAt} className="hover:bg-slate-50/50">
@@ -2394,10 +2394,70 @@ function SettingsPanel() {
         clPriorNotice: 1,
         elPriorNotice: 15
     });
+    const [rawSettings, setRawSettings] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [saving, setSaving] = useState(false);
 
-    const handleSave = () => {
-        showToast('success', 'Settings Saved', 'General Leave Policies Settings updated.');
+    useEffect(() => {
+        fetchSettings();
+    }, []);
+
+    const fetchSettings = async () => {
+        setLoading(true);
+        try {
+            const res = await api.get('/attendance/settings');
+            if (res.data) {
+                setRawSettings(res.data);
+                setSettings({
+                    sandwichRule: res.data.sandwichLeave ?? false,
+                    maxConsecutiveLeaves: res.data.maxConsecutiveLeaves ?? 15,
+                    clPriorNotice: res.data.clPriorNotice ?? 1,
+                    elPriorNotice: res.data.elPriorNotice ?? 15
+                });
+            }
+        } catch (err) {
+            console.error("Failed to load settings in SettingsPanel", err);
+        } finally {
+            setLoading(false);
+        }
     };
+
+    const handleSave = async () => {
+        try {
+            setSaving(true);
+            const updated = {
+                ...(rawSettings || {}),
+                sandwichLeave: settings.sandwichRule,
+                maxConsecutiveLeaves: settings.maxConsecutiveLeaves,
+                clPriorNotice: settings.clPriorNotice,
+                elPriorNotice: settings.elPriorNotice,
+                advancedPolicy: {
+                    ...(rawSettings?.advancedPolicy || {}),
+                    leaveIntegration: {
+                        ...(rawSettings?.advancedPolicy?.leaveIntegration || {}),
+                        sandwichRuleEnabled: settings.sandwichRule
+                    }
+                }
+            };
+            await api.put('/attendance/settings', updated);
+            setRawSettings(updated);
+            showToast('success', 'Settings Saved', 'General Leave Policies Settings updated.');
+        } catch (err) {
+            console.error("Failed to save settings", err);
+            showToast('error', 'Error', 'Failed to save settings.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="py-20 text-center flex flex-col items-center justify-center gap-3">
+                <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Loading configuration...</p>
+            </div>
+        );
+    }
 
     return (
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-5 max-w-xl animate-in slide-in-from-bottom-4 duration-500">
@@ -2453,9 +2513,10 @@ function SettingsPanel() {
 
                 <button
                     onClick={handleSave}
-                    className="w-full py-2.5 bg-slate-900 hover:bg-black text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-md flex justify-center"
+                    disabled={saving}
+                    className="w-full py-2.5 bg-slate-900 hover:bg-black text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-md flex justify-center disabled:opacity-50"
                 >
-                    Save General Configuration
+                    {saving ? 'Saving...' : 'Save General Configuration'}
                 </button>
             </div>
         </div>
@@ -2834,6 +2895,166 @@ function LeaveRequestsPanel() {
     );
 }
 
+// ─── Smart Defaults per Leave Type ───────────────────────────────────────────
+// When the user picks a leave type in the rule configurator, these defaults
+// are merged into ruleForm so the form pre-populates with sane industry values.
+const LEAVE_TYPE_DEFAULTS = {
+    EL: {
+        totalPerYear: 21,
+        color: '#3b82f6',
+        carryForwardAllowed: true,
+        maxCarryForward: 15,
+        halfDayAllowed: true,
+        requiresApproval: true,
+        accrualType: 'monthly',
+        monthlyAccrual: true,
+        monthlyAccrualRate: 1.75,
+        accrualDependsOnAttendance: true,
+        minAttendanceDays: 20,
+        countPresent: true,
+        countOnDuty: true,
+        countCompOff: true,
+        countHoliday: true,
+        countWeeklyOff: true,
+        countPaidLeave: false,
+        prorateForNewJoiners: false,
+        encashmentAllowed: true,
+    },
+    CL: {
+        totalPerYear: 7,
+        color: '#10b981',
+        carryForwardAllowed: false,
+        maxCarryForward: 0,
+        halfDayAllowed: true,
+        requiresApproval: true,
+        accrualType: 'yearly',
+        monthlyAccrual: false,
+        monthlyAccrualRate: 0,
+        accrualDependsOnAttendance: false,
+        minAttendanceDays: 20,
+        prorateForNewJoiners: true,
+        encashmentAllowed: false,
+    },
+    SL: {
+        totalPerYear: 7,
+        color: '#f59e0b',
+        carryForwardAllowed: false,
+        maxCarryForward: 0,
+        halfDayAllowed: true,
+        requiresApproval: true,
+        accrualType: 'yearly',
+        monthlyAccrual: false,
+        monthlyAccrualRate: 0,
+        accrualDependsOnAttendance: false,
+        minAttendanceDays: 20,
+        prorateForNewJoiners: true,
+        encashmentAllowed: false,
+    },
+    MATERNITY: {
+        totalPerYear: 84,
+        color: '#ec4899',
+        carryForwardAllowed: false,
+        maxCarryForward: 0,
+        halfDayAllowed: false,
+        requiresApproval: true,
+        accrualType: 'yearly',
+        monthlyAccrual: false,
+        monthlyAccrualRate: 0,
+        accrualDependsOnAttendance: false,
+        prorateForNewJoiners: false,
+        encashmentAllowed: false,
+        applicableGender: 'Female',
+        maxChildrenLimit: 2,
+    },
+    PATERNITY: {
+        totalPerYear: 15,
+        color: '#6366f1',
+        carryForwardAllowed: false,
+        maxCarryForward: 0,
+        halfDayAllowed: false,
+        requiresApproval: true,
+        accrualType: 'yearly',
+        monthlyAccrual: false,
+        monthlyAccrualRate: 0,
+        accrualDependsOnAttendance: false,
+        prorateForNewJoiners: false,
+        encashmentAllowed: false,
+        applicableGender: 'Male',
+        maxChildrenLimit: 2,
+    },
+    COMP_OFF: {
+        totalPerYear: 0,
+        color: '#06b6d4',
+        carryForwardAllowed: true,
+        maxCarryForward: 12,
+        halfDayAllowed: true,
+        requiresApproval: false,
+        accrualType: 'yearly',
+        monthlyAccrual: false,
+        monthlyAccrualRate: 0,
+        accrualDependsOnAttendance: false,
+        prorateForNewJoiners: false,
+        encashmentAllowed: false,
+        expiryMonths: 3,
+    },
+    BEREAVEMENT: {
+        totalPerYear: 5,
+        color: '#64748b',
+        carryForwardAllowed: false,
+        maxCarryForward: 0,
+        halfDayAllowed: false,
+        requiresApproval: true,
+        accrualType: 'yearly',
+        monthlyAccrual: false,
+        monthlyAccrualRate: 0,
+        accrualDependsOnAttendance: false,
+        prorateForNewJoiners: false,
+        encashmentAllowed: false,
+    },
+    MARRIAGE: {
+        totalPerYear: 3,
+        color: '#f97316',
+        carryForwardAllowed: false,
+        maxCarryForward: 0,
+        halfDayAllowed: false,
+        requiresApproval: true,
+        accrualType: 'yearly',
+        monthlyAccrual: false,
+        monthlyAccrualRate: 0,
+        accrualDependsOnAttendance: false,
+        prorateForNewJoiners: false,
+        encashmentAllowed: false,
+    },
+    WFH: {
+        totalPerYear: 24,
+        color: '#8b5cf6',
+        carryForwardAllowed: false,
+        maxCarryForward: 0,
+        halfDayAllowed: true,
+        requiresApproval: true,
+        accrualType: 'yearly',
+        monthlyAccrual: false,
+        monthlyAccrualRate: 0,
+        accrualDependsOnAttendance: false,
+        prorateForNewJoiners: false,
+        encashmentAllowed: false,
+    },
+    LOP: {
+        totalPerYear: 0,
+        color: '#ef4444',
+        carryForwardAllowed: false,
+        maxCarryForward: 0,
+        halfDayAllowed: true,
+        requiresApproval: true,
+        accrualType: 'yearly',
+        monthlyAccrual: false,
+        monthlyAccrualRate: 0,
+        accrualDependsOnAttendance: false,
+        prorateForNewJoiners: false,
+        encashmentAllowed: false,
+    },
+};
+
 const COMMON_POLICY_TEMPLATES = [
     {
         id: 'custom',
@@ -2843,22 +3064,100 @@ const COMMON_POLICY_TEMPLATES = [
     },
     {
         id: 'standard',
-        label: 'Standard Company Policy (12 EL, 6 CL, 6 SL)',
+        label: 'Standard Company Policy (21 EL, 7 CL, 7 SL)',
         name: 'Standard Company Policy',
         rules: [
-            { leaveType: 'EL', totalPerYear: 12, requiresApproval: true, color: '#3b82f6', carryForwardAllowed: true, maxCarryForward: 12, halfDayAllowed: true },
-            { leaveType: 'CL', totalPerYear: 6, requiresApproval: true, color: '#10b981', carryForwardAllowed: false, maxCarryForward: 0, halfDayAllowed: true },
-            { leaveType: 'SL', totalPerYear: 6, requiresApproval: true, color: '#ef4444', carryForwardAllowed: false, maxCarryForward: 0, halfDayAllowed: true }
+            { 
+                leaveType: 'EL', 
+                totalPerYear: 21, 
+                requiresApproval: true, 
+                color: '#3b82f6', 
+                carryForwardAllowed: true, 
+                maxCarryForward: 15, 
+                halfDayAllowed: true,
+                monthlyAccrual: true,
+                accrualType: 'monthly',
+                monthlyAccrualRate: 1.75,
+                accrualDependsOnAttendance: true,
+                minAttendanceDays: 20,
+                countPresent: true,
+                countOnDuty: true,
+                countCompOff: true,
+                countHoliday: true,
+                countWeeklyOff: true,
+                countPaidLeave: false
+            },
+            { 
+                leaveType: 'CL', 
+                totalPerYear: 7, 
+                requiresApproval: true, 
+                color: '#10b981', 
+                carryForwardAllowed: false, 
+                maxCarryForward: 0, 
+                halfDayAllowed: true,
+                prorateForNewJoiners: true,
+                minAttendanceDays: 20
+            },
+            { 
+                leaveType: 'SL', 
+                totalPerYear: 7, 
+                requiresApproval: true, 
+                color: '#f59e0b', 
+                carryForwardAllowed: false, 
+                maxCarryForward: 0, 
+                halfDayAllowed: true,
+                prorateForNewJoiners: true,
+                minAttendanceDays: 20
+            }
         ]
     },
     {
         id: 'corporate',
-        label: 'Corporate Leave Policy (15 EL, 10 CL, 8 SL)',
+        label: 'Corporate Leave Policy (21 EL, 7 CL, 7 SL)',
         name: 'Corporate Leave Policy',
         rules: [
-            { leaveType: 'EL', totalPerYear: 15, requiresApproval: true, color: '#3b82f6', carryForwardAllowed: true, maxCarryForward: 15, halfDayAllowed: true },
-            { leaveType: 'CL', totalPerYear: 10, requiresApproval: true, color: '#10b981', carryForwardAllowed: false, maxCarryForward: 0, halfDayAllowed: true },
-            { leaveType: 'SL', totalPerYear: 8, requiresApproval: true, color: '#ef4444', carryForwardAllowed: true, maxCarryForward: 5, halfDayAllowed: true }
+            { 
+                leaveType: 'EL', 
+                totalPerYear: 21, 
+                requiresApproval: true, 
+                color: '#3b82f6', 
+                carryForwardAllowed: true, 
+                maxCarryForward: 15, 
+                halfDayAllowed: true,
+                monthlyAccrual: true,
+                accrualType: 'monthly',
+                monthlyAccrualRate: 1.75,
+                accrualDependsOnAttendance: true,
+                minAttendanceDays: 20,
+                countPresent: true,
+                countOnDuty: true,
+                countCompOff: true,
+                countHoliday: true,
+                countWeeklyOff: true,
+                countPaidLeave: false
+            },
+            { 
+                leaveType: 'CL', 
+                totalPerYear: 7, 
+                requiresApproval: true, 
+                color: '#10b981', 
+                carryForwardAllowed: false, 
+                maxCarryForward: 0, 
+                halfDayAllowed: true,
+                prorateForNewJoiners: true,
+                minAttendanceDays: 20
+            },
+            { 
+                leaveType: 'SL', 
+                totalPerYear: 7, 
+                requiresApproval: true, 
+                color: '#f59e0b', 
+                carryForwardAllowed: true, 
+                maxCarryForward: 5, 
+                halfDayAllowed: true,
+                prorateForNewJoiners: true,
+                minAttendanceDays: 20
+            }
         ]
     },
     {
@@ -2879,11 +3178,31 @@ const COMMON_POLICY_TEMPLATES = [
     },
     {
         id: 'intern',
-        label: 'Internship Leave Policy (6 Casual, 6 Sick)',
+        label: 'Internship Leave Policy (7 Casual, 7 Sick)',
         name: 'Internship Leave Policy',
         rules: [
-            { leaveType: 'CL', totalPerYear: 6, requiresApproval: true, color: '#10b981', carryForwardAllowed: false, maxCarryForward: 0, halfDayAllowed: true },
-            { leaveType: 'SL', totalPerYear: 6, requiresApproval: true, color: '#ef4444', carryForwardAllowed: false, maxCarryForward: 0, halfDayAllowed: true }
+            { 
+                leaveType: 'CL', 
+                totalPerYear: 7, 
+                requiresApproval: true, 
+                color: '#10b981', 
+                carryForwardAllowed: false, 
+                maxCarryForward: 0, 
+                halfDayAllowed: true,
+                prorateForNewJoiners: true,
+                minAttendanceDays: 20
+            },
+            { 
+                leaveType: 'SL', 
+                totalPerYear: 7, 
+                requiresApproval: true, 
+                color: '#f59e0b', 
+                carryForwardAllowed: false, 
+                maxCarryForward: 0, 
+                halfDayAllowed: true,
+                prorateForNewJoiners: true,
+                minAttendanceDays: 20
+            }
         ]
     }
 ];
@@ -3001,7 +3320,16 @@ export default function LeavePolicies({ initialView = 'policies' }) {
         maxPostFactoCount: 0,
         medicalCertRequiredAfterDays: 0,
         applicableGender: 'All',
-        maxChildrenLimit: 0
+        maxChildrenLimit: 0,
+        accrualDependsOnAttendance: false,
+        minAttendanceDays: 20,
+        countPresent: true,
+        countOnDuty: true,
+        countCompOff: true,
+        countHoliday: true,
+        countWeeklyOff: true,
+        countPaidLeave: false,
+        prorateForNewJoiners: false
     });
 
     const [editingRuleIndex, setEditingRuleIndex] = useState(null);
@@ -3297,7 +3625,16 @@ export default function LeavePolicies({ initialView = 'policies' }) {
             maxPostFactoCount: 0,
             medicalCertRequiredAfterDays: 0,
             applicableGender: 'All',
-            maxChildrenLimit: 0
+            maxChildrenLimit: 0,
+            accrualDependsOnAttendance: false,
+            minAttendanceDays: 20,
+            countPresent: true,
+            countOnDuty: true,
+            countCompOff: true,
+            countHoliday: true,
+            countWeeklyOff: true,
+            countPaidLeave: false,
+            prorateForNewJoiners: false
         });
         setIsPolicyIdManuallyEdited(false);
         fetchGrades();
@@ -3316,7 +3653,7 @@ export default function LeavePolicies({ initialView = 'policies' }) {
             ...t,
             id: `template-${t.id}`
         })),
-        ...policies.map(p => {
+        ...policies.filter(p => !COMMON_POLICY_TEMPLATES.some(t => t.name && t.name.trim().toLowerCase() === p.name?.trim().toLowerCase())).map(p => {
             const rulesSummary = p.rules && p.rules.length > 0
                 ? ` (${p.rules.map(r => `${r.totalPerYear} ${r.leaveType}`).join(', ')})`
                 : '';
@@ -3381,7 +3718,16 @@ export default function LeavePolicies({ initialView = 'policies' }) {
             maxPostFactoCount: 0,
             medicalCertRequiredAfterDays: 0,
             applicableGender: 'All',
-            maxChildrenLimit: 0
+            maxChildrenLimit: 0,
+            accrualDependsOnAttendance: false,
+            minAttendanceDays: 20,
+            countPresent: true,
+            countOnDuty: true,
+            countCompOff: true,
+            countHoliday: true,
+            countWeeklyOff: true,
+            countPaidLeave: false,
+            prorateForNewJoiners: false
         });
     };
 
@@ -3414,7 +3760,16 @@ export default function LeavePolicies({ initialView = 'policies' }) {
             maxPostFactoCount: 0,
             medicalCertRequiredAfterDays: 0,
             applicableGender: 'All',
-            maxChildrenLimit: 0
+            maxChildrenLimit: 0,
+            accrualDependsOnAttendance: false,
+            minAttendanceDays: 20,
+            countPresent: true,
+            countOnDuty: true,
+            countCompOff: true,
+            countHoliday: true,
+            countWeeklyOff: true,
+            countPaidLeave: false,
+            prorateForNewJoiners: false
         });
     };
 
@@ -3466,7 +3821,16 @@ export default function LeavePolicies({ initialView = 'policies' }) {
                 maxPostFactoCount: 0,
                 medicalCertRequiredAfterDays: 0,
                 applicableGender: 'All',
-                maxChildrenLimit: 0
+                maxChildrenLimit: 0,
+                accrualDependsOnAttendance: false,
+                minAttendanceDays: 20,
+                countPresent: true,
+                countOnDuty: true,
+                countCompOff: true,
+                countHoliday: true,
+                countWeeklyOff: true,
+                countPaidLeave: false,
+                prorateForNewJoiners: false
             });
         }
 
@@ -4119,42 +4483,48 @@ export default function LeavePolicies({ initialView = 'policies' }) {
                                                     <div className="grid grid-cols-2 gap-4">
                                                         <div className="space-y-1.5">
                                                             <label className="text-[8px] font-bold text-slate-400 uppercase tracking-widest ml-1">Leave Type</label>
-                                                             <select
-                                                                 value={ruleForm.leaveType && ['EL', 'CL', 'SL', 'MATERNITY', 'PATERNITY', 'COMP_OFF', 'BEREAVEMENT', 'MARRIAGE', 'WFH', 'LOP'].includes(ruleForm.leaveType) ? ruleForm.leaveType : (ruleForm.leaveType ? 'CUSTOM' : '')}
-                                                                 onChange={e => {
-                                                                     const val = e.target.value;
-                                                                     if (val === 'CUSTOM') {
-                                                                         setRuleForm({ ...ruleForm, leaveType: 'CUSTOM' });
-                                                                     } else {
-                                                                         setRuleForm({ ...ruleForm, leaveType: val });
-                                                                     }
-                                                                 }}
-                                                                 className="w-full h-10 bg-slate-50 border border-slate-100 rounded-xl px-4 text-xs font-bold text-slate-700 outline-none focus:border-indigo-500 transition-all"
-                                                             >
-                                                                 <option value="">Select Leave Type</option>
-                                                                 <option value="EL">Earned Leave (EL)</option>
-                                                                 <option value="CL">Casual Leave (CL)</option>
-                                                                 <option value="SL">Sick Leave (SL)</option>
-                                                                 <option value="MATERNITY">Maternity Leave</option>
-                                                                 <option value="PATERNITY">Paternity Leave</option>
-                                                                 <option value="COMP_OFF">Compensatory Off</option>
-                                                                 <option value="BEREAVEMENT">Bereavement Leave</option>
-                                                                 <option value="MARRIAGE">Marriage Leave</option>
-                                                                 <option value="WFH">Work From Home</option>
-                                                                 <option value="LOP">LOP (Loss of Pay)</option>
-                                                                 <option value="CUSTOM">+ Add Custom Leave Type</option>
-                                                             </select>
-                                                             {ruleForm.leaveType && (ruleForm.leaveType === 'CUSTOM' || !['EL', 'CL', 'SL', 'MATERNITY', 'PATERNITY', 'COMP_OFF', 'BEREAVEMENT', 'MARRIAGE', 'WFH', 'LOP'].includes(ruleForm.leaveType)) && (
-                                                                 <div className="space-y-1 mt-2 animate-in slide-in-from-top-2">
-                                                                     <label className="text-[8px] font-bold text-slate-400 uppercase tracking-widest ml-1">Custom Leave Code</label>
-                                                                     <input
-                                                                         placeholder="e.g. STUDY, SABBATICAL"
-                                                                         value={ruleForm.leaveType === 'CUSTOM' ? '' : ruleForm.leaveType}
-                                                                         onChange={e => setRuleForm({ ...ruleForm, leaveType: e.target.value.toUpperCase() })}
-                                                                         className="w-full h-10 bg-slate-50 border border-slate-100 rounded-xl px-4 text-xs font-bold text-slate-700 outline-none focus:border-indigo-500 transition-all uppercase"
-                                                                     />
-                                                                 </div>
-                                                             )}
+                                                            <select
+                                                                value={ruleForm.leaveType && ['EL', 'CL', 'SL', 'MATERNITY', 'PATERNITY', 'COMP_OFF', 'BEREAVEMENT', 'MARRIAGE', 'WFH', 'LOP'].includes(ruleForm.leaveType) ? ruleForm.leaveType : (ruleForm.leaveType ? 'CUSTOM' : '')}
+                                                                onChange={e => {
+                                                                    const val = e.target.value;
+                                                                    if (val === 'CUSTOM') {
+                                                                        setRuleForm({ ...ruleForm, leaveType: 'CUSTOM' });
+                                                                    } else if (val && LEAVE_TYPE_DEFAULTS[val]) {
+                                                                        setRuleForm(prev => ({
+                                                                            ...prev,
+                                                                            ...LEAVE_TYPE_DEFAULTS[val],
+                                                                            leaveType: val,
+                                                                        }));
+                                                                    } else {
+                                                                        setRuleForm({ ...ruleForm, leaveType: val });
+                                                                    }
+                                                                }}
+                                                                className="w-full h-10 bg-slate-50 border border-slate-100 rounded-xl px-4 text-xs font-bold text-slate-700 outline-none focus:border-indigo-500 transition-all"
+                                                            >
+                                                                <option value="">Select Leave Type</option>
+                                                                <option value="EL">Earned Leave (EL)</option>
+                                                                <option value="CL">Casual Leave (CL)</option>
+                                                                <option value="SL">Sick Leave (SL)</option>
+                                                                <option value="MATERNITY">Maternity Leave</option>
+                                                                <option value="PATERNITY">Paternity Leave</option>
+                                                                <option value="COMP_OFF">Compensatory Off</option>
+                                                                <option value="BEREAVEMENT">Bereavement Leave</option>
+                                                                <option value="MARRIAGE">Marriage Leave</option>
+                                                                <option value="WFH">Work From Home</option>
+                                                                <option value="LOP">LOP (Loss of Pay)</option>
+                                                                <option value="CUSTOM">+ Add Custom Leave Type</option>
+                                                            </select>
+                                                            {ruleForm.leaveType && (ruleForm.leaveType === 'CUSTOM' || !['EL', 'CL', 'SL', 'MATERNITY', 'PATERNITY', 'COMP_OFF', 'BEREAVEMENT', 'MARRIAGE', 'WFH', 'LOP'].includes(ruleForm.leaveType)) && (
+                                                                <div className="space-y-1 mt-2 animate-in slide-in-from-top-2">
+                                                                    <label className="text-[8px] font-bold text-slate-400 uppercase tracking-widest ml-1">Custom Leave Code</label>
+                                                                    <input
+                                                                        placeholder="e.g. STUDY, SABBATICAL"
+                                                                        value={ruleForm.leaveType === 'CUSTOM' ? '' : ruleForm.leaveType}
+                                                                        onChange={e => setRuleForm({ ...ruleForm, leaveType: e.target.value.toUpperCase() })}
+                                                                        className="w-full h-10 bg-slate-50 border border-slate-100 rounded-xl px-4 text-xs font-bold text-slate-700 outline-none focus:border-indigo-500 transition-all uppercase"
+                                                                    />
+                                                                </div>
+                                                            )}
                                                         </div>
                                                         <div className="space-y-1.5">
                                                             <label className="text-[8px] font-bold text-slate-400 uppercase tracking-widest ml-1">Annual Credit</label>
@@ -4179,6 +4549,7 @@ export default function LeavePolicies({ initialView = 'policies' }) {
                                                         </div>
                                                     </div>
                                                 </div>
+
                                             )}
 
                                             {/* Sub-tab Content: Accrual */}

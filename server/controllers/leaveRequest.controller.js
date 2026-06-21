@@ -135,10 +135,7 @@ const calculateNetDays = async (req, startDate, endDate, employeeId = null) => {
     const includeWeekends = !!(shiftConfig?.absentCfg?.sandwichWeekendFill ?? sandwichEnabled);
     const includeHolidays = !!(shiftConfig?.absentCfg?.sandwichHolidayFill ?? sandwichEnabled);
 
-    if (sandwichEnabled && includeWeekends && includeHolidays) {
-        const diffTime = Math.abs(end - start);
-        return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-    }
+    // Fall through to the day-by-day loop below to ensure 100% timezone-safe calculation
 
     const holidays = await Holiday.find({
         tenant: req.tenantId,
@@ -296,22 +293,104 @@ exports.getMyBalances = async (req, res) => {
             return res.json(EMPTY_BALANCE_RESPONSE);
         }
 
-        const { ensureLeavePolicy } = require('../config/dbManager');
-        emp = await ensureLeavePolicy(emp, req.tenantDB, req.tenantId);
         const effectiveTenantId = new mongoose.Types.ObjectId(emp.tenant || tenantObjectId);
-        if (!emp?.leavePolicy) {
-            const restoredPolicy = await restorePolicyFromExistingBalance({
-                employee: emp,
-                LeaveBalance,
-                LeavePolicy,
-                tenantId: effectiveTenantId,
-                year
-            });
 
-            if (!restoredPolicy) {
-                console.warn(`[DEBUG_LEAVE_BALANCES] No policy assigned for employee: ${employeeObjectId}. Returning empty balances.`);
-                return res.json(EMPTY_BALANCE_RESPONSE);
+
+        // Ensure "Attendance Based EL Policy" exists
+        let attendancePolicy = await LeavePolicy.findOne({
+            tenant: effectiveTenantId,
+            name: 'Attendance Based EL Policy'
+        });
+
+        // Auto-migrate existing policy: upgrade CL/SL from 6→7 and enable prorateForNewJoiners
+        if (attendancePolicy) {
+            let needsSave = false;
+            const updatedRules = (attendancePolicy.rules || []).map(rule => {
+                const lt = String(rule.leaveType || '').toUpperCase();
+                if (['CL', 'SL'].includes(lt)) {
+                    let changed = false;
+                    const updated = { ...rule.toObject ? rule.toObject() : rule };
+                    if (Number(updated.totalPerYear) !== 7) {
+                        updated.totalPerYear = 7;
+                        changed = true;
+                    }
+                    if (!updated.prorateForNewJoiners) {
+                        updated.prorateForNewJoiners = true;
+                        changed = true;
+                    }
+                    if (changed) needsSave = true;
+                    return updated;
+                }
+                return rule;
+            });
+            if (needsSave) {
+                attendancePolicy.rules = updatedRules;
+                await attendancePolicy.save();
+                console.log('[LEAVE_POLICY_MIGRATE] Upgraded Attendance Based EL Policy CL/SL to 7 days with prorateForNewJoiners');
             }
+        }
+
+        if (!attendancePolicy) {
+            attendancePolicy = await LeavePolicy.create({
+                tenant: effectiveTenantId,
+                name: 'Attendance Based EL Policy',
+                description: 'Attendance based monthly EL accrual policy',
+                status: 'ACTIVE',
+                isActive: true,
+                applicableTo: 'All',
+                leaveTypes: ['EL', 'CL', 'SL'],
+                rules: [
+                    {
+                        leaveType: 'EL',
+                        totalPerYear: 21,
+                        requiresApproval: true,
+                        color: '#3b82f6',
+                        carryForwardAllowed: true,
+                        maxCarryForward: 15,
+                        halfDayAllowed: true,
+                        monthlyAccrual: true,
+                        accrualType: 'monthly',
+                        monthlyAccrualRate: 1.75,
+                        accrualDependsOnAttendance: true,
+                        minAttendanceDays: 20,
+                        countPresent: true,
+                        countOnDuty: true,
+                        countCompOff: true,
+                        countHoliday: true,
+                        countWeeklyOff: true,
+                        countPaidLeave: false,
+                        accrualSlabs: [{ minAttendanceDays: 20, creditDays: 1.75 }]
+                    },
+                    {
+                        leaveType: 'CL',
+                        totalPerYear: 7,
+                        requiresApproval: true,
+                        color: '#10b981',
+                        carryForwardAllowed: false,
+                        halfDayAllowed: true,
+                        prorateForNewJoiners: true,
+                        minAttendanceDays: 20
+                    },
+                    {
+                        leaveType: 'SL',
+                        totalPerYear: 7,
+                        requiresApproval: true,
+                        color: '#f59e0b',
+                        carryForwardAllowed: false,
+                        halfDayAllowed: true,
+                        prorateForNewJoiners: true,
+                        minAttendanceDays: 20
+                    }
+                ]
+            });
+        }
+
+        // Auto-assign to Employee if leavePolicy is null, invalid, or matches a deleted one
+        const EmployeeModel = req.tenantDB.model('Employee');
+        const policyExists = emp.leavePolicy ? await LeavePolicy.findById(emp.leavePolicy) : null;
+        if (!emp.leavePolicy || !policyExists) {
+            emp.leavePolicy = attendancePolicy._id;
+            await EmployeeModel.updateOne({ _id: emp._id }, { $set: { leavePolicy: attendancePolicy._id } });
         }
 
         // ALWAYS cast tenantId to ObjectId for query consistency
@@ -338,6 +417,15 @@ exports.getMyBalances = async (req, res) => {
             policy: activePolicy
         });
 
+        // Calculate joining month payable days for accurate CL/SL proration
+        const isJoiningYear = emp.joiningDate && new Date(emp.joiningDate).getFullYear() === year;
+        let joiningPayableDays = null;
+        if (isJoiningYear) {
+            try {
+                joiningPayableDays = await leaveManagementService.getJoiningMonthPayableDays(emp, effectiveTenantId, req.tenantDB, year);
+            } catch (_e) { /* non-critical */ }
+        }
+
         await leaveManagementService.repairZeroLeaveBalancesFromPolicy({
             employee: emp,
             policy: activePolicy,
@@ -347,7 +435,8 @@ exports.getMyBalances = async (req, res) => {
                 Grade: req.tenantDB.model('Grade')
             },
             year,
-            prorate: true
+            prorate: true,
+            joiningPayableDays
         });
 
         let balances = await LeaveBalance.find({
@@ -373,7 +462,7 @@ exports.getMyBalances = async (req, res) => {
         // PATERNITY: Only Married Male employees
         const empGender = String(emp.gender || '').trim().toLowerCase();
         const empMarital = String(emp.maritalStatus || '').trim().toLowerCase();
-        const isMarried = ['married', 'मेरेड', 'married'].includes(empMarital) || empMarital === 'married';
+        const isMarried = ['married', 'मेरेड', 'मेरेડ', 'विवाहित', 'vivahit'].includes(empMarital);
 
         balances = balances.filter(b => {
             const lt = String(b.leaveType || '').toUpperCase();
@@ -388,6 +477,25 @@ exports.getMyBalances = async (req, res) => {
             return true; // All other leave types shown normally
         });
 
+        // Fetch employee's most recent Accrual ledger log for attendance details
+        const LeaveLedger = req.tenantDB.model('LeaveLedger');
+        const lastAccrualLedger = await LeaveLedger.findOne({
+            tenant: effectiveTenantId,
+            employee: employeeObjectId,
+            actionType: 'Accrual'
+        }).sort({ date: -1 }).lean();
+
+        let lastMonthAccrual = null;
+        if (lastAccrualLedger) {
+            lastMonthAccrual = {
+                eligibleDays: lastAccrualLedger.eligibleDays,
+                days: lastAccrualLedger.days,
+                formulaApplied: lastAccrualLedger.formulaApplied,
+                date: lastAccrualLedger.date,
+                remarks: lastAccrualLedger.remarks
+            };
+        }
+
         // RETURN STRUCTURED OBJECT (Crucial for frontend detection)
         res.json({
             balances,
@@ -396,7 +504,8 @@ exports.getMyBalances = async (req, res) => {
                 id: currentPolicy._id,
                 name: currentPolicy.name,
                 rules: currentPolicy.rules
-            } : null
+            } : null,
+            lastMonthAccrual
         });
     } catch (error) {
         console.error("getMyBalances Error:", error);
@@ -416,7 +525,7 @@ exports.applyLeave = async (req, res) => {
         // If HR or PSA, they can apply on behalf
         const isHR = ['hr', 'admin', 'psa'].includes(req.user.role);
         let actorEmployee = await resolveAuthenticatedEmployee(req, {
-            select: '_id role leavePolicy tenant joiningDate leaveBalanceYear employeeType department departmentId manager grade gradeId designation jobType band'
+            select: '_id role leavePolicy tenant joiningDate leaveBalanceYear employeeType department departmentId manager grade gradeId designation jobType band gender maritalStatus children'
         });
         const actorEmployeeId = actorEmployee?._id || req.user.id;
         const employeeId = (isHR && targetId) ? targetId : actorEmployee?._id;
@@ -452,7 +561,7 @@ exports.applyLeave = async (req, res) => {
 
         // Fetch employee doc and policy first
         const employeeDoc = isHR
-            ? await Employee.findById(employeeId).select('leavePolicy leaveBalanceYear joiningDate tenant employeeType role department departmentId grade gradeId gender maritalStatus')
+            ? await Employee.findById(employeeId).select('leavePolicy leaveBalanceYear joiningDate tenant employeeType role department departmentId grade gradeId gender maritalStatus children')
             : actorEmployee;
         if (!employeeDoc?.leavePolicy && !['LOP', 'Loss of Pay', 'Leave without Pay', 'Personal Leave'].includes(leaveType)) {
             return res.status(400).json({ error: 'NO_ACTIVE_LEAVE_POLICY', message: 'No active leave policy assigned.' });
@@ -482,7 +591,7 @@ exports.applyLeave = async (req, res) => {
         // ── Maternity / Paternity eligibility gate (backend enforcement) ─────────
         const empGenderRaw = String((isHR ? employeeDoc?.gender : actorEmployee?.gender) || '').trim().toLowerCase();
         const empMaritalRaw = String((isHR ? employeeDoc?.maritalStatus : actorEmployee?.maritalStatus) || '').trim().toLowerCase();
-        const empIsMarried = empMaritalRaw === 'married';
+        const empIsMarried = ['married', 'मेरेड', 'मेरेડ', 'विवाहित', 'vivahit'].includes(empMaritalRaw);
         const leaveTypeUpper = String(leaveType || '').toUpperCase();
 
         if (leaveTypeUpper === 'MATERNITY') {
@@ -491,6 +600,41 @@ exports.applyLeave = async (req, res) => {
             }
             if (!empIsMarried) {
                 return res.status(400).json({ error: 'MARITAL_INELIGIBLE', message: 'Maternity Leave is only applicable to married female employees.' });
+            }
+
+            // ── Child-count based entitlement check ───────────────────────────────
+            if (activeRule && activeRule.maternityChildRules && activeRule.maternityChildRules.length > 0) {
+                const empDoc = isHR ? employeeDoc : actorEmployee;
+                const childCount = (empDoc?.children?.length) || 0;
+                // This child (the one being born) is childCount + 1
+                const thisChildNumber = childCount + 1;
+
+                // Find the matching tier
+                const matchedTier = activeRule.maternityChildRules.find(tier => {
+                    const from = tier.childCountFrom || 1;
+                    const to = tier.childCountTo;  // null = unlimited
+                    return thisChildNumber >= from && (to === null || to === undefined || thisChildNumber <= to);
+                });
+
+                if (matchedTier) {
+                    const requestedDays = await calculateNetDays(req, startDate, endDate || startDate, employeeId);
+                    const effectiveDays = isHalfDay ? requestedDays - 0.5 : requestedDays;
+                    const tierLabel = matchedTier.label || `Child #${thisChildNumber}`;
+                    const maxAllowed = matchedTier.daysEntitled || 0;
+
+                    if (maxAllowed > 0 && effectiveDays > maxAllowed) {
+                        return res.status(400).json({
+                            error: 'MATERNITY_DAYS_EXCEEDED',
+                            message: `For ${tierLabel}, maternity leave entitlement is ${maxAllowed} days (you requested ${effectiveDays} days).`
+                        });
+                    }
+
+                    // Store matched tier info in req.body.meta for record-keeping
+                    req.body.meta = {
+                        ...(req.body.meta || {}),
+                        maternityTier: { label: tierLabel, childNumber: thisChildNumber, daysEntitled: maxAllowed, fullyPaid: matchedTier.fullyPaid, preDeliveryDaysAllowed: matchedTier.preDeliveryDaysAllowed }
+                    };
+                }
             }
         }
 

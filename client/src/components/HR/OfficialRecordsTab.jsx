@@ -397,6 +397,23 @@ export default function OfficialRecordsTab({
               ))}
           </select>
         </div>
+        {/* Leave Policy */}
+        <div className="flex flex-col gap-2">
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] pl-1 h-4 flex items-center whitespace-nowrap">
+            Leave Policy</label>
+          <select
+            value={leavePolicy}
+            onChange={(e) => setLeavePolicy?.(e.target.value)}
+            className="w-full h-[42px] px-4 bg-white dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 rounded-2xl outline-none focus:border-slate-400 text-sm font-bold text-slate-700 transition-all"
+          >
+            <option value="">Select Leave Policy</option>
+            {applicablePolicies.map((p) => (
+              <option key={p._id} value={p._id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
 
         {/* Joining Date */}
         <div className="flex flex-col gap-2">

@@ -117,7 +117,7 @@ export default function ApplyLeaveForm({ balances = [], existingLeaves = [], edi
         // MATERNITY only for Married Female, PATERNITY only for Married Male
         const profileGender = String(profile?.gender || '').trim().toLowerCase();
         const profileMarital = String(profile?.maritalStatus || '').trim().toLowerCase();
-        const profileIsMarried = profileMarital === 'married';
+        const profileIsMarried = ['married', 'मेरेड', 'मेरेડ', 'विवाहित', 'vivahit'].includes(profileMarital);
 
         return mergedOptions.filter(opt => {
             const lt = String(opt.leaveType || '').toUpperCase();
@@ -294,7 +294,7 @@ export default function ApplyLeaveForm({ balances = [], existingLeaves = [], edi
             const leaveTypeUpper = String(form.leaveType || '').toUpperCase();
             const empGender = String(profile?.gender || '').trim().toLowerCase();
             const empMarital = String(profile?.maritalStatus || '').trim().toLowerCase();
-            const empIsMarried = empMarital === 'married';
+            const empIsMarried = ['married', 'मेरेड', 'मेरेડ', 'विवाहित', 'vivahit'].includes(empMarital);
 
             if (leaveTypeUpper === 'MATERNITY') {
                 if (empGender !== 'female') {

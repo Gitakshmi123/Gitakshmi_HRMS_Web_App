@@ -19,6 +19,9 @@ const LeaveLedgerSchema = new mongoose.Schema({
     previousBalance: { type: Number, default: 0 },
     newBalance: { type: Number, default: 0 },
 
+    eligibleDays: { type: Number, default: null },
+    formulaApplied: { type: String, default: '' },
+
     remarks: { type: String, trim: true },
     
     // The exact date/time this ledger entry occurred
