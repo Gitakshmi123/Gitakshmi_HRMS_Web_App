@@ -448,9 +448,9 @@ export default function HrmsRoutes() {
           <Route path="leaves" element={<Navigate to="leave-approvals" replace />} />
           <Route path="leave-approvals" element={<ProtectedModule module="leave" permissionKey="leave.requests"><LeaveApprovals /></ProtectedModule>} />
           <Route path="leave-approvals/regularization" element={<ProtectedModule module="leave" permissionKey="leave.requests"><RegularizationApprovals category="Leave" /></ProtectedModule>} />
-          <Route path="leave-policies" element={<ProtectedModule module="leave" permissionKey="leave.policies"><LeavePolicies /></ProtectedModule>} />
-          <Route path="leave-policies/custom" element={<ProtectedModule module="leave" permissionKey="leave.custom"><LeavePolicies initialView="custom" /></ProtectedModule>} />
-          <Route path="organization-policies" element={<ProtectedModule module="leave" permissionKey="leave.policies"><LeavePolicies /></ProtectedModule>} />
+          <Route path="leave-policies" element={<ProtectedModule module="leave" permissionKey="leave.policies"><LeavePolicies mode="master" /></ProtectedModule>} />
+          <Route path="leave-policies/custom" element={<ProtectedModule module="leave" permissionKey="leave.custom"><LeavePolicies mode="master" initialView="custom" /></ProtectedModule>} />
+          <Route path="organization-policies" element={<ProtectedModule module="leave" permissionKey="leave.policies"><LeavePolicies mode="config" /></ProtectedModule>} />
           <Route path="org" element={<OrgStructure />} />
           <Route path="org-tree" element={<CeoOrg />} />
           <Route path="access" element={<ProtectedModule module="accessControl" permissionKey="configuration.access"><AccessControl /></ProtectedModule>} />
@@ -680,9 +680,9 @@ export default function HrmsRoutes() {
           <Route path="org" element={<EmployeePermissionRoute module="hr" permissionKey="people.org"><OrgStructure /></EmployeePermissionRoute>} />
           <Route path="users" element={<EmployeePermissionRoute module="hr" permissionKey="people.users"><UserManagement /></EmployeePermissionRoute>} />
           <Route path="leave-approvals" element={<EmployeePermissionRoute module="hr" permissionKey="leave.requests"><LeaveApprovals /></EmployeePermissionRoute>} />
-          <Route path="leave-policies" element={<EmployeePermissionRoute module="hr" permissionKey="leave.policies"><LeavePolicies /></EmployeePermissionRoute>} />
-          <Route path="leave-policies/custom" element={<EmployeePermissionRoute module="hr" permissionKey="leave.custom"><LeavePolicies initialView="custom" /></EmployeePermissionRoute>} />
-          <Route path="organization-policies" element={<EmployeePermissionRoute module="hr" permissionKey="leave.policies"><LeavePolicies /></EmployeePermissionRoute>} />
+          <Route path="leave-policies" element={<EmployeePermissionRoute module="hr" permissionKey="leave.policies"><LeavePolicies mode="master" /></EmployeePermissionRoute>} />
+          <Route path="leave-policies/custom" element={<EmployeePermissionRoute module="hr" permissionKey="leave.custom"><LeavePolicies mode="master" initialView="custom" /></EmployeePermissionRoute>} />
+          <Route path="organization-policies" element={<EmployeePermissionRoute module="hr" permissionKey="leave.policies"><LeavePolicies mode="config" /></EmployeePermissionRoute>} />
           <Route path="exit-management" element={<EmployeePermissionRoute module="hr" permissionKey="offboarding.exit"><ExitManagement /></EmployeePermissionRoute>} />
           <Route path="reports" element={<EmployeePermissionRoute module="hr" permissionKey="reports.staffing"><PersonnelReports /></EmployeePermissionRoute>} />
           <Route path="reports/replacements" element={<RBACRoute module="reports.movements"><PersonnelReports /></RBACRoute>} />
