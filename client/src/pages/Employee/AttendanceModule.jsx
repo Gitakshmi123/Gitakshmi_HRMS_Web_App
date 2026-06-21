@@ -665,10 +665,10 @@ export default function AttendanceModule({
             )}
 
             {leavesSubTab === 'apply' && (
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              <div className="space-y-8">
                 {/* Apply Form */}
                 {canApplyLeave && (
-                  <div className="lg:col-span-5">
+                  <div className="w-full">
                     <SectionHeading title="Apply for Leave" />
                     <ApplyLeaveForm
                       balances={balances}
@@ -684,7 +684,7 @@ export default function AttendanceModule({
                 )}
 
                 {/* History */}
-                <div className={clsx("lg:col-span-7", !canApplyLeave && "lg:col-span-12")}>
+                <div className="w-full">
                   <div className="flex items-center justify-between mb-2">
                     <SectionHeading title="Leave Activity" />
                     <span className="text-xs font-medium text-[#64748B] bg-slate-100 px-3 py-1 rounded-full">{leaves.length} Total</span>
@@ -756,7 +756,7 @@ export default function AttendanceModule({
                                  title="Early Return / Partial Cancel"
                                >
                                  <History size={16} />
-                               </button>
+                                </button>
                             )}
                           </div>
                         </div>
@@ -769,7 +769,7 @@ export default function AttendanceModule({
                   </div>
                 </div>
               </div>
-            )}
+            )})}
 
             {leavesSubTab === 'encashment' && encashConfig?.allowed && (
               <div className="space-y-6 animate-in slide-in-from-bottom-3 duration-300">

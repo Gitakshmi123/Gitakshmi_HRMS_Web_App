@@ -2181,3 +2181,160 @@ exports.getLeaveLedger = async (req, res) => {
         res.status(500).json({ error: e.message });
     }
 };
+
+exports.getWorkforceVisibility = async (req, res) => {
+    try {
+        const { Employee, LeaveRequest, Holiday } = getModels(req);
+        
+        let employeeId = req.user.id;
+        if (req.query.employeeId && req.query.employeeId !== 'undefined') {
+            employeeId = req.query.employeeId;
+        }
+
+        const employee = await Employee.findOne({ 
+            _id: employeeId,
+            $or: [{ mainCompanyId: req.tenantId }, { tenant: req.tenantId }] 
+        }).populate('departmentId').lean();
+
+        if (!employee) {
+            return res.status(404).json({ error: "Employee profile not found." });
+        }
+
+        let startPeriod, endPeriod;
+        if (req.query.startDate && req.query.endDate) {
+            startPeriod = new Date(req.query.startDate);
+            endPeriod = new Date(req.query.endDate);
+            startPeriod.setHours(0, 0, 0, 0);
+            endPeriod.setHours(23, 59, 59, 999);
+        } else {
+            const month = parseInt(req.query.month);
+            const year = parseInt(req.query.year);
+            if (isNaN(month) || isNaN(year)) {
+                return res.status(400).json({ error: "Either month/year or startDate/endDate parameters must be specified." });
+            }
+            startPeriod = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0));
+            endPeriod = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999));
+        }
+
+        let teamIds = [employee._id];
+        let teamMembers = [];
+        const activeManagerId = employee.manager || employee.reportingManagerId;
+        if (activeManagerId) {
+            teamMembers = await Employee.find({
+                tenant: req.tenantId,
+                $or: [
+                    { manager: activeManagerId },
+                    { reportingManagerId: activeManagerId },
+                    { _id: activeManagerId }
+                ],
+                status: 'Active'
+            }).select('firstName lastName employeeId departmentId designationId').lean();
+            teamIds = [...new Set([employee._id, ...teamMembers.map(t => t._id)])];
+        } else {
+            if (employee.departmentId) {
+                teamMembers = await Employee.find({
+                    tenant: req.tenantId,
+                    departmentId: employee.departmentId,
+                    status: 'Active'
+                }).select('firstName lastName employeeId departmentId designationId').lean();
+                teamIds = teamMembers.map(t => t._id);
+            }
+        }
+
+        let deptIds = [employee._id];
+        let deptMembers = [];
+        if (employee.departmentId) {
+            deptMembers = await Employee.find({
+                tenant: req.tenantId,
+                departmentId: employee.departmentId,
+                status: 'Active'
+            }).select('firstName lastName employeeId departmentId designationId').lean();
+            deptIds = deptMembers.map(d => d._id);
+        }
+
+        const viewType = req.query.viewType || 'team';
+        let targetEmployeeIds = [];
+        if (viewType === 'team') {
+            targetEmployeeIds = teamIds;
+        } else if (viewType === 'department') {
+            targetEmployeeIds = deptIds;
+        } else {
+            const allActiveEmployees = await Employee.find({
+                tenant: req.tenantId,
+                status: 'Active'
+            }).select('_id').lean();
+            targetEmployeeIds = allActiveEmployees.map(e => e._id);
+        }
+
+        const leaves = await LeaveRequest.find({
+            tenant: req.tenantId,
+            employee: { $in: targetEmployeeIds },
+            status: { $in: ['Approved', 'Pending'] },
+            startDate: { $lte: endPeriod },
+            endDate: { $gte: startPeriod }
+        })
+        .populate({
+            path: 'employee',
+            select: 'firstName lastName employeeId departmentId designationId'
+        })
+        .lean();
+
+        const holidays = await Holiday.find({
+            tenant: req.tenantId,
+            date: { $lte: endPeriod },
+            $or: [
+                { endDate: { $exists: false } },
+                { endDate: null, date: { $gte: startPeriod } },
+                { endDate: { $gte: startPeriod } }
+            ]
+        }).lean();
+
+        let snapshot = null;
+        if (req.query.startDate && req.query.endDate) {
+            const alreadyOnLeave = [];
+            const pendingLeaves = [];
+            leaves.forEach(l => {
+                const empId = l.employee?._id || l.employee;
+                if (String(empId) === String(employeeId)) return;
+                if (l.status === 'Approved') {
+                    alreadyOnLeave.push(l);
+                } else if (l.status === 'Pending') {
+                    pendingLeaves.push(l);
+                }
+            });
+
+            let isCritical = false;
+            if (employee.designationId && employee.departmentId) {
+                const sameDesignationCount = await Employee.countDocuments({
+                    tenant: req.tenantId,
+                    departmentId: employee.departmentId,
+                    designationId: employee.designationId,
+                    status: 'Active'
+                });
+                isCritical = (sameDesignationCount === 1);
+            }
+
+            snapshot = {
+                alreadyOnLeave,
+                pendingLeaves,
+                teamStrength: teamIds.length,
+                available: Math.max(0, teamIds.length - alreadyOnLeave.length - pendingLeaves.length - 1),
+                isCritical
+            };
+        }
+
+        res.json({
+            success: true,
+            leaves,
+            holidays,
+            teamStrength: teamIds.length,
+            teamMembers,
+            departmentStrength: deptIds.length,
+            deptMembers,
+            snapshot
+        });
+    } catch (error) {
+        console.error("getWorkforceVisibility Error:", error);
+        res.status(500).json({ error: error.message });
+    }
+};
