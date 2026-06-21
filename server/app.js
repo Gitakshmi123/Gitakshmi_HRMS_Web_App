@@ -253,6 +253,7 @@ try {
     mongoose.model('Department', require('./models/Department'));
     mongoose.model('LeaveBalance', require('./models/LeaveBalance'));
     mongoose.model('LeavePolicy', require('./models/LeavePolicy'));
+    mongoose.model('LeaveType', require('./models/LeaveType'));
     mongoose.model('AuditLog', require('./models/AuditLog'));
     mongoose.model('BGVCase', require('./models/BGVCase'));
     mongoose.model('BGVCheck', require('./models/BGVCheck'));
