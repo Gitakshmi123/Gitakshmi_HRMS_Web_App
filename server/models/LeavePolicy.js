@@ -12,13 +12,14 @@ const LeavePolicySchema = new mongoose.Schema({
     carryForward: { type: Boolean, default: false },
     status: { type: String, enum: ['ACTIVE', 'INACTIVE'], default: 'ACTIVE' },
     isActive: { type: Boolean, default: true, index: true },
+    isLocked: { type: Boolean, default: false }, // For 4-step formula engine
     effectiveFrom: { type: Date, default: null },
     expiryDate: { type: Date, default: null },
 
     // Who does this policy apply to?
     applicableTo: {
         type: String,
-        enum: ['All', 'Department', 'Role', 'Specific', 'Intern', 'Grade', 'Band', 'Designation', 'JobType', 'Custom'],
+        enum: ['All', 'Department', 'Role', 'Specific', 'Intern', 'Grade', 'Band', 'Designation', 'JobType', 'Custom', 'Template'],
         default: 'All'
     },
     // If specific departments, roles, or individual employees
@@ -37,7 +38,16 @@ const LeavePolicySchema = new mongoose.Schema({
     applicableJobTypes: [{ type: String, trim: true }], 
     applicableBands: [{ type: String, trim: true, uppercase: true }], // e.g. ['A', 'B', 'C']
 
-    // Array of rules defined in this policy
+    // --- FORMULA ENGINE V2 FIELDS ---
+    version: { type: Number, default: 1 },
+    approvalStatus: { type: String, enum: ['Draft', 'Review', 'Approved', 'Locked'], default: 'Draft' },
+    formulas: [{
+        leaveType: { type: String, required: true, trim: true }, // e.g. "EL"
+        formulaType: { type: String, enum: ['Allocation', 'Eligibility', 'Accrual', 'Carry Forward', 'Encashment'], required: true },
+        expression: { type: String, required: true } // e.g. "IF(SERVICE_MONTHS >= 6 AND PAYABLE_DAYS >= 20, 1.75, 0)"
+    }],
+
+    // Array of rules defined in this policy (Legacy V1 Simple Mode)
     rules: [{
         leaveType: { type: String, required: true, trim: true }, // e.g. "CL", "SL", "LWP"
         totalPerYear: { type: Number, default: 0 },
