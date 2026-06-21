@@ -35,7 +35,7 @@ function registerModels(db, tenantId, forceRefresh = false) {
     "BGVTimeline", "BGVEvidenceConfig", "BGVConsent", "BGVRiskScore", "BGVTaskAssignment",
     "DocumentAudit", "DocumentAccess", "LetterRevocation", "DocumentViewConfig", "SignedLetter",
     "OnboardingTemplate", "OnboardingDocument", "OnboardingSubmission", "TicketTemplate", "RequirementTemplate",
-    "PayslipTemplate"
+    "PayslipTemplate", "Shift", "ShiftAssignment", "ShiftMaster", "ShiftPolicy"
   ];
 
   // MONKEYPATCH: Transparently redirect shared models to global connection (CRITICAL for 500 limit)

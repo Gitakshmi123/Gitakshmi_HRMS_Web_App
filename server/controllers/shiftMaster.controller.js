@@ -3,8 +3,9 @@ const ShiftPolicySchema = require('../models/ShiftPolicy');
 const AuditLogSchema = require('../models/AuditLog');
 
 const getModels = (req) => {
-    const db = req.tenantDB;
-    if (!db) throw new Error("Tenant database connection not available");
+    const mongoose = require('mongoose');
+    const db = req.tenantDB || mongoose.connection;
+    if (!db) throw new Error("Database connection not available");
     return {
         ShiftMaster: db.model('ShiftMaster', ShiftMasterSchema),
         ShiftPolicy: db.model('ShiftPolicy', ShiftPolicySchema),
@@ -67,11 +68,13 @@ exports.createShift = async (req, res) => {
             return res.status(400).json({ success: false, error: "Missing required core fields" });
         }
 
+        const validUserId = (req.user && require('mongoose').Types.ObjectId.isValid(req.user.id)) ? req.user.id : null;
+
         // 1. Create Shift Master
         const newShift = new ShiftMaster({
             ...shiftMaster,
             tenant: req.tenantId || req.user?.tenantId || req.user?.companyId || '60c72b2f9b1d8b0015a5a123',
-            createdBy: req.user ? req.user.id : null
+            createdBy: validUserId
         });
 
         await newShift.save();
@@ -86,7 +89,7 @@ exports.createShift = async (req, res) => {
                 version: 1,
                 isCurrent: true,
                 effectiveFrom: shiftMaster.validFrom || new Date(),
-                createdBy: req.user ? req.user.id : null
+                createdBy: validUserId
             });
             await newPolicy.save();
         }
@@ -98,7 +101,7 @@ exports.createShift = async (req, res) => {
                 entity: 'ShiftMaster',
                 entityId: newShift._id,
                 action: 'SHIFT_CREATED',
-                performedBy: req.user.id,
+                performedBy: validUserId,
                 changes: { before: null, after: newShift.toObject() },
                 meta: { shiftName: newShift.name }
             });
@@ -130,7 +133,7 @@ exports.bulkCreateShifts = async (req, res) => {
         }
 
         const tenantId = req.tenantId || req.user?.tenantId || req.user?.companyId || '60c72b2f9b1d8b0015a5a123';
-        const createdBy = req.user ? req.user.id : null;
+        const createdBy = (req.user && require('mongoose').Types.ObjectId.isValid(req.user.id)) ? req.user.id : null;
 
         const createdShifts = [];
 
@@ -204,7 +207,7 @@ exports.bulkCreateShifts = async (req, res) => {
                 entity: 'ShiftMaster',
                 entityId: createdShifts[0]._id, // Tagging first shift just for reference
                 action: 'BULK_SHIFTS_CREATED',
-                performedBy: req.user.id,
+                performedBy: createdBy,
                 details: `Bulk created ${createdShifts.length} shifts via Excel`
             });
             await auditLog.save();
@@ -246,7 +249,7 @@ exports.updateShift = async (req, res) => {
                 entity: 'ShiftMaster',
                 entityId: shift._id,
                 action: 'SHIFT_UPDATED',
-                performedBy: req.user.id,
+                performedBy: (req.user && require('mongoose').Types.ObjectId.isValid(req.user.id)) ? req.user.id : null,
                 changes: { before, after: shift.toObject() },
                 meta: { shiftName: shift.name }
             });
@@ -279,7 +282,7 @@ exports.deleteShift = async (req, res) => {
                 entity: 'ShiftMaster',
                 entityId: shift._id,
                 action: 'SHIFT_DELETED',
-                performedBy: req.user.id,
+                performedBy: (req.user && require('mongoose').Types.ObjectId.isValid(req.user.id)) ? req.user.id : null,
                 changes: { before, after: shift.toObject() },
                 meta: { shiftName: shift.name }
             });
@@ -327,13 +330,15 @@ exports.savePolicy = async (req, res) => {
             await currentPolicy.save();
         }
 
+        const validUserId = (req.user && require('mongoose').Types.ObjectId.isValid(req.user.id)) ? req.user.id : null;
+
         const newPolicy = new ShiftPolicy({
             ...payload,
             tenant: req.tenantId,
             shiftMasterId: shiftId,
             version: nextVersion,
             isCurrent: true,
-            createdBy: req.user ? req.user.id : null
+            createdBy: validUserId
         });
 
         await newPolicy.save();
@@ -344,7 +349,7 @@ exports.savePolicy = async (req, res) => {
                 entity: 'ShiftPolicy',
                 entityId: newPolicy._id,
                 action: 'POLICY_VERSION_CREATED',
-                performedBy: req.user.id,
+                performedBy: validUserId,
                 changes: { before: currentPolicy ? currentPolicy.toObject() : null, after: newPolicy.toObject() },
                 meta: { shiftId, version: nextVersion }
             });

@@ -1091,8 +1091,6 @@ export default function EmployeeForm({
       else if (!departmentId && customDepartmentName.length < 2) e.department = 'Department name must be at least 2 characters';
       else if (!departmentId && customDepartmentName.length > 50) e.department = 'Department name must be at most 50 characters';
       if (!joiningDate) e.joiningDate = 'Joining Date is required';
-      if (!gradeId && !grade) e.grade = 'Grade is required';
-      if (!band) e.band = 'Band is required';
       if (!jobType) e.jobType = 'Employee Type is required';
     }
 
