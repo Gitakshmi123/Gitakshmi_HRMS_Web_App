@@ -10,7 +10,9 @@ import { showToast } from '../../../utils/uiNotifications';
 const CATEGORIES = [
     { value: 'UNSKILLED', label: 'Unskilled' },
     { value: 'SEMI_SKILLED', label: 'Semi Skilled' },
-    { value: 'SKILLED', label: 'Skilled' }
+    { value: 'SKILLED', label: 'Skilled' },
+    { value: 'HIGHLY_SKILLED', label: 'Highly Skilled' },
+    { value: 'GENERAL', label: 'General / Management' }
 ];
 
 const MinimumWageMaster = () => {

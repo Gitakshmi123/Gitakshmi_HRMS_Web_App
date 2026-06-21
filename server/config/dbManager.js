@@ -90,6 +90,7 @@ function registerModels(db, tenantId, forceRefresh = false) {
     const LetterTemplateSchema = require("../models/LetterTemplate");
     const GeneratedLetterSchema = require("../models/GeneratedLetter");
     const LeavePolicySchema = require("../models/LeavePolicy");
+    const LeaveTypeSchema = require("../models/LeaveType");
     const LeavePolicyCustomMappingSchema = require("../models/LeavePolicyCustomMapping");
     const LeaveBalanceSchema = require("../models/LeaveBalance");
     const LeaveAccrualLogSchema = require("../models/LeaveAccrualLog");
@@ -226,6 +227,7 @@ function registerModels(db, tenantId, forceRefresh = false) {
     register("LetterTemplate", LetterTemplateSchema);
     register("GeneratedLetter", GeneratedLetterSchema);
     register("LeavePolicy", LeavePolicySchema);
+    register("LeaveType", LeaveTypeSchema);
     register("LeavePolicyCustomMapping", LeavePolicyCustomMappingSchema);
     register("Band", BandSchema);
     register("DesignationGradeMap", DesignationGradeMapSchema);

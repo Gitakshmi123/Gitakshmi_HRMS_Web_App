@@ -10,5 +10,6 @@ router.get('/list', compensationController.getCompensationList);
 router.post('/increment', compensationController.createIncrement);
 router.post('/setup/:employeeId', compensationController.setupInitialCompensation);
 router.get('/history/:employeeId', compensationController.getCompensationHistory);
+router.post('/bulk-setup', compensationController.bulkSetupCompensation);
 
 module.exports = router;

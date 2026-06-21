@@ -268,16 +268,7 @@ export default function SalaryComponents() {
                         <FileSpreadsheet size={16} strokeWidth={2.5} />
                     </button>
 
-                    {/* Excel Salary Assignment */}
-                    <button
-                        onClick={() => navigate('/hr/payroll/salary-assignment-excel')}
-                        disabled={loading || !canCreate}
-                        className="h-9 px-4 flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-indigo-600 transition shadow-sm font-bold text-[10px] uppercase tracking-wider"
-                        title="Professional Excel Assignment"
-                    >
-                        <Calculator size={15} strokeWidth={2.5} />
-                        Excel Assignment
-                    </button>
+
 
                     {/* Add Component dropdown */}
                     {canCreate && <div className="relative">

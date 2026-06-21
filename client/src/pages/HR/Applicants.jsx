@@ -7,7 +7,7 @@ import { getNextStage, normalizeStatus } from './PipelineStatusManager';
 import { useAuth } from '../../context/AuthContext';
 import MatchBreakdown from '../../components/MatchBreakdown';
 
-import AssignSalaryModal from '../../components/AssignSalaryModal';
+import InitialCompensationModal from '../../components/Compensation/InitialCompensationModal';
 import { DatePicker, Pagination, Select, Modal, TimePicker, Dropdown, Menu } from 'antd';
 import { showToast, showConfirmToast } from '../../utils/uiNotifications'; // Imports fixed
 import dayjs from 'dayjs';
@@ -1905,7 +1905,8 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
             loadApplicants();
             return true;
         } catch (error) {
-            showToast('error', 'Error', "Failed: " + error.message);
+            const errorMsg = error.response?.data?.message || error.message;
+            showToast('error', 'Error', "Failed: " + errorMsg);
             return false;
         }
     };
@@ -2083,6 +2084,21 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
         }
     }
 
+    async function lockApplicantSalary(app) {
+        try {
+            if (!window.confirm('Are you sure you want to lock this salary? Once locked, you cannot modify it.')) return;
+            const res = await api.post(`/salary/confirm`, { applicantId: app._id });
+            if (res.data?.success) {
+                showToast('success', 'Success', 'Salary Locked successfully!');
+                loadApplicants();
+            } else {
+                showToast('error', 'Error', res.data?.message || 'Failed to lock salary');
+            }
+        } catch (err) {
+            console.error('Lock Salary Error:', err);
+            showToast('error', 'Error', err.response?.data?.message || err.message || 'Failed to lock salary');
+        }
+    }
     async function fetchTemplates() {
         // Fetch Offer Templates
         try {
@@ -4268,7 +4284,10 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
                                                         {app.salaryAssigned ? (
                                                             <div className="flex flex-col items-end lg:items-center gap-1">
                                                                 <button onClick={(e) => { e.stopPropagation(); setSelectedApplicant(app); setShowSalaryPreview(true); }} className="text-[10px] font-black text-slate-700 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-400 hover:text-indigo-600 transition shadow-sm uppercase tracking-widest whitespace-nowrap">VIEW PAY</button>
-                                                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Pay Fixed</span>
+                                                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{app.salaryLocked ? 'Pay Locked' : 'Pay Draft'}</span>
+                                                                {!app.salaryLocked && (
+                                                                    <button onClick={(e) => { e.stopPropagation(); lockApplicantSalary(app); }} className="text-[9px] font-bold text-emerald-600 hover:text-emerald-700 hover:underline uppercase tracking-widest whitespace-nowrap">Lock Salary</button>
+                                                                )}
                                                             </div>
                                                         ) : (
                                                             <button onClick={(e) => { e.stopPropagation(); setSelectedApplicant(app); setShowSalaryModal(true); }} className="text-[10px] font-black text-[#4F46E5] hover:underline uppercase tracking-widest">Assign Pay</button>
@@ -5498,14 +5517,17 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
                 )
             }
 
-            {/* Assign Salary Modal */}
+            {/* Initial Compensation Modal */}
             {
                 showSalaryModal && selectedApplicant && (
-                    <AssignSalaryModal
-                        isOpen={showSalaryModal}
-                        onClose={() => setShowSalaryModal(false)}
+                    <InitialCompensationModal
                         applicant={selectedApplicant}
-                        onSuccess={handleSalaryAssigned}
+                        onClose={() => setShowSalaryModal(false)}
+                        onSuccess={() => {
+                            loadApplicants();
+                            setShowSalaryModal(false);
+                            showToast('success', 'Salary Configured', 'Candidate salary configuration has been saved successfully.');
+                        }}
                     />
                 )
             }
@@ -5808,6 +5830,80 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
                                     >
                                         <Download size={16} /> Download Resume
                                     </button>
+                                    {(selectedApplicant.status === 'Applied' || selectedApplicant.status === 'Shortlisted') && (
+                                        <button
+                                            onClick={async () => {
+                                                try {
+                                                    const res = await api.post(`/applications/${selectedApplicant._id}/request-documents`);
+                                                    if (res.data.success) {
+                                                        showToast('success', 'Documents Requested', 'Candidate has been notified to complete their profile.');
+                                                        loadApplicants(); // Refresh list
+                                                    }
+                                                } catch (err) {
+                                                    showToast('error', 'Request Failed', err.response?.data?.message || 'Failed to request documents');
+                                                }
+                                            }}
+                                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm flex items-center gap-2 shadow-sm transition"
+                                        >
+                                            <FileText size={16} /> Request Profile & Documents
+                                        </button>
+                                    )}
+                                    {selectedApplicant.status === 'Profile Submitted' && (
+                                        <>
+                                            <button
+                                                onClick={async () => {
+                                                    try {
+                                                        const res = await api.post(`/applications/${selectedApplicant._id}/approve-profile`);
+                                                        if (res.data.success) {
+                                                            showToast('success', 'Profile Approved', 'Candidate profile and documents have been verified.');
+                                                            loadApplicants();
+                                                        }
+                                                    } catch (err) {
+                                                        showToast('error', 'Approval Failed', err.response?.data?.message || 'Failed to approve profile');
+                                                    }
+                                                }}
+                                                className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium text-sm flex items-center gap-2 shadow-sm transition"
+                                            >
+                                                <CheckCircle size={16} /> Approve Profile
+                                            </button>
+                                            <button
+                                                onClick={async () => {
+                                                    const reason = window.prompt("Enter reason for requesting re-upload:");
+                                                    if (reason === null) return;
+                                                    try {
+                                                        const res = await api.post(`/applications/${selectedApplicant._id}/request-reupload`, { reason });
+                                                        if (res.data.success) {
+                                                            showToast('success', 'Re-upload Requested', 'Candidate has been notified to re-upload documents.');
+                                                            loadApplicants();
+                                                        }
+                                                    } catch (err) {
+                                                        showToast('error', 'Request Failed', err.response?.data?.message || 'Failed to request re-upload');
+                                                    }
+                                                }}
+                                                className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 font-medium text-sm flex items-center gap-2 shadow-sm transition"
+                                            >
+                                                <AlertCircle size={16} /> Request Re-upload
+                                            </button>
+                                        </>
+                                    )}
+                                    {selectedApplicant.status === 'Document Verified' && (
+                                        <button
+                                            onClick={async () => {
+                                                try {
+                                                    const res = await api.post(`/applications/${selectedApplicant._id}/convert-to-employee`);
+                                                    if (res.data.success) {
+                                                        showToast('success', 'Candidate Hired!', 'Candidate successfully converted to Employee.');
+                                                        loadApplicants();
+                                                    }
+                                                } catch (err) {
+                                                    showToast('error', 'Conversion Failed', err.response?.data?.message || 'Failed to convert to employee');
+                                                }
+                                            }}
+                                            className="px-6 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg hover:from-emerald-600 hover:to-teal-600 font-bold text-sm flex items-center gap-2 shadow-lg shadow-emerald-200"
+                                        >
+                                            <UserCheck size={16} /> Convert to Employee
+                                        </button>
+                                    )}
                                     {(selectedApplicant.offerStatus === 'REQUESTED' || selectedApplicant.offerRevisionRequested) && (
                                         <button
                                             onClick={() => {

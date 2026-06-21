@@ -85,7 +85,10 @@ const ApplicantSchema = new mongoose.Schema({
   missingSkills: [{ type: String }],
 
 
-  status: { type: String, default: 'Applied' },
+  status: {
+    type: String,
+    default: 'Applied'
+  },
   timeline: [
     {
       status: String,
@@ -156,6 +159,8 @@ const ApplicantSchema = new mongoose.Schema({
     fileSize: { type: Number },
     fileType: { type: String },
     verified: { type: Boolean, default: false },
+    verificationStatus: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
+    rejectionReason: { type: String },
     verifiedAt: { type: Date },
     verifiedBy: { type: String },
     uploadedAt: { type: Date, default: Date.now },

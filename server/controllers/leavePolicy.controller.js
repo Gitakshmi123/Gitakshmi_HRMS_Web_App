@@ -118,9 +118,8 @@ exports.createPolicy = async (req, res) => {
             return res.status(400).json({ error: 'duplicate_name', message: 'A leave policy with this name already exists.' });
         }
 
-        if (normalizedRules.length === 0) {
-            return res.status(400).json({ error: 'rules_required', message: 'At least one leave type rule is required' });
-        }
+        // Validation for empty rules removed to support creating Leave Groups without rules initially
+
 
         const policy = new LeavePolicy({
             tenant: tenantId,
@@ -522,10 +521,14 @@ exports.updatePolicy = async (req, res) => {
             }));
         }
 
+        if (req.body.formulas !== undefined) {
+            updateData.formulas = req.body.formulas;
+        }
+
         // Update the policy document
         const policy = await LeavePolicy.findOneAndUpdate(
             { _id: req.params.id, tenant: tenantId },
-            updateData,
+            { $set: updateData },
             { new: true, runValidators: true }
         );
 

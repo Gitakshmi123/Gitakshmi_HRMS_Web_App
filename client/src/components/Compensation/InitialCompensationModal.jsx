@@ -32,17 +32,24 @@ const CATEGORIES = [
 ];
 
 const STATES = [
-    'Gujarat', 'Maharashtra', 'Karnataka', 'Delhi', 'Tamil Nadu', 
-    'Telangana', 'West Bengal', 'Rajasthan', 'Madhya Pradesh', 'Uttar Pradesh'
+    'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 
+    'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka', 
+    'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram', 
+    'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana', 
+    'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal', 'Delhi', 'Jammu and Kashmir',
+    'Puducherry', 'Chandigarh'
 ];
 
-export default function InitialCompensationModal({ employee, onClose, onSuccess }) {
+export default function InitialCompensationModal({ employee, applicant, onClose, onSuccess }) {
+    const targetEntity = employee || applicant;
+    const isApplicant = !!applicant;
+
     const [formData, setFormData] = useState({
-        effectiveFrom: formatDateInput(employee?.legacySource?.effectiveFrom || employee?.joiningDate || new Date()),
-        monthlyCTC: employee?.legacySource?.totalCTC ? Math.round(employee.legacySource.totalCTC / 12) : '',
-        annualCTC: employee?.legacySource?.totalCTC || '',
+        effectiveFrom: formatDateInput(targetEntity?.legacySource?.effectiveFrom || targetEntity?.joiningDate || new Date()),
+        monthlyCTC: targetEntity?.legacySource?.totalCTC ? Math.round(targetEntity.legacySource.totalCTC / 12) : '',
+        annualCTC: targetEntity?.legacySource?.totalCTC || '',
         employeeCategory: 'GENERAL',
-        state: employee?.workState || 'Gujarat',
+        state: targetEntity?.workState || targetEntity?.state || 'Gujarat',
         templateId: '',
         reason: '',
         notes: '',
@@ -52,10 +59,11 @@ export default function InitialCompensationModal({ employee, onClose, onSuccess 
     const [preview, setPreview] = useState(null);
     const [loadingPreview, setLoadingPreview] = useState(false);
     const [templates, setTemplates] = useState([]);
+    const [dbStates, setDbStates] = useState([]);
     const [error, setError] = useState('');
     const [submitting, setSubmitting] = useState(false);
 
-    // Fetch templates on mount
+    // Fetch templates & minimum wage states on mount
     useEffect(() => {
         const fetchTemplates = async () => {
             try {
@@ -65,8 +73,32 @@ export default function InitialCompensationModal({ employee, onClose, onSuccess 
                 console.error('Failed to fetch templates:', err);
             }
         };
+        const fetchMinWages = async () => {
+            try {
+                const res = await api.get('/payroll/minimum-wages');
+                if (res.data?.success) {
+                    const uniqueStates = [...new Set((res.data.data || []).map(item => item.state))].filter(Boolean);
+                    setDbStates(uniqueStates);
+                }
+            } catch (err) {
+                console.error('Failed to fetch minimum wages for states:', err);
+            }
+        };
         fetchTemplates();
+        fetchMinWages();
     }, []);
+
+    const allStates = useMemo(() => {
+        const list = [...STATES];
+        dbStates.forEach(s => {
+            const exists = list.some(x => x.toLowerCase() === s.toLowerCase());
+            if (!exists) {
+                const formatted = s.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+                list.push(formatted);
+            }
+        });
+        return list.sort();
+    }, [dbStates]);
 
     const fetchPreview = useCallback(
         debounce(async (data) => {
@@ -124,7 +156,9 @@ export default function InitialCompensationModal({ employee, onClose, onSuccess 
 
         try {
             setSubmitting(true);
-            const response = await api.post(`/compensation/setup/${employee._id}`, {
+            
+            let endpoint = `/compensation/setup/${targetEntity._id}`;
+            let payload = {
                 effectiveFrom: formData.effectiveFrom,
                 totalCTC,
                 employeeCategory: formData.employeeCategory,
@@ -132,7 +166,13 @@ export default function InitialCompensationModal({ employee, onClose, onSuccess 
                 reason: formData.reason,
                 notes: formData.notes,
                 autoCreatePayrollProfile: formData.autoCreatePayrollProfile
-            });
+            };
+            if (isApplicant) {
+                endpoint = '/salary/candidate-setup';
+                payload.applicantId = targetEntity._id;
+            }
+
+            const response = await api.post(endpoint, payload);
 
             if (response.data?.success) {
                 onSuccess(response.data);
@@ -156,7 +196,7 @@ export default function InitialCompensationModal({ employee, onClose, onSuccess 
         return effectiveDate > today ? 'SCHEDULED' : 'ACTIVE';
     }, [formData.effectiveFrom]);
 
-    if (!employee) return null;
+    if (!targetEntity) return null;
 
     return createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
@@ -186,20 +226,20 @@ export default function InitialCompensationModal({ employee, onClose, onSuccess 
                                 <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200 flex items-center justify-between">
                                     <div className="flex items-center gap-4">
                                         <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-lg">
-                                            {employee.firstName?.[0]}{employee.lastName?.[0]}
+                                            {targetEntity.firstName?.[0] || targetEntity.name?.[0] || '?'}{targetEntity.lastName?.[0] || ''}
                                         </div>
                                         <div>
-                                            <div className="font-bold text-slate-900 text-lg">{employee.name}</div>
+                                            <div className="font-bold text-slate-900 text-lg">{targetEntity.name || `${targetEntity.firstName} ${targetEntity.lastName}`}</div>
                                             <div className="text-slate-500 text-sm flex items-center gap-2">
-                                                <span>{employee.employeeId}</span>
+                                                <span>{isApplicant ? 'Candidate' : targetEntity.employeeId}</span>
                                                 <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-                                                <span>{employee.department}</span>
+                                                <span>{targetEntity.department || targetEntity.requirementId?.jobTitle || 'N/A'}</span>
                                             </div>
                                         </div>
                                     </div>
                                     <div className="text-right">
                                         <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Status</div>
-                                        <div className="text-indigo-600 font-bold">{employee.compensationStatus || 'Not Set'}</div>
+                                        <div className="text-indigo-600 font-bold">{isApplicant ? (targetEntity.salaryAssigned ? 'Assigned' : 'Not Set') : (targetEntity.compensationStatus || 'Not Set')}</div>
                                     </div>
                                 </div>
 
@@ -214,7 +254,7 @@ export default function InitialCompensationModal({ employee, onClose, onSuccess 
                                     <div className="space-y-2">
                                         <label className="text-sm font-bold text-slate-700">Effective From *</label>
                                         <div className="relative">
-                                            <Calendar className="absolute left-4 top-3 h-5 w-5 text-slate-400" />
+                                            <Calendar className="absolute left-4 top-3 h-5 w-5 text-slate-400 pointer-events-none" />
                                             <input
                                                 type="date"
                                                 value={formData.effectiveFrom}
@@ -244,7 +284,7 @@ export default function InitialCompensationModal({ employee, onClose, onSuccess 
                                     <div className="space-y-2">
                                         <label className="text-sm font-bold text-slate-700">Monthly CTC (Rs) *</label>
                                         <div className="relative">
-                                            <div className="absolute left-4 top-3 font-bold text-slate-400">₹</div>
+                                            <div className="absolute left-4 top-3 font-bold text-slate-400 pointer-events-none">₹</div>
                                             <input
                                                 type="number"
                                                 value={formData.monthlyCTC}
@@ -259,7 +299,7 @@ export default function InitialCompensationModal({ employee, onClose, onSuccess 
                                     <div className="space-y-2">
                                         <label className="text-sm font-bold text-slate-700">Annual CTC (Rs) *</label>
                                         <div className="relative">
-                                            <div className="absolute left-4 top-3 font-bold text-slate-400">₹</div>
+                                            <div className="absolute left-4 top-3 font-bold text-slate-400 pointer-events-none">₹</div>
                                             <input
                                                 type="number"
                                                 value={formData.annualCTC}
@@ -280,7 +320,7 @@ export default function InitialCompensationModal({ employee, onClose, onSuccess 
                                             onChange={(e) => handleChange('state', e.target.value)}
                                             className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition font-medium"
                                         >
-                                            {STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                                            {allStates.map(s => <option key={s} value={s}>{s}</option>)}
                                         </select>
                                     </div>
 

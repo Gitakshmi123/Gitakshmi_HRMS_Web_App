@@ -1,4 +1,4 @@
-// Restarted to apply AUTHZ_BYPASS and DEBUG_MODULE_ACCESS fixes.
+// Restarted to apply AUTHZ_BYPASS and file logging changes (V2).
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 
@@ -211,7 +211,7 @@ app.use((req, res, next) => {
         const start = Date.now();
         res.on('finish', () => {
             const duration = Date.now() - start;
-            // console.log(`[GLOBAL_API_LOG] ${req.method} ${req.path} | Status: ${res.statusCode} | Duration: ${duration}ms`);
+            console.log(`[GLOBAL_API_LOG] ${req.method} ${req.path} | Status: ${res.statusCode} | Duration: ${duration}ms`);
         });
     }
     next();
@@ -253,6 +253,7 @@ try {
     mongoose.model('Department', require('./models/Department'));
     mongoose.model('LeaveBalance', require('./models/LeaveBalance'));
     mongoose.model('LeavePolicy', require('./models/LeavePolicy'));
+    mongoose.model('LeaveType', require('./models/LeaveType'));
     mongoose.model('AuditLog', require('./models/AuditLog'));
     mongoose.model('BGVCase', require('./models/BGVCase'));
     mongoose.model('BGVCheck', require('./models/BGVCheck'));
@@ -708,7 +709,7 @@ app.use(hrmsPrefix + '/attendance', auth, attendanceRoutes);
 
 // Catch-all for API (404)
 app.use('/api', (req, res) => {
-    console.warn(`[404_API] ${req.method} ${req.originalUrl} - No route matched.`);
+    console.warn(`[404_API_CAUGHT] Method: ${req.method} URL: ${req.originalUrl} Headers:`, req.headers);
     res.status(404).json({ success: false, message: `Route ${req.originalUrl} not found on this server.` });
 });
 

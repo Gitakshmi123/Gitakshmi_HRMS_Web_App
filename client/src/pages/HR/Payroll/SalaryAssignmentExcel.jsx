@@ -9,6 +9,23 @@ import * as XLSX from '@sheetjs/xlsx';
 import api from '../../../utils/api';
 import { showToast } from '../../../utils/uiNotifications';
 
+const STATES_BASE = [
+    'ANDHRA PRADESH', 'ARUNACHAL PRADESH', 'ASSAM', 'BIHAR', 'CHHATTISGARH', 
+    'GOA', 'GUJARAT', 'HARYANA', 'HIMACHAL PRADESH', 'JHARKHAND', 'KARNATAKA', 
+    'KERALA', 'MADHYA PRADESH', 'MAHARASHTRA', 'MANIPUR', 'MEGHALAYA', 'MIZORAM', 
+    'NAGALAND', 'ODISHA', 'PUNJAB', 'RAJASTHAN', 'SIKKIM', 'TAMIL NADU', 'TELANGANA', 
+    'TRIPURA', 'UTTAR PRADESH', 'UTTARKHAND', 'WEST BENGAL', 'DELHI', 'JAMMU AND KASHMIR',
+    'PUDUCHERRY', 'CHANDIGARH'
+];
+
+const CATEGORIES = [
+    { id: 'UNSKILLED', label: 'UNSKILLED' },
+    { id: 'SEMI_SKILLED', label: 'SEMI-SKILLED' },
+    { id: 'SKILLED', label: 'SKILLED' },
+    { id: 'HIGHLY_SKILLED', label: 'HIGHLY SKILLED' },
+    { id: 'GENERAL', label: 'GENERAL / MANAGEMENT' }
+];
+
 const SalaryAssignmentExcel = () => {
     // Selection State
     const [employees, setEmployees] = useState([]);
@@ -34,6 +51,22 @@ const SalaryAssignmentExcel = () => {
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
 
+    const allStates = useMemo(() => {
+        const list = [...STATES_BASE];
+        const dbStates = [...new Set((minimumWages || []).map(item => item.state))].filter(Boolean);
+        dbStates.forEach(s => {
+            const upper = s.toUpperCase();
+            if (!list.includes(upper)) {
+                list.push(upper);
+            }
+        });
+        return list.sort();
+    }, [minimumWages]);
+
+    const activeMinWage = useMemo(() => {
+        return minimumWages.find(m => m.state === state && m.category === category);
+    }, [minimumWages, state, category]);
+
     useEffect(() => {
         init();
     }, []);
@@ -49,7 +82,15 @@ const SalaryAssignmentExcel = () => {
                 api.get('/payroll/benefits')
             ]);
             setEmployees(empRes.data.data || []);
-            setMinimumWages(mwRes.data.data || []);
+            // Temporary Injection from Book5.xlsx to bypass MongoDB 500 collection limit
+            const fetchedWages = mwRes.data.data || [];
+            const injectedWages = [
+                { state: 'GUJARAT', category: 'UNSKILLED', monthlyAmount: 13325 },
+                { state: 'GUJARAT', category: 'SEMI_SKILLED', monthlyAmount: 13585 },
+                { state: 'GUJARAT', category: 'SKILLED', monthlyAmount: 13897 }
+            ];
+            setMinimumWages([...fetchedWages, ...injectedWages]);
+            
             setMasterEarnings(eRes.data.data || []);
             setMasterDeductions(dRes.data.data || []);
             setMasterBenefits(bRes.data.data || []);
@@ -92,9 +133,7 @@ const SalaryAssignmentExcel = () => {
                 annualCTC: Number(annualCTC),
                 minWageAmount,
                 employeeCategory: category,
-                earnings: masterEarnings.filter(e => e.isActive),
-                deductions: masterDeductions.filter(d => d.isActive),
-                benefits: masterBenefits.filter(b => b.isActive)
+                state: state
             });
 
             if (res.data.success) {
@@ -177,8 +216,8 @@ const SalaryAssignmentExcel = () => {
                         if (rowStr.includes('category')) {
                             const valIndex = row.findIndex(c => String(c).toLowerCase() === 'category');
                             if (valIndex !== -1 && row[valIndex + 1]) {
-                                const catVal = String(row[valIndex + 1]).toUpperCase().replace('-', '_');
-                                if (['UNSKILLED', 'SEMI_SKILLED', 'SKILLED'].includes(catVal)) {
+                                const catVal = String(row[valIndex + 1]).toUpperCase().replace(/[-\s]+/g, '_');
+                                if (['UNSKILLED', 'SEMI_SKILLED', 'SKILLED', 'HIGHLY_SKILLED', 'GENERAL'].includes(catVal)) {
                                     extractedCategory = catVal;
                                 }
                             }
@@ -432,10 +471,9 @@ const SalaryAssignmentExcel = () => {
                                             onChange={(e) => setState(e.target.value)}
                                             className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none focus:ring-4 focus:ring-indigo-100 dark:focus:ring-indigo-900/30 font-black text-sm text-slate-900 dark:text-white appearance-none"
                                         >
-                                            <option value="GUJARAT">GUJARAT</option>
-                                            <option value="MAHARASHTRA">MAHARASHTRA</option>
-                                            <option value="DELHI">DELHI</option>
-                                            <option value="KARNATAKA">KARNATAKA</option>
+                                            {allStates.map(s => (
+                                                <option key={s} value={s}>{s}</option>
+                                            ))}
                                         </select>
                                     </div>
                                     <div className="space-y-2">
@@ -445,12 +483,52 @@ const SalaryAssignmentExcel = () => {
                                             onChange={(e) => setCategory(e.target.value)}
                                             className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none focus:ring-4 focus:ring-indigo-100 dark:focus:ring-indigo-900/30 font-black text-sm text-slate-900 dark:text-white appearance-none"
                                         >
-                                            <option value="UNSKILLED">UNSKILLED</option>
-                                            <option value="SEMI_SKILLED">SEMI-SKILLED</option>
-                                            <option value="SKILLED">SKILLED</option>
+                                            {CATEGORIES.map(cat => (
+                                                <option key={cat.id} value={cat.id}>{cat.label}</option>
+                                            ))}
                                         </select>
                                     </div>
                                 </div>
+
+                                {activeMinWage ? (
+                                    <motion.div 
+                                        initial={{ opacity: 0, y: -10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        className="px-4 py-3 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800/50 rounded-2xl flex items-center justify-between shadow-sm"
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/50 rounded-xl flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                                                <ShieldCheck size={16} strokeWidth={2.5} />
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Statutory Rules Activated</p>
+                                                <p className="text-sm font-bold text-slate-700 dark:text-slate-300 -mt-0.5">Minimum Wage Applied</p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-lg font-black text-indigo-600 dark:text-indigo-400 tracking-tight">₹{activeMinWage.monthlyAmount.toLocaleString('en-IN')}<span className="text-xs font-bold text-indigo-400 opacity-60 ml-0.5">/mo</span></p>
+                                        </div>
+                                    </motion.div>
+                                ) : (
+                                    <motion.div 
+                                        initial={{ opacity: 0, y: -10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        className="px-4 py-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800/50 rounded-2xl flex items-center justify-between shadow-sm"
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 bg-amber-100 dark:bg-amber-900/50 rounded-xl flex items-center justify-center text-amber-600 dark:text-amber-400">
+                                                <AlertTriangle size={16} strokeWidth={2.5} />
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Configuration Alert</p>
+                                                <p className="text-sm font-bold text-slate-700 dark:text-slate-300 -mt-0.5">No Minimum Wage Found</p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest bg-amber-100 dark:bg-amber-900/30 px-3 py-1.5 rounded-lg">Setup Required</p>
+                                        </div>
+                                    </motion.div>
+                                )}
 
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Effective Execution Date</label>
@@ -618,6 +696,29 @@ const SalaryAssignmentExcel = () => {
                                                     <td className="px-10 py-7 text-right font-black text-2xl">₹{breakup.totals.grossB_Monthly.toLocaleString('en-IN')}</td>
                                                     <td className="px-10 py-7 text-right font-black opacity-40">₹{breakup.totals.grossB_Yearly.toLocaleString('en-IN')}</td>
                                                 </tr>
+
+                                                {/* 🏷 SECTION C: OTHER BENEFITS */}
+                                                {breakup.otherBenefits && breakup.otherBenefits.length > 0 && (
+                                                    <>
+                                                        <tr className="bg-emerald-50/30 dark:bg-emerald-900/10">
+                                                            <td colSpan="3" className="px-10 py-5 font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-[0.2em] text-[10px]">
+                                                                Section C: Other Insurance & Policy Benefits
+                                                            </td>
+                                                        </tr>
+                                                        {breakup.otherBenefits.map(comp => (
+                                                            <tr key={comp.code} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
+                                                                <td className="px-10 py-5 font-bold text-slate-700 dark:text-slate-300">{comp.name}</td>
+                                                                <td className="px-10 py-5 text-right font-black text-slate-900 dark:text-white">₹{comp.monthly.toLocaleString('en-IN')}</td>
+                                                                <td className="px-10 py-5 text-right font-bold text-slate-400 dark:text-slate-500">₹{comp.yearly.toLocaleString('en-IN')}</td>
+                                                            </tr>
+                                                        ))}
+                                                        <tr className="bg-emerald-600 text-white shadow-xl">
+                                                            <td className="px-10 py-7 font-black uppercase tracking-[0.2em] text-[11px]">Gross C Total (Other Benefits)</td>
+                                                            <td className="px-10 py-7 text-right font-black text-2xl">₹{breakup.totals.grossC_Monthly.toLocaleString('en-IN')}</td>
+                                                            <td className="px-10 py-7 text-right font-black opacity-40">₹{breakup.totals.grossC_Yearly.toLocaleString('en-IN')}</td>
+                                                        </tr>
+                                                    </>
+                                                )}
 
                                                 {/* 🏁 FINAL CTC */}
                                                 <tr className="bg-indigo-700 text-white border-t-8 border-white dark:border-slate-900">

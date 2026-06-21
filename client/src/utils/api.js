@@ -57,7 +57,7 @@ export const ssoApi = null;
  * Reusable Axios instance for HRMS service
  */
 export const hrmsApi = axios.create({
-  baseURL: HRMS_API_ROOT ? `${HRMS_API_ROOT}/api` : "/api",
+  baseURL: "/api",
   withCredentials: true,
   timeout: 30000,
 });

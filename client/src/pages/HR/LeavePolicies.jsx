@@ -12,6 +12,7 @@ import {
 import { Can } from '../../components/rbac/PermissionGate';
 import LeaveAnalyticsPanel from './components/LeaveAnalyticsPanel';
 import OpeningBalanceImportModal from './components/OpeningBalanceImportModal';
+import FormulaBuilder from './components/FormulaBuilder';
 import * as XLSX from '@sheetjs/xlsx';
 
 // ─── Shared Excel Export Utility ─────────────────────────────────────────────
@@ -225,6 +226,720 @@ function PolicyCard({ p, onEdit, onSync, onDelete, onToggle }) {
     );
 }
 
+
+// ─── Policy Summary Card (Read Only) ─────────────────────────────────────────
+function PolicySummaryCard({ p }) {
+    const rulesList = [];
+    if (p.rules?.some(r => r.carryForwardAllowed)) rulesList.push('Carry Forward');
+    if (p.rules?.some(r => r.countHoliday || r.countWeeklyOff)) rulesList.push('Sandwich Rule');
+    if (p.rules?.some(r => r.probationLock)) rulesList.push('Probation Lock');
+    if (p.rules?.some(r => r.encashmentAllowed)) rulesList.push('Encashment');
+
+    return (
+        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5 flex flex-col gap-4">
+            <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">{p.name}</h3>
+            <div className="flex flex-wrap gap-4">
+                {(p.rules || []).map((r, i) => (
+                    <div key={i} className="flex flex-col">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{r.leaveType}</span>
+                        <span className="font-bold text-slate-800 text-sm">{r.totalPerYear}</span>
+                    </div>
+                ))}
+            </div>
+            {rulesList.length > 0 && (
+                <div className="mt-2">
+                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mb-2">Rules</p>
+                    <div className="flex flex-col gap-1.5">
+                        {rulesList.map(rule => (
+                            <div key={rule} className="flex items-center gap-2 text-xs text-slate-600 font-medium">
+                                <Check size={14} className="text-emerald-500" strokeWidth={3} /> {rule}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ─── Leave Types Master Panel ─────────────────────────────────────────────────
+const LEAVE_COLORS = [
+    '#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316','#6366f1','#84cc16'
+];
+function LeaveTypesMasterPanel() {
+    const [types, setTypes] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [form, setForm] = useState({ name: '', code: '', description: '', isPaid: true, color: '#3b82f6', isActive: true });
+    const [editingId, setEditingId] = useState(null);
+    const [showForm, setShowForm] = useState(false);
+
+    const fetchTypes = async () => {
+        setLoading(true);
+        try {
+            const res = await api.get('/hr/leave-types');
+            setTypes(res.data?.data || []);
+        } catch (err) {
+            showToast('error', 'Error', err.response?.data?.error || 'Failed to fetch leave types');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { fetchTypes(); }, []);
+
+    const resetForm = () => {
+        setForm({ name: '', code: '', description: '', isPaid: true, color: '#3b82f6', isActive: true });
+        setEditingId(null);
+        setShowForm(false);
+    };
+
+    const handleEdit = (t) => {
+        setForm({ name: t.name, code: t.code, description: t.description || '', isPaid: t.isPaid, color: t.color || '#3b82f6', isActive: t.isActive });
+        setEditingId(t._id);
+        setShowForm(true);
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        try {
+            if (editingId) {
+                await api.put(`/hr/leave-types/${editingId}`, form);
+                showToast('success', 'Updated', 'Leave Type updated');
+            } else {
+                await api.post('/hr/leave-types', { ...form, tenant: undefined });
+                showToast('success', 'Created', 'Leave Type created');
+            }
+            resetForm();
+            fetchTypes();
+        } catch (err) {
+            showToast('error', 'Error', err.response?.data?.error || 'Save failed');
+        }
+    };
+
+    const handleDelete = async (id) => {
+        showConfirmToast('Delete Leave Type?', 'This cannot be undone.', async () => {
+            try {
+                await api.delete(`/hr/leave-types/${id}`);
+                showToast('success', 'Deleted', 'Leave Type deleted');
+                fetchTypes();
+            } catch (err) {
+                showToast('error', 'Error', err.response?.data?.error || 'Delete failed');
+            }
+        });
+    };
+
+    return (
+        <div className="animate-in slide-in-from-bottom-4 duration-500">
+            <div className="flex items-center justify-between mb-5">
+                <div>
+                    <h2 className="text-base font-black text-slate-900 uppercase tracking-tight">Leave Types Master</h2>
+                    <p className="text-xs text-slate-400 mt-0.5">Define all leave types used across your organization</p>
+                </div>
+                <button
+                    onClick={() => { resetForm(); setShowForm(true); }}
+                    className="flex items-center gap-2 h-10 px-5 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-black transition-all"
+                >
+                    <Plus size={14} strokeWidth={3} /> New Leave Type
+                </button>
+            </div>
+
+            {/* Form */}
+            {showForm && (
+                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 mb-5 animate-in slide-in-from-top-2 duration-300">
+                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-4">{editingId ? 'Edit Leave Type' : 'New Leave Type'}</h3>
+                    <form onSubmit={handleSubmit} className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        <div className="col-span-2 md:col-span-1 space-y-1">
+                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Leave Name *</label>
+                            <input
+                                required
+                                value={form.name}
+                                onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+                                placeholder="e.g. Earned Leave"
+                                className="w-full h-10 bg-slate-50 border border-slate-200 rounded-lg px-3 text-xs font-medium text-slate-800 outline-none focus:border-slate-900 transition-all"
+                            />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Short Code *</label>
+                            <input
+                                required
+                                value={form.code}
+                                onChange={e => setForm(p => ({ ...p, code: e.target.value.toUpperCase() }))}
+                                placeholder="e.g. EL"
+                                maxLength={10}
+                                className="w-full h-10 bg-slate-50 border border-slate-200 rounded-lg px-3 text-xs font-bold text-slate-800 uppercase outline-none focus:border-slate-900 transition-all"
+                            />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Description</label>
+                            <input
+                                value={form.description}
+                                onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
+                                placeholder="Optional"
+                                className="w-full h-10 bg-slate-50 border border-slate-200 rounded-lg px-3 text-xs font-medium text-slate-800 outline-none focus:border-slate-900 transition-all"
+                            />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Color</label>
+                            <div className="flex flex-wrap gap-2 mt-1">
+                                {LEAVE_COLORS.map(c => (
+                                    <button key={c} type="button" onClick={() => setForm(p => ({ ...p, color: c }))}
+                                        className={clsx('w-6 h-6 rounded-full border-2 transition-all', form.color === c ? 'border-slate-900 scale-110' : 'border-transparent')}
+                                        style={{ backgroundColor: c }}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Paid Leave?</label>
+                            <div className="flex gap-3 mt-2">
+                                {[{ label: 'Paid', val: true }, { label: 'Unpaid', val: false }].map(opt => (
+                                    <button key={opt.label} type="button" onClick={() => setForm(p => ({ ...p, isPaid: opt.val }))}
+                                        className={clsx('px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all', form.isPaid === opt.val ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200')}
+                                    >{opt.label}</button>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="col-span-2 md:col-span-3 flex gap-3 pt-2">
+                            <button type="submit" className="h-10 px-6 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-black transition-all flex items-center gap-2">
+                                <Save size={13} /> {editingId ? 'Update' : 'Create'} Leave Type
+                            </button>
+                            <button type="button" onClick={resetForm} className="h-10 px-5 bg-slate-100 text-slate-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-200 transition-all">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+            )}
+
+            {/* Table */}
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                {loading ? (
+                    <div className="flex items-center justify-center p-16">
+                        <div className="w-8 h-8 border-4 border-slate-100 border-t-slate-800 rounded-full animate-spin" />
+                    </div>
+                ) : types.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center p-16 gap-3">
+                        <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-300 border border-slate-100">
+                            <List size={28} strokeWidth={1.5} />
+                        </div>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">No Leave Types Yet</p>
+                        <button onClick={() => setShowForm(true)} className="text-xs text-blue-600 font-bold hover:underline">Add your first leave type</button>
+                    </div>
+                ) : (
+                    <table className="w-full">
+                        <thead>
+                            <tr className="border-b border-slate-100 bg-slate-50/50">
+                                <th className="text-left px-5 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Code</th>
+                                <th className="text-left px-5 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Name</th>
+                                <th className="text-left px-5 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Description</th>
+                                <th className="text-center px-5 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Type</th>
+                                <th className="text-center px-5 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Status</th>
+                                <th className="text-right px-5 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {types.map((t, i) => (
+                                <tr key={t._id} className={clsx('border-b border-slate-50 hover:bg-slate-50/60 transition-all', i % 2 === 0 ? '' : 'bg-slate-50/30')}>
+                                    <td className="px-5 py-3">
+                                        <span className="inline-flex items-center gap-2">
+                                            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: t.color || '#3b82f6' }} />
+                                            <span className="text-xs font-black text-slate-900 uppercase">{t.code}</span>
+                                        </span>
+                                    </td>
+                                    <td className="px-5 py-3 text-xs font-semibold text-slate-700">{t.name}</td>
+                                    <td className="px-5 py-3 text-xs text-slate-400">{t.description || '—'}</td>
+                                    <td className="px-5 py-3 text-center">
+                                        <span className={clsx('px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider', t.isPaid ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600')}>
+                                            {t.isPaid ? 'Paid' : 'Unpaid'}
+                                        </span>
+                                    </td>
+                                    <td className="px-5 py-3 text-center">
+                                        <span className={clsx('px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider', t.isActive ? 'bg-blue-50 text-blue-600' : 'bg-slate-100 text-slate-400')}>
+                                            {t.isActive ? 'Active' : 'Inactive'}
+                                        </span>
+                                    </td>
+                                    <td className="px-5 py-3">
+                                        <div className="flex items-center justify-end gap-1">
+                                            <button onClick={() => handleEdit(t)} className="w-7 h-7 flex items-center justify-center rounded-lg bg-white border border-slate-200 text-slate-400 hover:text-slate-700 hover:border-slate-300 transition-all shadow-sm">
+                                                <Edit2 size={11} />
+                                            </button>
+                                            <button onClick={() => handleDelete(t._id)} className="w-7 h-7 flex items-center justify-center rounded-lg bg-white border border-slate-200 text-slate-400 hover:text-rose-600 hover:border-rose-200 transition-all shadow-sm">
+                                                <Trash2 size={11} />
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                )}
+            </div>
+        </div>
+    );
+}
+
+// ─── Leave Groups Panel ───────────────────────────────────────────────────────
+// Step 2: Create groups (uses existing LeavePolicy as the container)
+// Step 3 (Rules) is done inline by expanding a group and adding rules per leave type
+function LeaveFormulasPanel({ formulas, assignments, fetchGroups, leaveTypes }) {
+    const [loading, setLoading] = useState(false);
+    const [showForm, setShowForm] = useState(false);
+    const [editingId, setEditingId] = useState(null);
+    const [expandedGroupId, setExpandedGroupId] = useState(null);
+    const [form, setForm] = useState({ name: '', description: '', applicableTo: 'Template', departmentIds: [], roles: [], designations: [], specificEmployeeIds: [] });
+    const [rulesEditingGroupId, setRulesEditingGroupId] = useState(null);
+    const [rulesDraft, setRulesDraft] = useState([]);
+
+    
+
+    const resetForm = () => {
+        setForm({ name: '', description: '', applicableTo: 'Template', departmentIds: [], roles: [], designations: [], specificEmployeeIds: [] });
+        setEditingId(null);
+        setShowForm(false);
+    };
+
+    const handleEdit = (g) => {
+        setForm({
+            name: g.name || '',
+            description: g.description || '',
+            applicableTo: 'Template',
+            departmentIds: g.departmentIds || [],
+            roles: g.roles || [],
+            designations: g.designations || [],
+            specificEmployeeIds: g.specificEmployeeIds || []
+        });
+        setEditingId(g._id || g.id);
+        setShowForm(true);
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        try {
+            const payload = {
+                name: form.name,
+                description: form.description,
+                applicableTo: 'Template', isLocked: false,
+                departmentIds: form.departmentIds,
+                roles: form.roles,
+                designations: form.designations,
+                specificEmployeeIds: form.specificEmployeeIds,
+                isActive: true,
+                rules: []
+            };
+            if (editingId) {
+                await api.put(`/hr/leave-policies/${editingId}`, payload);
+                showToast('success', 'Updated', 'Leave Group updated');
+            } else {
+                await api.post('/hr/leave-policies', payload);
+                showToast('success', 'Created', 'Leave Group created');
+            }
+            resetForm();
+            fetchGroups();
+        } catch (err) {
+            showToast('error', 'Error', err.response?.data?.error || 'Save failed');
+        }
+    };
+
+    const handleDelete = async (id) => {
+        showConfirmToast('Delete Leave Group?', 'This will delete the group and all its rules.', async () => {
+            try {
+                await api.delete(`/hr/leave-policies/${id}`);
+                showToast('success', 'Deleted', 'Leave Group deleted');
+                fetchGroups();
+            } catch (err) {
+                showToast('error', 'Error', err.response?.data?.error || 'Delete failed');
+            }
+        });
+    };
+
+    const startEditRules = (group) => {
+        const existing = group.rules || [];
+        const draft = leaveTypes.map(lt => {
+            const found = existing.find(r => r.leaveType === lt.code);
+            return {
+                leaveTypeCode: lt.code,
+                leaveTypeName: lt.name,
+                color: lt.color,
+                enabled: !!found,
+                totalPerYear: found?.totalPerYear ?? 0,
+                carryForwardAllowed: found?.carryForwardAllowed ?? false,
+                maxCarryForward: found?.maxCarryForward ?? 0,
+                encashmentAllowed: found?.encashmentAllowed ?? false,
+                halfDayAllowed: found?.halfDayAllowed ?? true,
+                requiresApproval: found?.requiresApproval ?? true,
+                accrualType: found?.accrualType || 'yearly',
+                monthlyAccrualRate: found?.monthlyAccrualRate ?? 0,
+                accrualDependsOnAttendance: found?.accrualDependsOnAttendance ?? false,
+                minAttendanceDays: found?.accrualSlabs?.[0]?.minAttendanceDays ?? found?.minAttendanceDays ?? 20,
+                creditDays: found?.accrualSlabs?.[0]?.creditDays ?? 1.75,
+                countPresent: found?.countPresent ?? true,
+                countHoliday: found?.countHoliday ?? true,
+                countWeeklyOff: found?.countWeeklyOff ?? true,
+                countPaidLeave: found?.countPaidLeave ?? false,
+                applicableGender: found?.applicableGender || 'All',
+                minimumTenureMonths: found?.minimumTenureMonths ?? 0,
+                allowDuringProbation: found?.allowDuringProbation ?? false,
+                proRataApplicable: found?.proRataApplicable ?? true,
+            };
+        });
+        setRulesDraft(draft);
+        setRulesEditingGroupId(group._id || group.id);
+        setExpandedGroupId(group._id || group.id);
+    };
+
+    const handleSaveRules = async () => {
+        const enabledRules = rulesDraft.filter(r => r.enabled).map(r => ({
+            leaveType: r.leaveTypeCode,
+            totalPerYear: Number(r.totalPerYear) || 0,
+            carryForwardAllowed: r.carryForwardAllowed,
+            maxCarryForward: Number(r.maxCarryForward) || 0,
+            encashmentAllowed: r.encashmentAllowed,
+            halfDayAllowed: r.halfDayAllowed,
+            requiresApproval: r.requiresApproval,
+            color: r.color || '#3b82f6',
+            accrualType: r.accrualType,
+            monthlyAccrualRate: r.accrualType === 'monthly' ? Number(r.monthlyAccrualRate) || 0 : 0,
+            accrualDependsOnAttendance: r.accrualDependsOnAttendance,
+            minAttendanceDays: Number(r.minAttendanceDays) || 0,
+            countPresent: r.countPresent,
+            countHoliday: r.countHoliday,
+            countWeeklyOff: r.countWeeklyOff,
+            countPaidLeave: r.countPaidLeave,
+            applicableGender: r.applicableGender,
+            minimumTenureMonths: Number(r.minimumTenureMonths) || 0,
+            allowDuringProbation: r.allowDuringProbation,
+            proRataApplicable: r.proRataApplicable,
+            accrualSlabs: r.accrualDependsOnAttendance ? [{ minAttendanceDays: Number(r.minAttendanceDays) || 0, creditDays: Number(r.creditDays) || 0 }] : []
+        }));
+        try {
+            const group = formulas.find(g => (g._id || g.id) === rulesEditingGroupId);
+            await api.put(`/hr/leave-policies/${rulesEditingGroupId}`, { ...group, rules: enabledRules });
+            showToast('success', 'Saved', 'Leave rules saved for group');
+            setRulesEditingGroupId(null);
+            setRulesDraft([]);
+            fetchGroups();
+        } catch (err) {
+            showToast('error', 'Error', err.response?.data?.error || 'Save failed');
+        }
+    };
+
+    return (
+        <div className="animate-in slide-in-from-bottom-4 duration-500">
+            <div className="flex items-center justify-between mb-5">
+                <div>
+                    <h2 className="text-base font-black text-slate-900 uppercase tracking-tight">Leave Policy Formulas</h2>
+                    <p className="text-xs text-slate-400 mt-0.5">Step 2: Create custom leave formulas and lock them</p>
+                </div>
+                <button
+                    onClick={() => { resetForm(); setShowForm(true); }}
+                    className="flex items-center gap-2 h-10 px-5 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-black transition-all"
+                >
+                    <Plus size={14} strokeWidth={3} /> New Group
+                </button>
+            </div>
+
+            {/* Group Form */}
+            {showForm && (
+                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 mb-5 animate-in slide-in-from-top-2 duration-300">
+                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-4">{editingId ? 'Edit Leave Group' : 'New Leave Group'}</h3>
+                    <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Formula Name *</label>
+                            <input
+                                required
+                                value={form.name}
+                                onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+                                placeholder="e.g. Standard Policy, Management Policy"
+                                className="w-full h-10 bg-slate-50 border border-slate-200 rounded-lg px-3 text-xs font-medium text-slate-800 outline-none focus:border-slate-900 transition-all"
+                            />
+                        </div>
+                        
+                        <div className="col-span-1 md:col-span-2 space-y-1">
+                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Description</label>
+                            <input
+                                value={form.description}
+                                onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
+                                placeholder="Optional short description"
+                                className="w-full h-10 bg-slate-50 border border-slate-200 rounded-lg px-3 text-xs font-medium text-slate-800 outline-none focus:border-slate-900 transition-all"
+                            />
+                        </div>
+                        <div className="col-span-1 md:col-span-2 flex gap-3 pt-1">
+                            <button type="submit" className="h-10 px-6 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-black transition-all flex items-center gap-2">
+                                <Save size={13} /> {editingId ? 'Update' : 'Create'} Group
+                            </button>
+                            <button type="button" onClick={resetForm} className="h-10 px-5 bg-slate-100 text-slate-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-200 transition-all">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+            )}
+
+            {/* Groups List */}
+            {loading ? (
+                <div className="flex items-center justify-center p-16 bg-white rounded-2xl border border-slate-100">
+                    <div className="w-8 h-8 border-4 border-slate-100 border-t-slate-800 rounded-full animate-spin" />
+                </div>
+            ) : formulas.length === 0 ? (
+                <div className="flex flex-col items-center justify-center p-16 gap-3 bg-white rounded-2xl border border-slate-100">
+                    <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-300 border border-slate-100">
+                        <Users size={28} strokeWidth={1.5} />
+                    </div>
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest">No Leave Formulas Yet</p>
+                    <button onClick={() => setShowForm(true)} className="text-xs text-blue-600 font-bold hover:underline">Create first formula</button>
+                </div>
+            ) : (
+                <div className="space-y-3">
+                    {formulas.map(g => {
+                        const gid = g._id || g.id;
+                        const isExpanded = expandedGroupId === gid;
+                        const isEditingRules = rulesEditingGroupId === gid;
+                        return (
+                            <div key={gid} className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                                {/* Group Header */}
+                                <div className="flex items-center justify-between px-5 py-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-9 h-9 bg-slate-100 rounded-xl flex items-center justify-center text-slate-600">
+                                            <Users size={15} />
+                                        </div>
+                                        <div>
+                                            <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">{g.name}</h4>
+                                            <div className="flex items-center gap-2 mt-0.5">
+                                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{g.isLocked ? '🔒 LOCKED' : '🔓 UNLOCKED'}</span>
+                                                <span className="text-slate-200">•</span>
+                                                <span className="text-[9px] font-bold text-slate-400">{g.rules?.length || 0} leave types</span>
+                                                {g.description && <><span className="text-slate-200">•</span><span className="text-[9px] text-slate-400">{g.description}</span></>}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        {/* Leave type pills */}
+                                        <div className="hidden md:flex gap-1 flex-wrap max-w-xs">
+                                            {(g.rules || []).map(r => (
+                                                <span key={r.leaveType} className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider text-white" style={{ backgroundColor: r.color || '#3b82f6' }}>
+                                                    {r.leaveType}: {r.totalPerYear}d
+                                                </span>
+                                            ))}
+                                        </div>
+                                        <button
+                                            onClick={() => { startEditRules(g); }}
+                                            className="flex items-center gap-1.5 h-8 px-3 bg-blue-50 text-blue-600 rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-blue-100 transition-all"
+                                        >
+                                            <Edit2 size={10} /> Rules
+                                        </button>
+                                        {!g.isLocked && (
+                                            <button
+                                                onClick={async () => {
+                                                    await api.put(`/hr/leave-policies/${gid}`, { isLocked: true });
+                                                    fetchGroups();
+                                                }}
+                                                className="flex items-center gap-1.5 h-8 px-3 bg-amber-50 text-amber-600 rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-amber-100 transition-all"
+                                            >
+                                                Lock Formula
+                                            </button>
+                                        )}
+                                        <button onClick={() => handleEdit(g)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-white border border-slate-200 text-slate-400 hover:text-slate-700 hover:border-slate-300 transition-all shadow-sm">
+                                            <Edit2 size={11} />
+                                        </button>
+                                        <button onClick={() => handleDelete(gid)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-white border border-slate-200 text-slate-400 hover:text-rose-600 hover:border-rose-200 transition-all shadow-sm">
+                                            <Trash2 size={11} />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Step 3: Rules Editor */}
+                                {isEditingRules && (
+                                    <div className="border-t border-slate-100 bg-slate-50 p-5 animate-in slide-in-from-top-2 duration-200">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <h5 className="text-[10px] font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
+                                                <span>Configure Formula Engine for <span className="text-indigo-600">{g.name}</span></span>
+                                                <select 
+                                                    value={g.approvalStatus || 'Draft'}
+                                                    onChange={async (e) => {
+                                                        await api.put(`/hr/leave-policies/${g._id}`, { approvalStatus: e.target.value });
+                                                        fetchGroups();
+                                                    }}
+                                                    className="text-xs font-bold border border-slate-200 rounded-lg px-2 py-1 outline-none ml-4"
+                                                >
+                                                    <option value="Draft">Draft</option>
+                                                    <option value="Review">Review</option>
+                                                    <option value="Approved">Approved</option>
+                                                    <option value="Locked">Locked</option>
+                                                </select>
+                                            </h5>
+                                            <div className="flex gap-2">
+                                                <button onClick={() => { setRulesEditingGroupId(null); setExpandedGroupId(null); }} className="h-8 px-3 bg-white border border-slate-200 text-slate-500 rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-slate-100 transition-all">
+                                                    Close Editor
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-4 mb-4">
+                                            {(g.formulas || []).map((f, i) => (
+                                                <div key={i} className="flex items-center justify-between p-3 bg-white border border-slate-200 shadow-sm rounded-xl">
+                                                    <div>
+                                                        <span className="bg-indigo-100 text-indigo-700 text-[10px] font-black uppercase px-2 py-0.5 rounded-md mr-2">{f.leaveType}</span>
+                                                        <span className="bg-emerald-100 text-emerald-700 text-[10px] font-black uppercase px-2 py-0.5 rounded-md mr-2">{f.formulaType}</span>
+                                                        <code className="text-xs text-slate-600 font-mono">{f.expression}</code>
+                                                    </div>
+                                                    {!g.isLocked && (
+                                                        <button onClick={() => {
+                                                            showConfirmToast('Delete Formula Logic?', 'This will permanently remove this leave logic block from the policy.', async () => {
+                                                                try {
+                                                                    const updatedFormulas = g.formulas.filter((_, idx) => idx !== i);
+                                                                    
+                                                                    // Optimistically update the UI locally first for instant feedback
+                                                                    g.formulas = updatedFormulas;
+                                                                    
+                                                                    await api.put(`/hr/leave-policies/${g._id}`, { formulas: updatedFormulas });
+                                                                    showToast('success', 'Logic Removed', 'Formula logic successfully removed');
+                                                                    
+                                                                    // Re-fetch to sync backend state
+                                                                    await fetchGroups();
+                                                                } catch (err) {
+                                                                    showToast('error', 'Removal Failed', err.response?.data?.error || err.message);
+                                                                    fetchGroups(); // Revert local change on error
+                                                                }
+                                                            });
+                                                        }} className="w-8 h-8 flex items-center justify-center rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-100 transition-all ml-4 shrink-0">
+                                                            <Trash2 size={13} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {!g.isLocked && (
+                                            <div className="h-[600px] mt-6">
+                                                <FormulaBuilder 
+                                                    leaveTypes={leaveTypes} 
+                                                    onSave={async (f) => {
+                                                        const currentFormulas = g.formulas || [];
+                                                        const existingIdx = currentFormulas.findIndex(x => x.leaveType === f.leaveType && x.formulaType === f.formulaType);
+                                                        if(existingIdx > -1) {
+                                                            currentFormulas[existingIdx] = f;
+                                                        } else {
+                                                            currentFormulas.push(f);
+                                                        }
+                                                        await api.put(`/hr/leave-policies/${g._id}`, { formulas: currentFormulas });
+                                                        fetchGroups();
+                                                        showToast('success', 'Saved', 'Formula saved successfully!');
+                                                    }} 
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+}
+
+
+// ─── Group Assignment Panel ──────────────────────────────────────────────────────
+function LeaveGroupAssignmentPanel({ formulas, assignments, fetchGroups }) {
+    const [showForm, setShowForm] = useState(false);
+    const [form, setForm] = useState({ name: '', description: '', templateId: '', applicableTo: 'All', departmentIds: [], roles: [] });
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        try {
+            const template = formulas.find(f => f._id === form.templateId);
+            if (!template) return showToast('error', 'Error', 'Select a formula template');
+            
+            const payload = {
+                name: form.name,
+                description: form.description,
+                applicableTo: form.applicableTo,
+                departmentIds: form.departmentIds,
+                roles: form.roles,
+                isActive: true,
+                isLocked: false, // Active group isn't locked
+                rules: template.rules
+            };
+            
+            await api.post('/hr/leave-policies', payload);
+            showToast('success', 'Created', 'Group Assignment Created');
+            setShowForm(false);
+            fetchGroups();
+        } catch (err) {
+            showToast('error', 'Error', err.response?.data?.error || 'Failed');
+        }
+    };
+
+    const handleDelete = async (id) => {
+        showConfirmToast('Delete Assignment?', 'This will delete the group assignment.', async () => {
+            try {
+                await api.delete(`/hr/leave-policies/${id}`);
+                showToast('success', 'Deleted', 'Assignment deleted');
+                fetchGroups();
+            } catch (err) {
+                showToast('error', 'Error', 'Delete failed');
+            }
+        });
+    };
+
+    return (
+        <div className="animate-in slide-in-from-bottom-4 duration-500">
+            <div className="flex items-center justify-between mb-5">
+                <div>
+                    <h2 className="text-base font-black text-slate-900 uppercase tracking-tight">Group Assignment</h2>
+                    <p className="text-xs text-slate-400 mt-0.5">Step 3: Apply locked formulas to your employees</p>
+                </div>
+                <button
+                    onClick={() => setShowForm(true)}
+                    className="flex items-center gap-2 h-10 px-5 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-black transition-all"
+                >
+                    <Plus size={14} strokeWidth={3} /> New Assignment
+                </button>
+            </div>
+
+            {showForm && (
+                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 mb-5">
+                    <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Group Name</label>
+                            <input required value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} className="w-full h-10 bg-slate-50 border border-slate-200 rounded-lg px-3 text-xs font-medium outline-none" />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Formula Template (Locked Only)</label>
+                            <select required value={form.templateId} onChange={e => setForm(p => ({ ...p, templateId: e.target.value }))} className="w-full h-10 bg-slate-50 border border-slate-200 rounded-lg px-3 text-xs font-medium outline-none">
+                                <option value="">Select a locked formula...</option>
+                                {formulas.filter(f => f.isLocked).map(f => (
+                                    <option key={f._id} value={f._id}>{f.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Apply To</label>
+                            <select value={form.applicableTo} onChange={e => setForm(p => ({ ...p, applicableTo: e.target.value }))} className="w-full h-10 bg-slate-50 border border-slate-200 rounded-lg px-3 text-xs font-medium outline-none">
+                                {['All', 'Department', 'Role'].map(o => <option key={o} value={o}>{o}</option>)}
+                            </select>
+                        </div>
+                        <div className="col-span-1 md:col-span-2 flex gap-3 pt-1">
+                            <button type="submit" className="h-10 px-6 bg-slate-900 text-white rounded-xl text-xs font-black hover:bg-black transition-all">Assign Group</button>
+                            <button type="button" onClick={() => setShowForm(false)} className="h-10 px-5 bg-slate-100 text-slate-600 rounded-xl text-xs font-black hover:bg-slate-200">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+            )}
+
+            <div className="space-y-3">
+                {assignments.map(a => (
+                    <div key={a._id} className="bg-white rounded-2xl border border-slate-100 p-5 flex items-center justify-between">
+                        <div>
+                            <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">{a.name}</h4>
+                            <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-wider">Applied To: {a.applicableTo} • Uses Template Rules</p>
+                        </div>
+                        <button onClick={() => handleDelete(a._id)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-100 transition-all">
+                            <Trash2 size={13} />
+                        </button>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
 
 // ─── Custom Mappings Panel ─────────────────────────────────────────────────────
 function CustomMappingsPanel({ 
@@ -3288,6 +4003,24 @@ const generatePolicyId = (name, existingPolicies = []) => {
 
 // ─── Main Component ─────────────────────────────────────────────────────────────
 export default function LeavePolicies({ initialView, mode = 'master' }) {
+    const [globalFormulas, setGlobalFormulas] = useState([]);
+    const [globalAssignments, setGlobalAssignments] = useState([]);
+    const [globalLeaveTypes, setGlobalLeaveTypes] = useState([]);
+    
+    const fetchSharedData = async () => {
+        try {
+            const [grpRes, ltRes] = await Promise.all([
+                api.get('/hr/leave-policies'),
+                api.get('/hr/leave-types')
+            ]);
+            const allPols = Array.isArray(grpRes.data) ? grpRes.data : grpRes.data?.policies || grpRes.data?.data || [];
+            setGlobalFormulas(allPols.filter(p => p.applicableTo === 'Template'));
+            setGlobalAssignments(allPols.filter(p => p.applicableTo !== 'Template'));
+            setGlobalLeaveTypes(Array.isArray(ltRes.data) ? ltRes.data : ltRes.data?.data || []);
+        } catch (err) {}
+    };
+    
+    useEffect(() => { fetchSharedData(); }, []);
     const defaultInitialView = initialView || (mode === 'config' ? 'holiday' : 'policies');
     const [view, setView] = useState(defaultInitialView);
     const [ruleSubTab, setRuleSubTab] = useState('core');
@@ -3990,7 +4723,7 @@ export default function LeavePolicies({ initialView, mode = 'master' }) {
                         )}
                         
 
-                        {view === 'policies' && (
+                        {view === 'policies' && mode === 'config' && (
                             <Can module="leave.policies" action="create">
                                 <button
                                     onClick={handleCreateNew}
@@ -4009,6 +4742,9 @@ export default function LeavePolicies({ initialView, mode = 'master' }) {
             {!showModal && (
                 <div className="flex border-b border-slate-200 mb-6 bg-white p-1 rounded-xl shadow-sm gap-2 max-w-fit flex-wrap">
                     {[
+                        { id: 'leavetypes', label: '1. Leave Types' },
+                        { id: 'leaveformulas', label: '2. Leave Formulas' },
+                        { id: 'leavegroups', label: '3. Group Assignment' },
                         { id: 'policies', label: 'Leave Policies', count: totalPolicies },
                         { id: 'custom', label: 'Policy Mapping', count: mappings.length },
                         { id: 'holiday', label: 'Holiday Master' },
@@ -4021,9 +4757,9 @@ export default function LeavePolicies({ initialView, mode = 'master' }) {
                         { id: 'settings', label: 'Settings' }
                     ].filter(tab => {
                         if (mode === 'config') {
-                            return ['holiday', 'opening', 'requests', 'ledger', 'compoff', 'encashment', 'settings'].includes(tab.id);
+                            return ['leavetypes', 'leaveformulas', 'leavegroups', 'holiday', 'opening', 'requests', 'ledger', 'compoff', 'encashment', 'analytics', 'settings'].includes(tab.id);
                         } else {
-                            return ['policies', 'custom', 'analytics'].includes(tab.id);
+                            return ['policies', 'custom'].includes(tab.id);
                         }
                     }).map(tab => (
                         <button
@@ -4053,6 +4789,24 @@ export default function LeavePolicies({ initialView, mode = 'master' }) {
             {/* ── View Content ────────────────────────────────────────── */}
             {!showModal && (
                 <>
+                {view === 'leavetypes' && (
+                    <div className="animate-in slide-in-from-bottom-4 duration-500">
+                        <LeaveTypesMasterPanel />
+                    </div>
+                )}
+
+                {view === 'leaveformulas' && (
+                    <div className="animate-in slide-in-from-bottom-4 duration-500">
+                        <LeaveFormulasPanel formulas={globalFormulas} assignments={globalAssignments} fetchGroups={fetchSharedData} leaveTypes={globalLeaveTypes} />
+                    </div>
+                )}
+
+                {view === 'leavegroups' && (
+                    <div className="animate-in slide-in-from-bottom-4 duration-500">
+                        <LeaveGroupAssignmentPanel formulas={globalFormulas} assignments={globalAssignments} fetchGroups={fetchSharedData} />
+                    </div>
+                )}
+
                 {view === 'custom' && (
                     <div className="animate-in slide-in-from-bottom-4 duration-500">
                         <CustomMappingsPanel 
@@ -4182,14 +4936,18 @@ export default function LeavePolicies({ initialView, mode = 'master' }) {
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 pb-12 animate-in slide-in-from-bottom-4 duration-700">
                                 {(policies || []).map((p, idx) => (
-                                    <PolicyCard
-                                        key={(p._id || p.id || p?._doc?._id)?.toString() || idx}
-                                        p={p}
-                                        onEdit={handleEdit}
-                                        onSync={handleSync}
-                                        onDelete={handleDelete}
-                                        onToggle={toggleStatus}
-                                    />
+                                    mode === 'master' ? (
+                                        <PolicySummaryCard key={(p._id || p.id || p?._doc?._id)?.toString() || idx} p={p} />
+                                    ) : (
+                                        <PolicyCard
+                                            key={(p._id || p.id || p?._doc?._id)?.toString() || idx}
+                                            p={p}
+                                            onEdit={handleEdit}
+                                            onSync={handleSync}
+                                            onDelete={handleDelete}
+                                            onToggle={toggleStatus}
+                                        />
+                                    )
                                 ))}
                             </div>
                         )}

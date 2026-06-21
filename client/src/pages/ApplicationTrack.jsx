@@ -12,6 +12,7 @@ import clsx from 'clsx';
 import { getTenantId } from '../utils/auth';
 import { getBasePath } from '../utils/navigation';
 import { useAuth } from '../context/AuthContext';
+import CandidateProfileForm from './Candidate/CandidateProfileForm';
 import EmployeeOnboardingPortal from './Onboarding/EmployeeOnboardingPortal';
 import SignatureModal from './Onboarding/SignatureModal';
 import BGVUploadModal from './Onboarding/BGVUploadModal';
@@ -1072,6 +1073,35 @@ export default function ApplicationTrack() {
                             {/* BGV UPLOAD SECTION - INLINE */}
                             {isOfferAccepted && (
                                 <div className="mt-8">
+                                    <BGVUploadModal 
+                                        isEmbedded={true} 
+                                        applicationId={applicationId} 
+                                        onSuccess={fetchTimeline}
+                                    />
+                                </div>
+                            )}
+
+                            {/* PROFILE COMPLETION SECTION - INLINE */}
+                            {['document requested', 'reupload required'].includes(currentStatus) && (
+                                <div className="mt-8 space-y-6">
+                                    <div className="bg-white/80 backdrop-blur-xl p-4 sm:p-8 lg:p-12 rounded-[24px] sm:rounded-[48px] border border-orange-100 shadow-[0_40px_100px_rgba(249,115,22,0.08)]">
+                                        <div className="flex items-center gap-4 sm:gap-8 mb-8 sm:mb-10 border-b border-orange-50 pb-6 sm:pb-8">
+                                            <div className="bg-gradient-to-br from-orange-500 to-amber-600 p-3 sm:p-5 rounded-[20px] text-white shadow-xl flex-shrink-0">
+                                                <AlertCircle className="w-6 h-6 sm:w-8 sm:h-8" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <h2 className="text-xl sm:text-2xl font-bold text-slate-800 tracking-tight uppercase leading-none mb-2 truncate">Profile <span className="text-orange-600">Completion</span></h2>
+                                                <p className="text-[8px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-[2px] sm:tracking-[3px]">HR requested your details & documents</p>
+                                            </div>
+                                        </div>
+                                        <CandidateProfileForm 
+                                            applicationId={applicationId} 
+                                            isEmbedded={true}
+                                            onSuccess={fetchTimeline}
+                                        />
+                                    </div>
+
+                                    {/* Include document uploads as part of profile completion */}
                                     <BGVUploadModal 
                                         isEmbedded={true} 
                                         applicationId={applicationId} 

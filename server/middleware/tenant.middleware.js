@@ -31,7 +31,8 @@ module.exports = async function tenantResolver(req, res, next) {
       req.path === '/api/health' ||
       req.path === '/health' ||
       req.path === '/api/auth/sso-login' ||
-      AUTH_TENANT_SKIP_PATHS.has(req.path)
+      AUTH_TENANT_SKIP_PATHS.has(req.path) ||
+      AUTH_TENANT_SKIP_PATHS.has('/api' + req.path)
     ) {
       return next();
     }

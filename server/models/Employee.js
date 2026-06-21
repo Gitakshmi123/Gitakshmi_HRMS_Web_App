@@ -60,6 +60,13 @@ const EmployeeSchema = new mongoose.Schema({
   departmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Department', default: null, index: true },
   // logical department linkage (name or code) - kept for backward compatibility
   department: { type: String, trim: true },
+  
+  employeeCategory: { type: mongoose.Schema.Types.ObjectId, ref: 'EmployeeCategory', default: null, index: true },
+  holidayCalendar: { type: mongoose.Schema.Types.ObjectId, ref: 'HolidayCalendar', default: null, index: true },
+  leaveGroup: { type: mongoose.Schema.Types.ObjectId, ref: 'LeaveGroup', default: null, index: true },
+  confirmationPeriod: { type: String, trim: true },
+  basic: { type: String, trim: true },
+  leaveTravelAllowance: { type: String, trim: true },
   // direct manager (self-referencing within same tenant)
   manager: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', default: null, index: true },
   reportingTeamLead: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', default: null, index: true },
@@ -87,15 +94,12 @@ const EmployeeSchema = new mongoose.Schema({
   hobbies: { type: String, trim: true },
   height: { type: String, trim: true },
   weight: { type: String, trim: true },
-  cast: { type: String, trim: true },
 
   fatherFirstName: { type: String, trim: true },
   fatherLastName: { type: String, trim: true },
-  fatherBloodGroup: { type: String, trim: true },
   fatherAadhaar: { type: String, trim: true },
   motherFirstName: { type: String, trim: true },
   motherLastName: { type: String, trim: true },
-  motherBloodGroup: { type: String, trim: true },
   motherAadhaar: { type: String, trim: true },
 
   fatherCustomFields: [{ label: String, value: String }],
@@ -104,6 +108,7 @@ const EmployeeSchema = new mongoose.Schema({
   spouseDetails: {
     spouseName: { type: String, trim: true },
     relation: { type: String, trim: true },
+    gender: { type: String, enum: ['Male', 'Female', 'Other'], default: 'Female' },
     bloodGroup: { type: String, trim: true },
     dob: { type: Date },
     contactNo: { type: String, trim: true },
@@ -112,19 +117,21 @@ const EmployeeSchema = new mongoose.Schema({
 
   children: [{
     name: { type: String, trim: true },
-    gender: { type: String },
+    gender: { type: String, enum: ['Male', 'Female', 'Other'] },
     dob: { type: Date },
     bloodGroup: { type: String, trim: true },
     additionalFields: [{ label: String, value: String }]
   }],
   brothers: [{
     name: { type: String, trim: true },
+    gender: { type: String, default: 'Male' },
     dob: { type: Date },
     bloodGroup: { type: String, trim: true },
     additionalFields: [{ label: String, value: String }]
   }],
   sisters: [{
     name: { type: String, trim: true },
+    gender: { type: String, default: 'Female' },
     dob: { type: Date },
     bloodGroup: { type: String, trim: true },
     additionalFields: [{ label: String, value: String }]
@@ -135,6 +142,7 @@ const EmployeeSchema = new mongoose.Schema({
     read: Boolean,
     write: Boolean,
     speak: Boolean,
+    understand: Boolean,
     motherTongue: Boolean
   }],
 
@@ -203,6 +211,15 @@ const EmployeeSchema = new mongoose.Schema({
     country: { type: String, trim: true },
   },
 
+  localAddress: {
+    line1: { type: String, trim: true },
+    line2: { type: String, trim: true },
+    city: { type: String, trim: true },
+    state: { type: String, trim: true },
+    pinCode: { type: String, trim: true },
+    country: { type: String, trim: true },
+  },
+
   permAddress: {
     line1: { type: String, trim: true },
     line2: { type: String, trim: true },
@@ -224,12 +241,15 @@ const EmployeeSchema = new mongoose.Schema({
   experience: [
     {
       companyName: { type: String, trim: true },
+      employmentType: { type: String, enum: ['Full Time', 'Contract', 'Internship', 'Freelance'], default: 'Full Time' },
       from: { type: Date },
       to: { type: Date },
       lastDrawnSalary: { type: Number },
       reportingPersonName: { type: String, trim: true },
       reportingPersonContact: { type: String, trim: true },
       reportingPersonEmail: { type: String, trim: true },
+      reasonForLeaving: { type: String, trim: true },
+      experienceCertificateUrl: { type: String, trim: true }, // URL
       payslips: [String], // Array of URLs
       bankProofUrl: { type: String, trim: true }, // Chequebook or passbook photo
     }
@@ -277,6 +297,15 @@ const EmployeeSchema = new mongoose.Schema({
     lastSem2Marksheet: { type: String, trim: true }, // Alternative to Degree
     lastSem3Marksheet: { type: String, trim: true } // Alternative to Degree
   },
+
+  academicQualifications: [{
+    qualification: { type: String, trim: true },
+    universityBoard: { type: String, trim: true },
+    yearOfPassing: { type: Number },
+    percentageCgpa: { type: Number },
+    mode: { type: String, enum: ['Regular', 'Distance', 'Online', 'Correspondence'] },
+    documentUrl: { type: String, trim: true }
+  }],
 
   documents: {
     aadharFront: { type: String, trim: true },
