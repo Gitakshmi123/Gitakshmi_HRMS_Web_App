@@ -1,42 +1,43 @@
-const mongoose = require('mongoose');
 require('dotenv').config();
+const mongoose = require('mongoose');
+const MinimumWageSchema = require('./models/MinimumWage');
 
-async function checkEmployees() {
-    try {
-        const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/gt_hrms';
-        console.log('Connecting to:', uri);
-        await mongoose.connect(uri);
-        console.log('Connected to MongoDB');
+async function run() {
+  try {
+    console.log("Connecting to:", process.env.MONGO_URI);
+    await mongoose.connect(process.env.MONGO_URI);
+    console.log("Connected successfully!");
 
-        const db = mongoose.connection;
-        const Employee = db.model('Employee', new mongoose.Schema({
-            firstName: String,
-            lastName: String,
-            tenant: mongoose.Schema.Types.ObjectId,
-            isActive: Boolean
-        }, { strict: false }));
-
-        const Tenant = db.model('Tenant', new mongoose.Schema({
-            name: String
-        }, { strict: false }));
-
-        const tenants = await Tenant.find({}).lean();
-        console.log('Tenants Count:', tenants.length);
-        console.log('Tenants:', tenants.map(t => ({ id: t._id, name: t.name })));
-
-        const employees = await Employee.find({}).limit(10).lean();
-        console.log('Employees Count:', await Employee.countDocuments({}));
-        console.log('Sample Employees:', employees.map(e => ({
-            name: `${e.firstName} ${e.lastName}`,
-            tenant: e.tenant,
-            isActive: e.isActive
-        })));
-
-        process.exit(0);
-    } catch (err) {
-        console.error(err);
-        process.exit(1);
+    // Resolve model
+    const Tenant = require('./models/Tenant');
+    const firstTenant = await Tenant.findOne({ status: 'active' }).lean();
+    if (!firstTenant) {
+      console.log("No active tenant found.");
+      return;
     }
+    console.log("Active tenant found:", firstTenant.companyName, "ID:", firstTenant._id);
+
+    let MinimumWage;
+    try {
+      MinimumWage = mongoose.model('MinimumWage');
+    } catch(e) {
+      MinimumWage = mongoose.model('MinimumWage', MinimumWageSchema);
+    }
+
+    const total = await MinimumWage.countDocuments();
+    console.log("Total MinimumWage records:", total);
+
+    const records = await MinimumWage.find({}).lean();
+    console.log("MinimumWage Records:");
+    records.forEach(r => {
+      console.log(`- State: ${r.state}, Category: ${r.category}, Amount: ₹${r.monthlyAmount}, Active: ${r.isActive}`);
+    });
+
+  } catch (err) {
+    console.error("Error:", err);
+  } finally {
+    await mongoose.disconnect();
+  }
 }
 
-checkEmployees();
+run();

@@ -14,6 +14,7 @@ router.get('/current', salaryCtrl.getCurrent);
 router.post('/preview', salaryCtrl.preview);
 router.post('/unlock', salaryCtrl.unlock);
 router.post('/auto-balance', salaryCtrl.autoBalance);
+router.post('/candidate-setup', salaryCtrl.candidateSetup);
 router.get('/snapshot/:id', salaryCtrl.getSnapshot);
 
 module.exports = router;

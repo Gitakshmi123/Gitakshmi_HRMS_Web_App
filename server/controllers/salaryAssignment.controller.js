@@ -199,8 +199,7 @@ exports.assignSalaryExcel = async (req, res) => {
         const components = [
             ...breakup.earnings.map(e => ({ name: e.name, code: e.code, monthlyAmount: e.monthly, annualAmount: e.yearly, type: 'EARNING' })),
             ...breakup.deductions.map(d => ({ name: d.name, code: d.code, monthlyAmount: d.monthly, annualAmount: d.yearly, type: 'DEDUCTION' })),
-            ...breakup.employerContributions.map(b => ({ name: b.name, code: b.code, monthlyAmount: b.monthly, annualAmount: b.yearly, type: 'BENEFIT' })),
-            ...breakup.retirementBenefits.map(r => ({ name: r.name, code: r.code, monthlyAmount: r.monthly, annualAmount: r.yearly, type: 'BENEFIT' }))
+            ...(breakup.benefits || []).map(b => ({ name: b.name, code: b.code, monthlyAmount: b.monthly, annualAmount: b.yearly, type: 'BENEFIT' }))
         ];
 
         if (!compensation) {
@@ -247,10 +246,7 @@ exports.assignSalaryExcel = async (req, res) => {
             // Map structured lists
             earnings: breakup.earnings.map(e => ({ name: e.name, code: e.code, monthlyAmount: e.monthly, annualAmount: e.yearly })),
             deductions: breakup.deductions.map(d => ({ name: d.name, code: d.code, monthlyAmount: d.monthly, annualAmount: d.yearly })),
-            benefits: [
-                ...breakup.employerContributions.map(b => ({ name: b.name, code: b.code, monthlyAmount: b.monthly, annualAmount: b.yearly })),
-                ...breakup.retirementBenefits.map(r => ({ name: r.name, code: r.code, monthlyAmount: r.monthly, annualAmount: r.yearly }))
-            ],
+            benefits: (breakup.benefits || []).map(b => ({ name: b.name, code: b.code, monthlyAmount: b.monthly, annualAmount: b.yearly })),
             
             breakup: breakup, // Store the full calculation result for backup
             category: category,

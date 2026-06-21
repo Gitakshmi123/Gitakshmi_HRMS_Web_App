@@ -319,7 +319,9 @@ exports.deleteEarning = async (req, res) => {
 
 exports.bulkCreateSalaryComponents = async (req, res) => {
     try {
+        console.log('[DEBUG] bulkCreateSalaryComponents called!');
         const tenantId = req.user?.tenantId || req.tenantId;
+        console.log('[DEBUG] tenantId:', tenantId);
         if (!tenantId) return res.status(401).json({ success: false, error: 'Unauthorized: Tenant context required' });
         if (!req.tenantDB) return res.status(500).json({ success: false, error: 'Tenant DB connection not available' });
 

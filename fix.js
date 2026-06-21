@@ -1,111 +1,141 @@
 const fs = require('fs');
-
-const file = 'D:\\Project\\GT_HRMS\\server\\controllers\\candidate.controller.js';
-let content = fs.readFileSync(file, 'utf8');
-
-const marker = '// --- Forgot Password Methods ---';
-const index = content.indexOf(marker);
-
-if (index !== -1) {
-    content = content.substring(0, index);
-}
-
-const correctCode = `// --- Forgot Password Methods ---
-const forgotPasswordOtpEntries = new Map();
-
-exports.sendForgotPasswordOtp = async (req, res) => {
+let content = fs.readFileSync('server/controllers/compensation.controller.js', 'utf8');
+let idx = content.indexOf('exports.getCompensationHistory = async (req, res) => {');
+if (idx !== -1) {
+    let correctContent = content.substring(0, idx) + `exports.getCompensationHistory = async (req, res) => {
     try {
-        const { email, tenantId } = req.body;
-        if (!email || !tenantId) return res.status(400).json({ error: "Email and company portal identification are required." });
+        const { employeeId } = req.params;
+        const tenantId = getTenantId(req);
+        const { Employee, EmployeeCtcVersion, EmployeePayrollProfile } = getModels(req);
 
-        const tenantDB = await getTenantDB(tenantId);
-        if (!tenantDB) return res.status(400).json({ error: "Invalid company portal link." });
-
-        const resolvedTenantId = await resolveTenantObjectId(tenantId, tenantDB);
-        if (!resolvedTenantId) return res.status(400).json({ error: "Invalid company portal." });
-
-        let Candidate;
-        try { Candidate = tenantDB.model("Candidate"); } catch (e) {
-            Candidate = tenantDB.model("Candidate", require("../models/Candidate"));
+        const employee = await Employee.findOne({ _id: employeeId }).select('_id firstName lastName employeeId').lean();
+        if (!employee) {
+            return res.status(404).json({
+                success: false,
+                message: 'Employee not found'
+            });
         }
 
-        const existing = await Candidate.findOne({ email: email.toLowerCase(), tenant: resolvedTenantId });
-        if (!existing) {
-            return res.status(404).json({ error: "No account found with this email in the current portal." });
-        }
+        const [salaryHistory, profileHistory] = await Promise.all([
+            EmployeeCtcVersion.find({ companyId: tenantId, employeeId })
+                .populate('createdBy', 'firstName lastName')
+                .sort({ effectiveFrom: -1, version: -1 })
+                .lean(),
+            EmployeePayrollProfile.find({ tenantId, employeeId })
+                .populate('createdBy', 'firstName lastName')
+                .sort({ effectiveFrom: -1 })
+                .lean()
+        ]);
 
-        const otp = String(Math.floor(100000 + Math.random() * 900000));
-        const exp = Date.now() + 10 * 60 * 1000;
-        const key = \`\${resolvedTenantId}:\${email.toLowerCase()}\`;
-        forgotPasswordOtpEntries.set(key, { otp, exp });
-
-        const { sendMail } = require('../utils/emailService');
-        const smtpOwner = await Tenant.findById(resolvedTenantId).select('smtpConfig').lean();
-        const customSmtp = smtpOwner?.smtpConfig?.host && smtpOwner?.smtpConfig?.user && smtpOwner?.smtpConfig?.pass
-            ? smtpOwner.smtpConfig
-            : null;
-
-        await sendMail({
-            to: email,
-            subject: 'Password Reset Verification Code',
-            text: \`Your password reset verification code is: \${otp}\\n\\nThis code expires in 10 minutes.\`,
-            html: \`<div style="font-family: sans-serif; padding: 20px; color: #333;">
-                <h2>Password Reset</h2>
-                <p>We received a request to reset the password for your account. Please use the verification code below to reset your password:</p>
-                <div style="background-color: #f0f4f8; padding: 15px; font-size: 24px; font-weight: bold; letter-spacing: 5px; text-align: center; border-radius: 8px; margin: 20px 0; color: #1a56db;">
-                    \${otp}
-                </div>
-                <p>This code will expire in 10 minutes. If you did not request this, please ignore this email.</p>
-            </div>\`,
-            customSmtp
+        res.json({
+            success: true,
+            data: salaryHistory,
+            meta: {
+                employee,
+                payrollProfiles: profileHistory
+            }
         });
-
-        res.json({ success: true, message: "Verification code sent to your email." });
-    } catch (err) {
-        console.error('❌ [FORGOT_PWD_OTP] Error:', err);
-        res.status(500).json({ error: "Failed to send verification code. Please try again." });
+    } catch (error) {
+        console.error('Get History Error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message || 'Failed to fetch history'
+        });
     }
 };
 
-exports.resetPassword = async (req, res) => {
+exports.bulkSetupCompensation = async (req, res) => {
     try {
-        const { tenantId, email, otp, newPassword } = req.body;
-        if (!tenantId || !email || !otp || !newPassword) return res.status(400).json({ error: "All fields are required." });
+        const tenantId = getTenantId(req);
+        const userId = req.user?.id || req.user?._id || null;
+        const { Employee, EmployeeCtcVersion } = getModels(req);
+        const canonicalPayroll = require('../services/canonicalPayroll.service');
+        const SalaryCalculationEngine = require('../services/salaryCalculationEngine');
+        const payrollPhase1 = require('../services/payrollPhase1.service');
+        const MinimumWage = req.tenantDB.model('MinimumWage');
 
-        const tenantDB = await getTenantDB(tenantId);
-        if (!tenantDB) return res.status(400).json({ error: "Invalid portal link" });
-
-        const resolvedTenantId = await resolveTenantObjectId(tenantId, tenantDB);
-        if (!resolvedTenantId) return res.status(400).json({ error: "Invalid portal" });
-
-        const key = \`\${resolvedTenantId}:\${email.toLowerCase()}\`;
-        const entry = forgotPasswordOtpEntries.get(key);
-
-        if (!entry || entry.otp !== String(otp) || entry.exp < Date.now()) {
-            return res.status(400).json({ error: "Invalid or expired verification code (OTP)." });
+        const { employees } = req.body;
+        if (!Array.isArray(employees) || employees.length === 0) {
+            return res.status(400).json({ success: false, message: 'Valid employees array is required' });
         }
 
-        let Candidate;
-        try { Candidate = tenantDB.model("Candidate"); } catch (e) {
-            Candidate = tenantDB.model("Candidate", require("../models/Candidate"));
+        const results = {
+            successCount: 0,
+            failedCount: 0,
+            errors: []
+        };
+
+        for (const [index, row] of employees.entries()) {
+            try {
+                const { employeeId, totalCTC, state, employeeCategory, effectiveFrom: rowEffectiveFrom } = row;
+                
+                if (!employeeId || !totalCTC) {
+                    throw new Error('Employee ID and Proposed CTC are required');
+                }
+
+                // Match by _id or employeeId string (e.g. EMP-001)
+                const query = { $or: [] };
+                if (employeeId.match(/^[0-9a-fA-F]{24}$/)) {
+                    query.$or.push({ _id: employeeId });
+                }
+                query.$or.push({ employeeId: employeeId });
+
+                const employee = await Employee.findOne(query).select('firstName lastName employeeId email joiningDate createdAt workState').lean();
+                if (!employee) throw new Error(\`Employee \${employeeId} not found\`);
+
+                const effectiveFrom = startOfDay(rowEffectiveFrom ? new Date(rowEffectiveFrom) : (employee.joiningDate || employee.createdAt || new Date()));
+                const resolvedCTC = normalizeMoney(totalCTC);
+                const category = employeeCategory || 'GENERAL';
+                const empState = state || employee.workState || '';
+
+                const existingVersion = await canonicalPayroll.resolveEffectiveSalaryVersion(req.tenantDB, tenantId, employee._id, effectiveFrom, effectiveFrom);
+                if (existingVersion) throw new Error('Active salary version already exists for this employee');
+
+                let minWageAmount = 0;
+                if (empState && category) {
+                    const mwDoc = await MinimumWage.findOne({ 
+                        tenantId, 
+                        state: { $regex: new RegExp(\`^\${empState}$\`, 'i') },
+                        category: { $regex: new RegExp(\`^\${category}$\`, 'i') }
+                    });
+                    if (mwDoc) minWageAmount = mwDoc.monthlyAmount;
+                }
+
+                const ruleSet = await payrollPhase1.resolveStatutoryRuleSet(req.tenantDB, tenantId, effectiveFrom, effectiveFrom, { country: 'IN', workState: empState });
+                const result = SalaryCalculationEngine.calculateSalary({
+                    annualCTC: resolvedCTC,
+                    employeeCategory: category,
+                    minWageAmount,
+                    payrollContext: {
+                        applyStatutory: true,
+                        locationPolicy: ruleSet ? payrollPhase1.buildStatutoryRuleSnapshot(ruleSet) : undefined
+                    }
+                });
+
+                const components = [...result.earnings, ...result.benefits].map(c => ({
+                    name: c.name, code: c.code, type: result.earnings.includes(c) ? 'EARNING' : 'BENEFIT',
+                    monthlyAmount: c.monthly, annualAmount: c.yearly, isTaxable: true, isProRata: true, enabled: true
+                }));
+
+                await canonicalPayroll.createSalaryVersion(req.tenantDB, tenantId, employee._id, {
+                    effectiveFrom, totalCTC: resolvedCTC, components, source: 'MANUAL',
+                    revisionType: 'INITIAL', reason: 'Bulk Salary Setup'
+                }, userId);
+
+                results.successCount++;
+            } catch (err) {
+                results.failedCount++;
+                results.errors.push({ row: index + 1, employeeId: row.employeeId, error: err.message });
+            }
         }
 
-        const candidate = await Candidate.findOne({ email: email.toLowerCase(), tenant: resolvedTenantId });
-        if (!candidate) return res.status(404).json({ error: "Candidate not found." });
-
-        const bcrypt = require('bcryptjs');
-        candidate.password = await bcrypt.hash(newPassword, 10);
-        await candidate.save();
-
-        forgotPasswordOtpEntries.delete(key);
-
-        res.json({ success: true, message: "Password reset successfully. You can now login." });
-    } catch (err) {
-        console.error('❌ [RESET_PWD] Error:', err);
-        res.status(500).json({ error: "Failed to reset password. Please try again." });
+        res.json({ success: true, message: \`Bulk setup complete. Success: \${results.successCount}, Failed: \${results.failedCount}\`, data: results });
+    } catch (error) {
+        console.error('Bulk Setup Error:', error);
+        res.status(500).json({ success: false, message: error.message });
     }
 };
-\n`;
-
-fs.writeFileSync(file, content + correctCode);
-console.log('Fixed syntax error in candidate.controller.js');
+`;
+    fs.writeFileSync('server/controllers/compensation.controller.js', correctContent);
+    console.log('Fixed');
+}

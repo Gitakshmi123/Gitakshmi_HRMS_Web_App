@@ -441,7 +441,7 @@ const SalaryController = {
             const totalComps = snapshot.earnings.reduce((s, e) => s + e.yearlyAmount, 0) +
                 snapshot.benefits.reduce((s, b) => s + b.yearlyAmount, 0);
 
-            if (Math.abs(totalComps - snapshot.ctc) > 1) { // 1 rupee tolerance for rounding
+            if (Math.abs(totalComps - snapshot.ctc) > 50) { // 50 rupee tolerance for monthly-to-yearly Excel solver rounding
                 throw new Error("CTC Mismatch. Please recalculate and save draft again.");
             }
 
@@ -611,6 +611,94 @@ const SalaryController = {
         } catch (error) {
             console.error('[SALARY_CONTROLLER] autoBalance Error:', error);
             res.status(500).json({ success: false, message: "Auto-Balance logic failed on server" });
+        }
+    },
+
+    /**
+     * Candidate Salary Setup (Unified Phase 1 Engine Logic)
+     */
+    async candidateSetup(req, res) {
+        try {
+            const { applicantId, totalCTC, employeeCategory, state, city, effectiveFrom } = req.body;
+            const tenantId = getTenantId(req);
+
+            if (!applicantId || !totalCTC) {
+                return res.status(400).json({ success: false, message: "Applicant ID and Total CTC are required" });
+            }
+
+            const Applicant = req.tenantDB.model('Applicant');
+            const Snapshot = req.tenantDB.model('EmployeeSalarySnapshot');
+            const MinimumWage = req.tenantDB.models.MinimumWage || req.tenantDB.model('MinimumWage', require('../models/MinimumWage'));
+            const payrollPhase1 = require('../services/payrollPhase1.service');
+
+            const applicant = await Applicant.findById(applicantId).lean();
+            if (!applicant) {
+                return res.status(404).json({ success: false, message: "Candidate not found" });
+            }
+
+            const resolvedEffectiveFrom = effectiveFrom ? new Date(effectiveFrom) : new Date();
+            const category = employeeCategory || 'GENERAL';
+            const workState = state || '';
+
+            let minWageAmount = 0;
+            if (workState && category) {
+                const mwDoc = await MinimumWage.findOne({ 
+                    tenantId, 
+                    state: { $regex: new RegExp(`^${workState}$`, 'i') },
+                    category: { $regex: new RegExp(`^${category}$`, 'i') }
+                });
+                if (mwDoc) minWageAmount = mwDoc.monthlyAmount;
+            }
+
+            const ruleSet = await payrollPhase1.resolveStatutoryRuleSet(
+                req.tenantDB,
+                tenantId,
+                resolvedEffectiveFrom,
+                resolvedEffectiveFrom,
+                { country: 'IN', workState, workCity: city, payrollRegion: workState }
+            );
+
+            const result = SalaryCalculationEngine.calculateSalary({
+                annualCTC: totalCTC,
+                employeeCategory: category,
+                minWageAmount,
+                payrollContext: {
+                    applyStatutory: true,
+                    locationPolicy: ruleSet ? payrollPhase1.buildStatutoryRuleSnapshot(ruleSet) : undefined
+                }
+            });
+
+            // Map engine output to EmployeeSalarySnapshot format
+            await Snapshot.deleteMany({ applicant: applicantId, locked: false });
+
+            const payload = mapToSnapshot(result, req, {
+                applicant: applicantId,
+                effectiveFrom: resolvedEffectiveFrom,
+                payrollContext: result.payrollContext
+            });
+
+            payload.locked = false; // Draft mode
+            const snapshot = await Snapshot.create(payload);
+
+            await Applicant.findByIdAndUpdate(applicantId, {
+                $set: { salaryAssigned: true, salaryLocked: false, salarySnapshotId: snapshot._id }
+            });
+
+            // Also update Application model if it exists
+            const ApplicationModel = req.tenantDB.models?.Application || req.tenantDB.model('Application', require('../models/Application'));
+            await ApplicationModel.findByIdAndUpdate(applicantId, {
+                $set: { salaryAssigned: true, salaryLocked: false, salarySnapshotId: snapshot._id }
+            }).catch(() => {});
+
+            res.status(201).json({
+                success: true,
+                message: 'Candidate salary configuration created successfully',
+                data: mapToContract(snapshot)
+            });
+
+        } catch (error) {
+            console.error('[SALARY_CONTROLLER] Candidate Setup Error:', error);
+            res.status(500).json({ success: false, message: error.message || "Failed to setup candidate salary" });
         }
     }
 };

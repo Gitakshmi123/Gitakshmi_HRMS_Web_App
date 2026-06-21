@@ -7,7 +7,7 @@ import { getNextStage, normalizeStatus } from './PipelineStatusManager';
 import { useAuth } from '../../context/AuthContext';
 import MatchBreakdown from '../../components/MatchBreakdown';
 
-import AssignSalaryModal from '../../components/AssignSalaryModal';
+import InitialCompensationModal from '../../components/Compensation/InitialCompensationModal';
 import { DatePicker, Pagination, Select, Modal, TimePicker, Dropdown, Menu } from 'antd';
 import { showToast, showConfirmToast } from '../../utils/uiNotifications'; // Imports fixed
 import dayjs from 'dayjs';
@@ -2083,6 +2083,21 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
         }
     }
 
+    async function lockApplicantSalary(app) {
+        try {
+            if (!window.confirm('Are you sure you want to lock this salary? Once locked, you cannot modify it.')) return;
+            const res = await api.post(`/salary/confirm`, { applicantId: app._id });
+            if (res.data?.success) {
+                showToast('success', 'Success', 'Salary Locked successfully!');
+                loadApplicants();
+            } else {
+                showToast('error', 'Error', res.data?.message || 'Failed to lock salary');
+            }
+        } catch (err) {
+            console.error('Lock Salary Error:', err);
+            showToast('error', 'Error', err.response?.data?.message || err.message || 'Failed to lock salary');
+        }
+    }
     async function fetchTemplates() {
         // Fetch Offer Templates
         try {
@@ -4268,7 +4283,10 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
                                                         {app.salaryAssigned ? (
                                                             <div className="flex flex-col items-end lg:items-center gap-1">
                                                                 <button onClick={(e) => { e.stopPropagation(); setSelectedApplicant(app); setShowSalaryPreview(true); }} className="text-[10px] font-black text-slate-700 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-400 hover:text-indigo-600 transition shadow-sm uppercase tracking-widest whitespace-nowrap">VIEW PAY</button>
-                                                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Pay Fixed</span>
+                                                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{app.salaryLocked ? 'Pay Locked' : 'Pay Draft'}</span>
+                                                                {!app.salaryLocked && (
+                                                                    <button onClick={(e) => { e.stopPropagation(); lockApplicantSalary(app); }} className="text-[9px] font-bold text-emerald-600 hover:text-emerald-700 hover:underline uppercase tracking-widest whitespace-nowrap">Lock Salary</button>
+                                                                )}
                                                             </div>
                                                         ) : (
                                                             <button onClick={(e) => { e.stopPropagation(); setSelectedApplicant(app); setShowSalaryModal(true); }} className="text-[10px] font-black text-[#4F46E5] hover:underline uppercase tracking-widest">Assign Pay</button>
@@ -5498,14 +5516,17 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
                 )
             }
 
-            {/* Assign Salary Modal */}
+            {/* Initial Compensation Modal */}
             {
                 showSalaryModal && selectedApplicant && (
-                    <AssignSalaryModal
-                        isOpen={showSalaryModal}
-                        onClose={() => setShowSalaryModal(false)}
+                    <InitialCompensationModal
                         applicant={selectedApplicant}
-                        onSuccess={handleSalaryAssigned}
+                        onClose={() => setShowSalaryModal(false)}
+                        onSuccess={() => {
+                            loadApplicants();
+                            setShowSalaryModal(false);
+                            showToast('success', 'Salary Configured', 'Candidate salary configuration has been saved successfully.');
+                        }}
                     />
                 )
             }
