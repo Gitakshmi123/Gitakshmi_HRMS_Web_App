@@ -12,6 +12,7 @@ router.use('/hr', hrCheck);
 const empCtrl = require('../controllers/hr.employee.controller');
 const deptCtrl = require('../controllers/hr.department.controller');
 const policyCtrl = require('../controllers/leavePolicy.controller');
+const leaveTypeCtrl = require('../controllers/leaveType.controller');
 const requestCtrl = require('../controllers/leaveRequest.controller');
 const leaveAnalyticsCtrl = require('../controllers/leaveAnalytics.controller');
 const applicantCtrl = require('../controllers/applicant.controller');
@@ -86,6 +87,11 @@ router.get('/hr/leave-policies/test', auth.requireHr, (req, res) => {
    res.json({ message: 'Test route works', user: req.user, tenantId: req.tenantId });
 });
 
+// Formula Simulation & Explanation Routes
+const formulaSimCtrl = require('../controllers/formulaSimulationController');
+router.post('/hr/formula/simulate', auth.authenticate, checkPermission('leave.policies', 'view'), formulaSimCtrl.simulateFormula);
+router.post('/hr/formula/explain', auth.authenticate, checkPermission('leave.policies', 'view'), formulaSimCtrl.explainFormula);
+
 router.post('/hr/leave-policies', auth.authenticate, checkPermission('leave.policies', 'create'), policyCtrl.createPolicy);
 router.get('/hr/leave-policies', auth.authenticate, checkPermission('leave.policies', 'view'), policyCtrl.getPolicies);
 router.get('/hr/leave-policies/custom/mappings', auth.authenticate, checkPermission('leave.policies', 'view'), policyCtrl.getCustomMappings);
@@ -96,6 +102,12 @@ router.post('/hr/leave-policies/custom/apply', auth.authenticate, checkPermissio
 router.get('/hr/leave-policies/:id', auth.authenticate, checkPermission('leave.policies', 'view'), policyCtrl.getPolicyById);
 router.put('/hr/leave-policies/:id', auth.authenticate, checkPermission('leave.policies', 'edit'), auth.requireHr, policyCtrl.updatePolicy);
 router.post('/hr/leave-policies/:id/sync', auth.authenticate, checkPermission('leave.policies', 'edit'), auth.requireHr, policyCtrl.syncPolicy);
+// Leave Types
+router.post('/hr/leave-types', auth.authenticate, checkPermission('leave.policies', 'create'), auth.requireHr, leaveTypeCtrl.createLeaveType);
+router.get('/hr/leave-types', auth.authenticate, checkPermission('leave.policies', 'view'), leaveTypeCtrl.getLeaveTypes);
+router.put('/hr/leave-types/:id', auth.authenticate, checkPermission('leave.policies', 'edit'), auth.requireHr, leaveTypeCtrl.updateLeaveType);
+router.delete('/hr/leave-types/:id', auth.authenticate, checkPermission('leave.policies', 'delete'), auth.requireHr, leaveTypeCtrl.deleteLeaveType);
+
 router.post('/hr/leave-policies/apply-existing', auth.authenticate, checkPermission('leave.policies', 'edit'), auth.requireHr, policyCtrl.applyPolicyToExistingEmployees);
 router.patch('/hr/leave-policies/:id/status', auth.authenticate, checkPermission('leave.policies', 'edit'), auth.requireHr, policyCtrl.togglePolicyStatus);
 router.delete('/hr/leave-policies/:id', auth.authenticate, checkPermission('leave.policies', 'delete'), auth.requireHr, policyCtrl.deletePolicy);

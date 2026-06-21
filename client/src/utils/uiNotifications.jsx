@@ -51,15 +51,16 @@ if (typeof window !== 'undefined') {
  * Replaces Modal.confirm with a non-blocking toast at top-right
  * containing confirm/cancel buttons.
  */
-export const showConfirmToast = ({
-    title,
-    description,
-    onConfirm,
-    okText = 'Confirm',
-    cancelText = 'Cancel',
-    okType = 'primary', // 'primary', 'default', 'dashed', 'link', 'text'
-    danger = false
-}) => {
+export const showConfirmToast = (optsOrTitle, descriptionOpt, onConfirmOpt) => {
+    let title, description, onConfirm, okText = 'Confirm', cancelText = 'Cancel', okType = 'primary', danger = false;
+    
+    if (typeof optsOrTitle === 'object' && optsOrTitle !== null) {
+        ({ title, description, onConfirm, okText = 'Confirm', cancelText = 'Cancel', okType = 'primary', danger = false } = optsOrTitle);
+    } else {
+        title = optsOrTitle;
+        description = descriptionOpt;
+        onConfirm = onConfirmOpt;
+    }
     const key = `confirm-${Date.now()}`;
     const notify = antdInstances.notification;
 
