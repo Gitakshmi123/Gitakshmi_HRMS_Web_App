@@ -149,6 +149,23 @@ export default function AttendanceModule({
   }, [effectivePolicyId, leavePolicies, profile?.leavePolicy]);
   const location = useLocation();
   const navigate = useNavigate();
+
+  const availableTabs = useMemo(() => [
+    canViewAttendance ? 'attendance' : null,
+    (canApplyLeave || canSeeLeaveHistory) ? 'leaves' : null,
+    (canCreateAttendance || canSeeRequestHistory) ? 'requests' : null,
+  ].filter(Boolean), [canViewAttendance, canCreateAttendance, canApplyLeave, canSeeLeaveHistory, canSeeRequestHistory]);
+  const [activeTab, setActiveTab] = useState(availableTabs[0] || 'attendance');
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tabParam = params.get('tab');
+    if (tabParam && availableTabs.includes(tabParam)) {
+      setActiveTab(tabParam);
+    } else if (!tabParam && availableTabs.length > 0) {
+      setActiveTab(availableTabs[0]);
+    }
+  }, [location.search, availableTabs]);
   
   const [earlyReturnModal, setEarlyReturnModal] = useState({ isOpen: false, leaveId: null, leaveData: null, newEndDate: '' });
   const [selectedLeave, setSelectedLeave] = useState(null);
@@ -246,22 +263,7 @@ export default function AttendanceModule({
       setIsEarlyReturning(false);
     }
   };
-  const availableTabs = useMemo(() => [
-    canViewAttendance ? 'attendance' : null,
-    (canApplyLeave || canSeeLeaveHistory) ? 'leaves' : null,
-    (canCreateAttendance || canSeeRequestHistory) ? 'requests' : null,
-  ].filter(Boolean), [canViewAttendance, canCreateAttendance, canApplyLeave, canSeeLeaveHistory, canSeeRequestHistory]);
-  const [activeTab, setActiveTab] = useState(availableTabs[0] || 'attendance');
 
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const tabParam = params.get('tab');
-    if (tabParam && availableTabs.includes(tabParam)) {
-      setActiveTab(tabParam);
-    } else if (!tabParam && availableTabs.length > 0) {
-      setActiveTab(availableTabs[0]);
-    }
-  }, [location.search, availableTabs]);
 
   // Tab State
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());

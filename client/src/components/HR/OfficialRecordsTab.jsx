@@ -238,7 +238,7 @@ export default function OfficialRecordsTab({
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between pl-1 h-4">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] flex items-center whitespace-nowrap">
-              Employee Grade <span className="text-rose-500 ml-1 font-bold">*</span>
+              Employee Grade
             </label>
           </div>
           <select
@@ -284,7 +284,7 @@ export default function OfficialRecordsTab({
         {/* Band selection */}
         <div className="flex flex-col gap-2">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] pl-1 h-4 flex items-center whitespace-nowrap">
-            Employee Band <span className="text-rose-500 ml-1 font-bold">*</span></label>
+            Employee Band</label>
             <input
               type="text"
               list="band-options"
