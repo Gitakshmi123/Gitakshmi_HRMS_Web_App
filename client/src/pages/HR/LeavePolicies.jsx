@@ -226,6 +226,41 @@ function PolicyCard({ p, onEdit, onSync, onDelete, onToggle }) {
 }
 
 
+// ─── Policy Summary Card (Read Only) ─────────────────────────────────────────
+function PolicySummaryCard({ p }) {
+    const rulesList = [];
+    if (p.rules?.some(r => r.carryForwardAllowed)) rulesList.push('Carry Forward');
+    if (p.rules?.some(r => r.countHoliday || r.countWeeklyOff)) rulesList.push('Sandwich Rule');
+    if (p.rules?.some(r => r.probationLock)) rulesList.push('Probation Lock');
+    if (p.rules?.some(r => r.encashmentAllowed)) rulesList.push('Encashment');
+
+    return (
+        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5 flex flex-col gap-4">
+            <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">{p.name}</h3>
+            <div className="flex flex-wrap gap-4">
+                {(p.rules || []).map((r, i) => (
+                    <div key={i} className="flex flex-col">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{r.leaveType}</span>
+                        <span className="font-bold text-slate-800 text-sm">{r.totalPerYear}</span>
+                    </div>
+                ))}
+            </div>
+            {rulesList.length > 0 && (
+                <div className="mt-2">
+                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mb-2">Rules</p>
+                    <div className="flex flex-col gap-1.5">
+                        {rulesList.map(rule => (
+                            <div key={rule} className="flex items-center gap-2 text-xs text-slate-600 font-medium">
+                                <Check size={14} className="text-emerald-500" strokeWidth={3} /> {rule}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
 // ─── Custom Mappings Panel ─────────────────────────────────────────────────────
 function CustomMappingsPanel({ 
     mappings, 
@@ -3990,7 +4025,7 @@ export default function LeavePolicies({ initialView, mode = 'master' }) {
                         )}
                         
 
-                        {view === 'policies' && (
+                        {view === 'policies' && mode === 'config' && (
                             <Can module="leave.policies" action="create">
                                 <button
                                     onClick={handleCreateNew}
@@ -4021,7 +4056,7 @@ export default function LeavePolicies({ initialView, mode = 'master' }) {
                         { id: 'settings', label: 'Settings' }
                     ].filter(tab => {
                         if (mode === 'config') {
-                            return ['holiday', 'opening', 'requests', 'ledger', 'compoff', 'encashment', 'settings'].includes(tab.id);
+                            return ['policies', 'holiday', 'opening', 'requests', 'ledger', 'compoff', 'encashment', 'analytics', 'settings'].includes(tab.id);
                         } else {
                             return ['policies', 'custom', 'analytics'].includes(tab.id);
                         }
@@ -4182,14 +4217,18 @@ export default function LeavePolicies({ initialView, mode = 'master' }) {
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 pb-12 animate-in slide-in-from-bottom-4 duration-700">
                                 {(policies || []).map((p, idx) => (
-                                    <PolicyCard
-                                        key={(p._id || p.id || p?._doc?._id)?.toString() || idx}
-                                        p={p}
-                                        onEdit={handleEdit}
-                                        onSync={handleSync}
-                                        onDelete={handleDelete}
-                                        onToggle={toggleStatus}
-                                    />
+                                    mode === 'master' ? (
+                                        <PolicySummaryCard key={(p._id || p.id || p?._doc?._id)?.toString() || idx} p={p} />
+                                    ) : (
+                                        <PolicyCard
+                                            key={(p._id || p.id || p?._doc?._id)?.toString() || idx}
+                                            p={p}
+                                            onEdit={handleEdit}
+                                            onSync={handleSync}
+                                            onDelete={handleDelete}
+                                            onToggle={toggleStatus}
+                                        />
+                                    )
                                 ))}
                             </div>
                         )}
