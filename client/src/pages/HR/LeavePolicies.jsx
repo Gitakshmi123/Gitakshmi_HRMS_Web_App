@@ -800,28 +800,36 @@ function OpeningBalancePanel({ employees }) {
                             </div>
                         ) : (
                             <div className="space-y-4">
-                                <div className="grid grid-cols-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">
+                                <div className="grid grid-cols-8 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">
                                     <div className="col-span-2">Leave Type</div>
-                                    <div className="text-center font-black">Current Total</div>
-                                    <div className="col-span-2 text-right">Opening Balance Override</div>
+                                    <div className="text-center font-black">Total</div>
+                                    <div className="text-center font-black">Used / Pending</div>
+                                    <div className="text-center font-black">Available</div>
+                                    <div className="col-span-3 text-right">Opening Balance Override</div>
                                 </div>
                                 <div className="divide-y divide-slate-50 max-h-[350px] overflow-y-auto pr-1">
                                     {balances.map(bal => (
-                                        <div key={bal._id || bal.leaveType} className="grid grid-cols-5 items-center py-3">
+                                        <div key={bal._id || bal.leaveType} className="grid grid-cols-8 items-center py-3">
                                             <div className="col-span-2 flex items-center gap-2">
-                                                <span className="w-2.5 h-2.5 rounded-full bg-slate-900" style={{ backgroundColor: bal.color || '#3b82f6' }} />
+                                                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: bal.color || '#3b82f6' }} />
                                                 <span className="font-bold text-slate-700 text-xs">{bal.leaveType}</span>
                                             </div>
                                             <div className="text-center font-bold text-slate-800 text-xs">
                                                 {bal.total ?? 0}
                                             </div>
-                                            <div className="col-span-2 flex items-center justify-end gap-2">
+                                            <div className="text-center font-bold text-red-600 text-xs">
+                                                {(bal.used || 0) + (bal.pending || 0)}
+                                            </div>
+                                            <div className="text-center font-bold text-emerald-600 text-xs">
+                                                {bal.available ?? ((bal.total ?? 0) - ((bal.used || 0) + (bal.pending || 0)))}
+                                            </div>
+                                            <div className="col-span-3 flex items-center justify-end gap-2">
                                                 <input
                                                     type="number"
                                                     step="0.5"
                                                     value={inputValues[bal.leaveType] ?? ''}
                                                     onChange={e => setInputValues({ ...inputValues, [bal.leaveType]: e.target.value })}
-                                                    className="w-20 text-center py-1 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50/50 transition-all shadow-none"
+                                                    className="w-16 text-center py-1 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50/50 transition-all shadow-none"
                                                 />
                                                 <button
                                                     onClick={() => handleSaveOpening(bal.leaveType)}
@@ -3279,14 +3287,15 @@ const generatePolicyId = (name, existingPolicies = []) => {
 };
 
 // ─── Main Component ─────────────────────────────────────────────────────────────
-export default function LeavePolicies({ initialView = 'policies' }) {
-    const [view, setView] = useState(initialView);
+export default function LeavePolicies({ initialView, mode = 'master' }) {
+    const defaultInitialView = initialView || (mode === 'config' ? 'holiday' : 'policies');
+    const [view, setView] = useState(defaultInitialView);
     const [ruleSubTab, setRuleSubTab] = useState('core');
     const [selectedTemplateId, setSelectedTemplateId] = useState('custom');
     
     useEffect(() => {
-        setView(initialView);
-    }, [initialView]);
+        setView(initialView || (mode === 'config' ? 'holiday' : 'policies'));
+    }, [initialView, mode]);
 
     const [policies, setPolicies] = useState([]);
     const [employees, setEmployees] = useState([]);
@@ -3966,7 +3975,7 @@ export default function LeavePolicies({ initialView = 'policies' }) {
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                     <div className="flex flex-col gap-1">
                         <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tight">
-                            Leave Master
+                            {mode === 'config' ? 'Leave Configuration' : 'Leave Master'}
                         </h1>
                     </div>
                     <div className="flex items-center gap-3">
@@ -4010,7 +4019,13 @@ export default function LeavePolicies({ initialView = 'policies' }) {
                         { id: 'encashment', label: 'Encashment' },
                         { id: 'analytics', label: 'Analytics & Reports' },
                         { id: 'settings', label: 'Settings' }
-                    ].map(tab => (
+                    ].filter(tab => {
+                        if (mode === 'config') {
+                            return ['holiday', 'opening', 'requests', 'ledger', 'compoff', 'encashment', 'settings'].includes(tab.id);
+                        } else {
+                            return ['policies', 'custom', 'analytics'].includes(tab.id);
+                        }
+                    }).map(tab => (
                         <button
                             key={tab.id}
                             onClick={() => setView(tab.id)}

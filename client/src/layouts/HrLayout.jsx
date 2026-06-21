@@ -96,14 +96,13 @@ export default function HRLayout() {
   const sectionTabs = useMemo(() => {
     const sections = [
       {
-        match: ['/organization', '/org', '/departments', '/grades', '/organization-policies', '/leave-policies', '/leave-approvals', '/leave-requests', '/organization/automations', '/shift-management'],
+        match: ['/organization', '/org', '/departments', '/grades', '/organization-policies', '/leave-approvals', '/leave-requests', '/organization/automations', '/shift-management'],
         tabs: [
           { label: 'Organization', to: `${pathPrefix}/organization`, icon: MapPin, permission: 'people.org' },
           { label: 'Org Structure', to: `${pathPrefix}/org`, icon: Users, permission: 'people.org' },
           { label: 'Departments', to: `${pathPrefix}/departments`, icon: Building2, permission: 'people.departments' },
           { label: 'Grades', to: `${pathPrefix}/grades`, icon: Briefcase, permission: 'people.org' },
-          { label: 'Policies', to: `${pathPrefix}/leave-policies`, icon: Settings2, permission: 'leave.policies' },
-          { label: 'Custom', to: `${pathPrefix}/leave-policies/custom`, icon: Settings2, permission: 'leave.custom' },
+          { label: 'Leave Configuration', to: `${pathPrefix}/organization-policies`, icon: Settings2, permission: 'leave.policies' },
           { label: 'Requests', to: `${pathPrefix}/leave-approvals`, icon: Plane, permission: 'leave.requests' },
           { label: 'Shift', to: `${pathPrefix}/shift-management`, icon: Clock, permission: 'attendance.dashboard' },
           { label: 'Automations', to: `${pathPrefix}/organization/automations`, icon: Settings2, permission: 'people.org' },
@@ -260,7 +259,7 @@ export default function HRLayout() {
     if (path.includes('/users')) return '';
     if (path.includes('/attendance')) return '';
     if (path.includes('/exit-management')) return 'Resignation';
-    if (path.includes('/leave-policies')) return '';
+    if (path.includes('/leave-policies') || path.includes('/organization-policies')) return '';
     if (path.includes('/leave-approvals')) return '';
     if (path.includes('/leave-requests')) return 'Leave Requests';
     if (path.includes('/payroll')) return '';
