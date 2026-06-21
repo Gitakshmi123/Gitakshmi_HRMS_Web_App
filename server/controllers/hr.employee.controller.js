@@ -9,6 +9,7 @@ const leaveManagementService = require('../services/leaveManagement.service');
 const gradeBandAssignmentService = require('../services/gradeBandAssignment.service');
 const UserSchema = require('../models/User');
 const { sanitizeEmployee } = require('../utils/apiSanitizer');
+const { getDefaultPerms } = require('../utils/defaultRolePermissions');
 const companyIdConfigController = require('./companyIdConfig.controller');
 const salarySnapshotCanonicalSync = require('../services/salarySnapshotCanonicalSync.service');
 const employeeHierarchyService = require('../services/employeeHierarchy.service');
@@ -1078,6 +1079,7 @@ exports.create = async (req, res) => {
             mainCompanyId: tenantId,
             tenant: tenantId,
             companyId: tenantId,
+            permissions: getDefaultPerms('employee'),
           });
         } else if (String(existingUser.role || '').toLowerCase() === 'employee') {
           await User.findByIdAndUpdate(existingUser._id, {
@@ -4122,7 +4124,8 @@ exports.bulkUploadEmployees = async (req, res) => {
                   role: 'employee',
                   mainCompanyId: tenantId,
                   tenant: tenantId,
-                  companyId: tenantId
+                  companyId: tenantId,
+                  permissions: getDefaultPerms('employee')
                 });
               } else if (String(existingUser.role || '').toLowerCase() === 'employee') {
                 await User.findByIdAndUpdate(existingUser._id, {
