@@ -109,6 +109,15 @@ exports.createPolicy = async (req, res) => {
             return res.status(400).json({ error: 'name_required', message: 'Policy name is required' });
         }
 
+        // Check for duplicate policy name case-insensitively
+        const duplicatePolicy = await LeavePolicy.findOne({
+            tenant: tenantId,
+            name: { $regex: new RegExp(`^\\s*${name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'i') }
+        });
+        if (duplicatePolicy) {
+            return res.status(400).json({ error: 'duplicate_name', message: 'A leave policy with this name already exists.' });
+        }
+
         if (normalizedRules.length === 0) {
             return res.status(400).json({ error: 'rules_required', message: 'At least one leave type rule is required' });
         }
@@ -217,6 +226,47 @@ exports.getPolicies = async (req, res) => {
 
         const { LeavePolicy } = getModels(req);
         await healPolicyTenantScope(LeavePolicy, tenantId);
+
+
+        // Ensure "Attendance Based EL Policy" exists
+        let attendancePolicy = await LeavePolicy.findOne({
+            tenant: tenantId,
+            name: 'Attendance Based EL Policy'
+        });
+
+        if (!attendancePolicy) {
+            attendancePolicy = await LeavePolicy.create({
+                tenant: tenantId,
+                name: 'Attendance Based EL Policy',
+                description: 'Attendance based monthly EL accrual policy',
+                status: 'ACTIVE',
+                isActive: true,
+                applicableTo: 'All',
+                leaveTypes: ['EL'],
+                rules: [{
+                    leaveType: 'EL',
+                    totalPerYear: 21,
+                    requiresApproval: true,
+                    color: '#3b82f6',
+                    carryForwardAllowed: true,
+                    maxCarryForward: 15,
+                    halfDayAllowed: true,
+                    monthlyAccrual: true,
+                    accrualType: 'monthly',
+                    monthlyAccrualRate: 1.75,
+                    accrualDependsOnAttendance: true,
+                    minAttendanceDays: 20,
+                    countPresent: true,
+                    countOnDuty: true,
+                    countCompOff: true,
+                    countHoliday: true,
+                    countWeeklyOff: true,
+                    countPaidLeave: false,
+                    accrualSlabs: [{ minAttendanceDays: 20, creditDays: 1.75 }]
+                }]
+            });
+        }
+
         const policies = await LeavePolicy.find({ tenant: tenantId }).sort({ createdAt: -1 }).lean();
         res.json(policies.map((policy) => ({
             ...policy,
@@ -241,12 +291,16 @@ exports.getMyPolicies = async (req, res) => {
 
         const { LeavePolicy, LeaveBalance } = getModels(req);
         let emp = await resolveAuthenticatedEmployee(req, {
-            select: 'leavePolicy tenant joiningDate employeeType role department departmentId grade gradeId designation jobType band'
+            select: 'leavePolicy tenant joiningDate employeeType role department departmentId grade gradeId designation jobType band gender maritalStatus'
         });
 
         if (!emp) {
             return res.status(404).json({ error: 'Employee not found' });
         }
+
+        const empGender = String(emp.gender || '').trim().toLowerCase();
+        const empMarital = String(emp.maritalStatus || '').trim().toLowerCase();
+        const isMarried = ['married', 'मेरेड', 'मेरेડ', 'विवाहित', 'vivahit'].includes(empMarital);
 
         // Ensure employee has a policy (auto-assign default if missing)
         try {
@@ -300,6 +354,16 @@ exports.getMyPolicies = async (req, res) => {
                 policy: effectivePolicy
             });
 
+            // Calculate joining month payable days for accurate CL/SL proration
+            const currentYear = now.getFullYear();
+            const isJoiningYear = emp.joiningDate && new Date(emp.joiningDate).getFullYear() === currentYear;
+            let joiningPayableDays = null;
+            if (isJoiningYear) {
+                try {
+                    joiningPayableDays = await leaveManagementService.getJoiningMonthPayableDays(emp, tenantId, req.tenantDB, currentYear);
+                } catch (_e) { /* non-critical */ }
+            }
+
             await leaveManagementService.repairZeroLeaveBalancesFromPolicy({
                 employee: emp,
                 policy: effectivePolicy,
@@ -308,8 +372,9 @@ exports.getMyPolicies = async (req, res) => {
                     LeaveBalance,
                     Grade
                 },
-                year: now.getFullYear(),
-                prorate: true
+                year: currentYear,
+                prorate: true,
+                joiningPayableDays
             });
         }
 
@@ -325,6 +390,14 @@ exports.getMyPolicies = async (req, res) => {
                 grade: resolvedGrade
             });
             for (const rule of effectiveRules) {
+                const lt = String(rule.leaveType || '').toUpperCase();
+                if (lt === 'MATERNITY') {
+                    if (empGender !== 'female' || !isMarried) continue;
+                }
+                if (lt === 'PATERNITY') {
+                    if (empGender !== 'male' || !isMarried) continue;
+                }
+
                 // balance lookup
                 const bal = await LeaveBalance.findOne({ tenant: tenantId, employee: emp._id, policy: policy._id, leaveType: rule.leaveType, year }).lean();
 
@@ -423,8 +496,18 @@ exports.updatePolicy = async (req, res) => {
             return res.status(404).json({ error: 'Policy not found' });
         }
 
-        // Ensure specificEmployeeId maps to specificEmployeeIds if provided
         const updateData = { ...req.body };
+
+        if (updateData.name) {
+            const duplicatePolicy = await LeavePolicy.findOne({
+                tenant: tenantId,
+                name: { $regex: new RegExp(`^\\s*${updateData.name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'i') },
+                _id: { $ne: req.params.id }
+            });
+            if (duplicatePolicy) {
+                return res.status(400).json({ error: 'duplicate_name', message: 'A leave policy with this name already exists.' });
+            }
+        }
         if (updateData.specificEmployeeId && (!updateData.specificEmployeeIds || updateData.specificEmployeeIds.length === 0)) {
             updateData.specificEmployeeIds = [updateData.specificEmployeeId];
         }

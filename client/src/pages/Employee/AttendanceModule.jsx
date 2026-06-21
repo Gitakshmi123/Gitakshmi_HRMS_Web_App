@@ -126,7 +126,9 @@ export default function AttendanceModule({
   fetchDashboardData,
   handleCancelLeave,
   editLeave,
-  setEditLeave
+  setEditLeave,
+  lastMonthAccrual = null,
+  leavePolicy = null
 }) {
   const { hasPermission, loading: permissionLoading } = useRBAC();
   const canOpenAttendance = hasPermission('employee.attendance', 'any');
@@ -543,6 +545,50 @@ export default function AttendanceModule({
                 <div className="flex items-center justify-between">
                   <SectionHeading title="Leave Balances" />
                 </div>
+
+                {lastMonthAccrual && (
+                  <div className="bg-gradient-to-r from-indigo-50/80 via-purple-50/50 to-pink-50/50 border border-indigo-100/60 rounded-2xl p-4 mb-6 shadow-sm">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+                          <h4 className="text-xs font-black uppercase tracking-widest text-indigo-700">Monthly Accrual Summary</h4>
+                        </div>
+                        <p className="text-[10px] text-slate-500 font-medium leading-normal">
+                          Your leaves are credited monthly based on your attendance. Below is the details of last month's processing.
+                        </p>
+                      </div>
+                      
+                    </div>
+                    
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4 pt-3 border-t border-indigo-100/30">
+                      <div className="bg-white/50 p-2.5 rounded-xl border border-indigo-100/10">
+                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block">Current Balance</span>
+                        <span className="text-sm font-black text-slate-800">
+                          {((balances || []).find(b => b.leaveType === 'EL')?.available ?? 0)} EL
+                        </span>
+                      </div>
+                      <div className="bg-white/50 p-2.5 rounded-xl border border-indigo-100/10">
+                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block">Eligible Days (Last Month)</span>
+                        <span className="text-sm font-black text-slate-800">
+                          {lastMonthAccrual.eligibleDays !== null ? `${lastMonthAccrual.eligibleDays} Days` : 'N/A'}
+                        </span>
+                      </div>
+                      <div className="bg-white/50 p-2.5 rounded-xl border border-indigo-100/10">
+                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block">EL Credited</span>
+                        <span className="text-sm font-black text-slate-800">
+                          {lastMonthAccrual.days || 0} EL
+                        </span>
+                      </div>
+                      <div className="bg-white/50 p-2.5 rounded-xl border border-indigo-100/10">
+                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block">Status / Criteria</span>
+                        <span className={`text-xs font-black uppercase tracking-wider ${lastMonthAccrual.days > 0 ? 'text-indigo-600' : 'text-slate-500'}`}>
+                          {lastMonthAccrual.formulaApplied || 'N/A'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                   {balances.map((b, i) => {

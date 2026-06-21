@@ -480,10 +480,12 @@ exports.getLeaveLiability = async (req, res) => {
         const tenantId = new mongoose.Types.ObjectId(req.user?.tenantId || req.tenantId);
         const year = parseInt(req.query.year) || new Date().getFullYear();
 
-        const activeEmpIds = await Employee.find({
+        const activeEmployees = await Employee.find({
             tenant: tenantId,
             status: { $in: ['active', 'Active', 'ACTIVE'] }
-        }).distinct('_id');
+        }).populate('departmentId', 'name').lean();
+
+        const activeEmpIds = activeEmployees.map(e => e._id);
 
         // Liability is typically calculated on Privilege / Earned Leaves (EL/PL)
         const balances = await LeaveBalance.find({
@@ -495,9 +497,77 @@ exports.getLeaveLiability = async (req, res) => {
 
         const totalELDays = balances.reduce((sum, bal) => sum + (bal.available || 0), 0);
 
+        // Group employees by department Name
+        const deptGroups = {};
+        activeEmployees.forEach(emp => {
+            const deptName = emp.departmentId?.name || emp.department || 'Unassigned';
+            if (!deptGroups[deptName]) {
+                deptGroups[deptName] = [];
+            }
+            deptGroups[deptName].push(emp);
+        });
+
+        const LeaveLedger = req.tenantDB.model('LeaveLedger');
+        const departmentsData = [];
+
+        for (const [deptName, emps] of Object.entries(deptGroups)) {
+            const empIds = emps.map(e => e._id);
+
+            // 1. Current EL Liability in Dept
+            const deptBalances = balances.filter(b => empIds.some(id => id.toString() === b.employee.toString()));
+            const liability = deptBalances.reduce((sum, b) => sum + (b.available || 0), 0);
+
+            // 2. Accrual history (Total EL Generated, Eligible Days)
+            const ledgers = await LeaveLedger.find({
+                tenant: tenantId,
+                year,
+                employee: { $in: empIds },
+                leaveType: { $in: ['EL', 'PL', 'Earned Leave', 'Privilege Leave', 'EARNED LEAVE', 'PRIVILEGE LEAVE'] },
+                actionType: 'Accrual'
+            }).lean();
+
+            const totalELGenerated = ledgers.reduce((sum, l) => sum + (l.days || 0), 0);
+            
+            // Average Attendance calculation from ledger's eligibleDays
+            const eligibleDaysRecords = ledgers.filter(l => l.eligibleDays !== null && l.eligibleDays !== undefined);
+            const avgAttendance = eligibleDaysRecords.length > 0
+                ? eligibleDaysRecords.reduce((sum, l) => sum + l.eligibleDays, 0) / eligibleDaysRecords.length
+                : 22.0; // Default sensible fallback
+
+            // Classify current eligibility based on most recent accrual entry
+            let eligibleCount = 0;
+            let ineligibleCount = 0;
+
+            for (const emp of emps) {
+                const empLedgers = ledgers.filter(l => l.employee.toString() === emp._id.toString());
+                if (empLedgers.length > 0) {
+                    const sorted = [...empLedgers].sort((a, b) => new Date(b.date) - new Date(a.date));
+                    const mostRecent = sorted[0];
+                    if (mostRecent.days > 0) {
+                        eligibleCount++;
+                    } else {
+                        ineligibleCount++;
+                    }
+                } else {
+                    eligibleCount++;
+                }
+            }
+
+            departmentsData.push({
+                department: deptName,
+                activeEmployees: emps.length,
+                eligibleEmployees: eligibleCount,
+                ineligibleEmployees: ineligibleCount,
+                totalELGenerated: Number(totalELGenerated.toFixed(2)),
+                averageAttendance: Number(avgAttendance.toFixed(1)),
+                liability: Number(liability.toFixed(2))
+            });
+        }
+
         res.json({
             totalELDays: Number(totalELDays.toFixed(2)),
-            activeEmployeesCount: activeEmpIds.length
+            activeEmployeesCount: activeEmpIds.length,
+            departments: departmentsData
         });
     } catch (e) {
         console.error('getLeaveLiability Error:', e);

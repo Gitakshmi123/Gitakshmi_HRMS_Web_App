@@ -164,7 +164,7 @@ const mergeBalancesWithEffectivePolicy = ({ balances, policies, effectivePolicyI
   // filter Maternity and Paternity based on eligibility
   const profileGender = String(profile?.gender || '').trim().toLowerCase();
   const profileMarital = String(profile?.maritalStatus || '').trim().toLowerCase();
-  const profileIsMarried = profileMarital === 'married';
+  const profileIsMarried = ['married', 'मेरेડ', 'मेरेड', 'विवाहित', 'vivahit'].includes(profileMarital);
 
   return merged.filter(opt => {
     const lt = String(opt.leaveType || '').toUpperCase();
@@ -214,6 +214,8 @@ export default function EmployeeDashboard() {
   const [attendance, setAttendance] = useState([]);
   const [leaves, setLeaves] = useState([]);
   const [balances, setBalances] = useState([]);
+  const [lastMonthAccrual, setLastMonthAccrual] = useState(null);
+  const [userLeavePolicy, setUserLeavePolicy] = useState(null);
   const [leavePolicies, setLeavePolicies] = useState([]);
   const [effectivePolicyId, setEffectivePolicyId] = useState(null);
   const [hasLeavePolicy, setHasLeavePolicy] = useState(true);
@@ -438,6 +440,8 @@ export default function EmployeeDashboard() {
         profile: profilePayload
       });
       setBalances(mergedBalances);
+      setLastMonthAccrual(balanceRes?.data?.lastMonthAccrual || null);
+      setUserLeavePolicy(balanceRes?.data?.leavePolicy || null);
       setLeavePolicies(policyData);
       setEffectivePolicyId(policyPayload?.effectivePolicyId || null);
       setHasLeavePolicy(
@@ -637,6 +641,8 @@ export default function EmployeeDashboard() {
                   todaySummary={todaySummary}
                   attendance={attendance}
                   balances={balances}
+                  lastMonthAccrual={lastMonthAccrual}
+                  leavePolicy={userLeavePolicy}
                   leaves={leaves}
                   leavePolicies={leavePolicies}
                   effectivePolicyId={effectivePolicyId}

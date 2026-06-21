@@ -73,43 +73,137 @@ function getApplicableYear(joiningDate = new Date()) {
     return new Date(joiningDate).getFullYear();
 }
 
-function calculateProratedLeave(yearlyLeave, joiningDate) {
-    const validJoiningDate = validateJoiningDate(joiningDate);
-    const joiningMonth = validJoiningDate.getMonth() + 1;
-    const remainingMonths = 12 - joiningMonth + 1;
-    const calculatedLeave = roundLeaveValue((Number(yearlyLeave || 0) / 12) * remainingMonths);
-    console.log(`[LEAVE_PRORATION] joiningMonth=${joiningMonth}, remainingMonths=${remainingMonths}, yearlyLeave=${yearlyLeave}, calculatedLeave=${calculatedLeave}`);
-    return calculatedLeave;
+async function getEmployeeJoiningMonthPayableDays(employee, tenantId, tenantDB, year) {
+    if (!employee?.joiningDate) return 0;
+    
+    const doj = new Date(employee.joiningDate);
+    const joinYear = doj.getFullYear();
+    const joinMonth = doj.getMonth(); // 0-indexed
+    
+    const startOfMonth = new Date(Date.UTC(joinYear, joinMonth, 1, 0, 0, 0));
+    const endOfMonth = new Date(Date.UTC(joinYear, joinMonth + 1, 0, 23, 59, 59, 999));
+    
+    let AttendanceModel;
+    try {
+        const dbConnection = tenantDB || employee.db || employee.constructor.db || mongoose.connection;
+        AttendanceModel = dbConnection.model('Attendance');
+    } catch (err) {
+        console.warn('[LEAVE_PRORATION] Attendance model not found on connection, using default connection:', err.message);
+        try {
+            AttendanceModel = mongoose.connection.model('Attendance');
+        } catch (e) {
+            console.error('[LEAVE_PRORATION] Failed to resolve Attendance model:', e.message);
+            return 0;
+        }
+    }
+    
+    if (!AttendanceModel) return 0;
+    
+    const records = await AttendanceModel.find({
+        tenant: tenantId || employee.tenant,
+        employee: employee._id,
+        date: { $gte: startOfMonth, $lte: endOfMonth }
+    }).lean();
+    
+    const totalDaysInMonth = new Date(joinYear, joinMonth + 1, 0).getDate();
+    const maxPossibleDays = totalDaysInMonth - doj.getDate() + 1;
+    
+    if (maxPossibleDays < 20) {
+        console.log('[LEAVE_PRORATION] Employee ' + employee._id + ' joining date ' + employee.joiningDate + ' allows max ' + maxPossibleDays + ' payable days (< 20). Eligible days set to 0.');
+        return 0;
+    }
+    
+    const currentDate = new Date();
+    const isCurrentOrFutureMonth = (joinYear > currentDate.getFullYear()) || 
+        (joinYear === currentDate.getFullYear() && joinMonth >= currentDate.getMonth());
+        
+    if (isCurrentOrFutureMonth || records.length === 0) {
+        console.log('[LEAVE_PRORATION] Employee ' + employee._id + ' is current/future month or has 0 records. Defaulting payableDays to 20 for initialization.');
+        return 20;
+    }
+    
+    let payableDays = 0;
+    for (const record of records) {
+        const isPresent = record.status === 'present';
+        const isHalfDay = record.status === 'half_day';
+        const isOD = record.isOnDuty === true || record.isWFH === true;
+        const isCO = record.isCompOffDay === true;
+        const isPH = record.status === 'holiday';
+        
+        if (isPresent || isOD || isCO || isPH) {
+            payableDays += 1;
+        } else if (isHalfDay) {
+            payableDays += 0.5;
+        }
+    }
+    
+    console.log('[LEAVE_PRORATION] Employee ' + employee._id + ' joining month ' + joinYear + '-' + (joinMonth+1) + ' attendance records: ' + records.length + ', calculated payableDays: ' + payableDays);
+    return payableDays;
 }
 
-function calculateProratedLeaveForYear(yearlyLeave, joiningDate, year, leaveCycleStartMonth = 0) {
+function calculateProratedLeave(yearlyLeave, joiningDate, leaveKey = null, joiningPayableDays = null, year = new Date().getFullYear()) {
+    if (!joiningDate) {
+        return roundLeaveValue(yearlyLeave);
+    }
+    const validJoiningDate = validateJoiningDate(joiningDate);
+    const effectiveYear = Number(year);
+    const cycleStart = new Date(effectiveYear, 0, 1, 0, 0, 0, 0);
+    const joinDateMidnight = new Date(validJoiningDate.getFullYear(), validJoiningDate.getMonth(), validJoiningDate.getDate(), 0, 0, 0, 0);
+    
+    if (joinDateMidnight < cycleStart) {
+        return roundLeaveValue(yearlyLeave);
+    }
+    
+    const isClOrSl = leaveKey && ['CL', 'SL'].includes(leaveKey.toUpperCase());
+    if (isClOrSl) {
+        const payableDays = joiningPayableDays !== null ? joiningPayableDays : 20;
+        if (payableDays < 20) {
+            console.log('[LEAVE_PRORATION] CL/SL proration resulting in 0 due to payableDays=' + payableDays + ' < 20');
+            return 0;
+        }
+    }
+    
+    const joiningMonth = validJoiningDate.getMonth() + 1;
+    const remainingMonths = 12 - joiningMonth + 1;
+    const calculated = (Number(yearlyLeave || 0) / 12) * remainingMonths;
+    return isClOrSl ? Number(calculated.toFixed(2)) : roundLeaveValue(calculated);
+}
+
+function calculateProratedLeaveForYear(yearlyLeave, joiningDate, year, leaveCycleStartMonth = 0, leaveKey = null, joiningPayableDays = null) {
     if (!joiningDate) {
         return roundLeaveValue(yearlyLeave);
     }
 
     const validJoiningDate = validateJoiningDate(joiningDate);
     const effectiveYear = Number(year) || new Date().getFullYear();
-    const cycleStart = new Date(effectiveYear, leaveCycleStartMonth, 1);
-    const cycleEnd = new Date(effectiveYear + 1, leaveCycleStartMonth, 0);
+    const cycleStart = new Date(effectiveYear, leaveCycleStartMonth, 1, 0, 0, 0, 0);
+    const cycleEnd = new Date(effectiveYear + 1, leaveCycleStartMonth, 0, 23, 59, 59, 999);
+    const joinDateMidnight = new Date(validJoiningDate.getFullYear(), validJoiningDate.getMonth(), validJoiningDate.getDate(), 0, 0, 0, 0);
 
-    if (validJoiningDate > cycleEnd) {
+    if (joinDateMidnight > cycleEnd) {
         return 0;
     }
 
-    if (validJoiningDate <= cycleStart) {
-        return roundLeaveValue(yearlyLeave);
+    if (joinDateMidnight < cycleStart) {
+        const isClOrSl = leaveKey && ['CL', 'SL'].includes(leaveKey.toUpperCase());
+        return isClOrSl ? Number(Number(yearlyLeave).toFixed(2)) : roundLeaveValue(yearlyLeave);
     }
 
-    const monthsRemaining = Math.max(
-        0,
-        ((cycleEnd.getFullYear() - validJoiningDate.getFullYear()) * 12) +
-        (cycleEnd.getMonth() - validJoiningDate.getMonth()) +
-        1
-    );
+    const isClOrSl = leaveKey && ['CL', 'SL'].includes(leaveKey.toUpperCase());
+    if (isClOrSl) {
+        const payableDays = joiningPayableDays !== null ? joiningPayableDays : 20;
+        if (payableDays < 20) {
+            console.log('[LEAVE_PRORATION] CL/SL proration resulting in 0 due to payableDays=' + payableDays + ' < 20');
+            return 0;
+        }
+    }
 
-    const result = roundLeaveValue((Number(yearlyLeave || 0) / 12) * monthsRemaining);
-    console.log(`[LEAVE_PRORATION_DIAG] yearlyLeave=${yearlyLeave} monthsRemaining=${monthsRemaining} result=${result}`);
-    return result;
+    const joiningMonth = validJoiningDate.getMonth() + 1;
+    const remainingMonths = 12 - joiningMonth + 1;
+    const result = (Number(yearlyLeave || 0) / 12) * remainingMonths;
+    const roundedResult = isClOrSl ? Number(result.toFixed(2)) : roundLeaveValue(result);
+    console.log('[LEAVE_PRORATION_DIAG] leaveKey=' + leaveKey + ' yearlyLeave=' + yearlyLeave + ' remainingMonths=' + remainingMonths + ' result=' + roundedResult);
+    return roundedResult;
 }
 
 function buildPolicyLeaveMap(policy, employee = null, grade = null) {
@@ -134,7 +228,7 @@ function buildPolicyLeaveMap(policy, employee = null, grade = null) {
     return balance;
 }
 
-function calculateEmployeeLeaveBalance(policy, joiningDate, { prorate = true, employee = null, grade = null } = {}) {
+function calculateEmployeeLeaveBalance(policy, joiningDate, { prorate = true, employee = null, grade = null, joiningPayableDays = null, year = new Date().getFullYear() } = {}) {
     const balance = {};
     for (const key of DEFAULT_LEAVE_KEYS) {
         balance[key] = 0;
@@ -150,8 +244,8 @@ function calculateEmployeeLeaveBalance(policy, joiningDate, { prorate = true, em
 
         const yearlyLeave = roundLeaveValue(rule.totalPerYear);
         balance[leaveKey] = prorate && rule.prorateForNewJoiners === true
-            ? calculateProratedLeave(yearlyLeave, joiningDate)
-            : yearlyLeave;
+            ? calculateProratedLeave(yearlyLeave, joiningDate, leaveKey, joiningPayableDays, year)
+            : (['CL', 'SL'].includes(leaveKey.toUpperCase()) ? Number(Number(rule.totalPerYear).toFixed(2)) : yearlyLeave);
     }
 
     return balance;
@@ -211,7 +305,8 @@ function buildExpectedPolicyBalanceSnapshot({
     grade = null,
     year,
     prorate = true,
-    leaveCycleStartMonth = 0
+    leaveCycleStartMonth = 0,
+    joiningPayableDays = null
 }) {
     const rules = gradeLeavePolicyService.resolvePolicyRulesForEmployee({ policy, employee, grade });
     const expectedSnapshot = {};
@@ -224,11 +319,12 @@ function buildExpectedPolicyBalanceSnapshot({
 
         const eligibility = evaluatePolicyRuleEligibility(employee, policy, rule);
         const shouldProrateRule = prorate && rule.prorateForNewJoiners === true;
+        const isClOrSl = ['CL', 'SL'].includes(leaveKey.toUpperCase());
         const total = eligibility.eligible
             ? (
                 shouldProrateRule
-                    ? calculateProratedLeaveForYear(rule.totalPerYear, employee?.joiningDate, year, leaveCycleStartMonth)
-                    : roundLeaveValue(rule.totalPerYear)
+                    ? calculateProratedLeaveForYear(rule.totalPerYear, employee?.joiningDate, year, leaveCycleStartMonth, leaveKey, joiningPayableDays)
+                    : (isClOrSl ? Number(Number(rule.totalPerYear).toFixed(2)) : roundLeaveValue(rule.totalPerYear))
             )
             : 0;
 
@@ -575,7 +671,21 @@ async function syncEmployeeLeaveDocuments({
         date: new Date(effectiveYear, 0, 1)
     });
     const effectiveRules = gradeLeavePolicyService.resolvePolicyRulesForEmployee({ policy, employee, grade });
-    const computedBalance = calculateEmployeeLeaveBalance(policy, employee.joiningDate, { prorate, employee, grade });
+    
+    // Calculate joining month payable days if it is the joining year
+    const isJoiningYear = employee.joiningDate && new Date(employee.joiningDate).getFullYear() === effectiveYear;
+    let joiningPayableDays = null;
+    if (prorate && isJoiningYear) {
+        joiningPayableDays = await getEmployeeJoiningMonthPayableDays(employee, tenantId, LeaveBalance.db, effectiveYear);
+    }
+
+    const computedBalance = calculateEmployeeLeaveBalance(policy, employee.joiningDate, {
+        prorate,
+        employee,
+        grade,
+        joiningPayableDays,
+        year: effectiveYear
+    });
     const policyLeaveKeys = Array.from(new Set(
         effectiveRules
             .map((rule) => normalizeLeaveKey(rule?.leaveType))
@@ -586,7 +696,8 @@ async function syncEmployeeLeaveDocuments({
         employee,
         grade,
         year: effectiveYear,
-        prorate
+        prorate,
+        joiningPayableDays
     });
 
     employee.leavePolicy = policy._id;
@@ -730,7 +841,8 @@ async function repairZeroLeaveBalancesFromPolicy({
     tenantId,
     models,
     year,
-    prorate = true
+    prorate = true,
+    joiningPayableDays = null
 }) {
     const { LeaveBalance, Grade } = models;
     if (!employee || !policy || !LeaveBalance) {
@@ -762,7 +874,7 @@ async function repairZeroLeaveBalancesFromPolicy({
         }
 
         const total = prorate && rule.prorateForNewJoiners === true
-            ? calculateProratedLeaveForYear(ruleTotal, employee?.joiningDate, effectiveYear)
+            ? calculateProratedLeaveForYear(ruleTotal, employee?.joiningDate, effectiveYear, 0, leaveKey, joiningPayableDays)
             : ruleTotal;
         if (total <= 0) {
             continue;
@@ -1015,12 +1127,20 @@ async function ensureEmployeeLeaveBalanceForYear({
             .filter(Boolean)
     ));
     const isJoiningYear = employee.joiningDate && new Date(employee.joiningDate).getFullYear() === Number(year);
+    
+    // Calculate joining month payable days if it is the joining year
+    let joiningPayableDays = null;
+    if (isJoiningYear) {
+        joiningPayableDays = await getEmployeeJoiningMonthPayableDays(employee, tenantId, tenantDB, year);
+    }
+
     const expectedSnapshot = buildExpectedPolicyBalanceSnapshot({
         policy: targetPolicy,
         employee,
         grade,
         year,
-        prorate: isJoiningYear
+        prorate: isJoiningYear,
+        joiningPayableDays
     });
     const existingBalances = await LeaveBalance.find({
         tenant: tenantId,
@@ -1120,5 +1240,6 @@ module.exports = {
     evaluatePolicyRuleEligibility,
     getAssignedLeavePolicyForEmployee,
     isPolicyEnabled,
-    validateJoiningDate
+    validateJoiningDate,
+    getJoiningMonthPayableDays: getEmployeeJoiningMonthPayableDays
 };

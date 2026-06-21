@@ -17,7 +17,7 @@ const filterBalances = (balances, employee) => {
 
     const gender = String(employee.gender || '').trim().toLowerCase();
     const maritalStatus = String(employee.maritalStatus || '').trim().toLowerCase();
-    const isMarried = maritalStatus === 'married';
+    const isMarried = ['married', 'मेरेड', 'मेरेડ', 'विवाहित', 'vivahit'].includes(maritalStatus);
 
     return balances.filter(b => {
         const lt = String(b.leaveType || '').toUpperCase();
