@@ -199,6 +199,24 @@ export default function EmployeeForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [employee?._id]);
 
+  // Auto-generate password based on firstName, lastName, and dob
+  useEffect(() => {
+    if (!passwordLock && !employee?._id && !passwordEdited) {
+      if (firstName && lastName && dob) {
+        const fn3 = firstName.substring(0, 3).toLowerCase();
+        const ln3 = lastName.substring(0, 3).toLowerCase();
+        const year = dob.split('-')[0];
+        if (fn3 && ln3 && year) {
+          setPassword(`${ln3}${fn3}@${year}`);
+        } else {
+          setPassword('');
+        }
+      } else {
+        setPassword('');
+      }
+    }
+  }, [firstName, lastName, dob, passwordLock, employee?._id, passwordEdited]);
+
   // Payroll / Compensation State (Step 10)
   const [salaryTemplateId, setSalaryTemplateId] = useState(employee?.salaryTemplateId?._id || employee?.salaryTemplateId || '');
   const [salaryEffectiveDate, setSalaryEffectiveDate] = useState(employee?.joiningDate ? dayjs(employee.joiningDate).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD'));
@@ -1122,8 +1140,6 @@ export default function EmployeeForm({
       else if (!departmentId && customDepartmentName.length < 2) e.department = 'Department name must be at least 2 characters';
       else if (!departmentId && customDepartmentName.length > 50) e.department = 'Department name must be at most 50 characters';
       if (!joiningDate) e.joiningDate = 'Joining Date is required';
-      if (!gradeId && !grade) e.grade = 'Grade is required';
-      if (!band) e.band = 'Band is required';
       if (!jobType) e.jobType = 'Employee Type is required';
     }
 
@@ -2603,7 +2619,12 @@ export default function EmployeeForm({
                         <input
                           type={showPassword ? "text" : "password"}
                           value={passwordLock ? "••••••••••••" : password}
-                          onChange={e => !passwordLock && setPassword(e.target.value)}
+                          onChange={e => {
+                            if (!passwordLock) {
+                              setPassword(e.target.value);
+                              setPasswordEdited(e.target.value !== '');
+                            }
+                          }}
                           onFocus={() => { if (passwordLock) setShowPasswordConfirm(true); }}
                           readOnly={passwordLock}
                           className={`w-full h-full px-3 pr-20 bg-transparent outline-none text-sm font-medium tracking-[0.2em] placeholder:text-slate-400 ${errors.password ? 'text-rose-500' : ''} ${passwordLock ? 'cursor-not-allowed text-slate-500' : ''}`}

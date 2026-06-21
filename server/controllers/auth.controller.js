@@ -201,13 +201,17 @@ async function verifyEmployeePortalPassword(employee, tenant, password) {
 
   try {
     const User = getUserModel();
-    const portalUser = await User.findOne({ email: normalizeEmail(employee.email) }).select('password role tenant').lean();
-    if (!portalUser?.password) return false;
-    if (String(portalUser.tenant) !== String(tenant._id)) return false;
+    const portalUser = await User.findOne({ email: normalizeEmail(employee.email) }).select('password role tenant mainCompanyId').lean();
+    if (!portalUser?.password) { console.log('DEBUG: no portalUser password'); return false; }
+    const portalTenantId = portalUser.tenant || portalUser.mainCompanyId;
+    if (String(portalTenantId) !== String(tenant._id)) { console.log('DEBUG: tenant mismatch', portalTenantId, tenant._id); return false; }
     const r = String(portalUser.role || '').toLowerCase();
-    if (!EMPLOYEE_PORTAL_USER_ROLES.has(r)) return false;
-    return comparePassword(password, portalUser.password);
+    if (!EMPLOYEE_PORTAL_USER_ROLES.has(r)) { console.log('DEBUG: bad role', r); return false; }
+    const match = await comparePassword(password, portalUser.password);
+    console.log('DEBUG: portal match', match);
+    return match;
   } catch (_e) {
+    console.log('DEBUG: error', _e);
     return false;
   }
 }

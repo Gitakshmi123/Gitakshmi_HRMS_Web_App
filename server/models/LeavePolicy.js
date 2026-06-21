@@ -55,6 +55,17 @@ const LeavePolicySchema = new mongoose.Schema({
         monthlyAccrualRate: { type: Number, default: 0 },
         proRataApplicable: { type: Boolean, default: true }, // Pro-rate for mid-year joiners
         accrualDependsOnAttendance: { type: Boolean, default: false }, // e.g. based on Present+WO+Holidays
+        minAttendanceDays: { type: Number, default: 20 },
+        countPresent: { type: Boolean, default: true },
+        countOnDuty: { type: Boolean, default: true },
+        countCompOff: { type: Boolean, default: true },
+        countHoliday: { type: Boolean, default: true },
+        countWeeklyOff: { type: Boolean, default: true },
+        countPaidLeave: { type: Boolean, default: false },
+        accrualSlabs: [{
+            minAttendanceDays: { type: Number, default: 20 },
+            creditDays: { type: Number, default: 1.75 }
+        }],
         allowNegativeBalance: { type: Boolean, default: false },
         
         carryForwardAllowed: { type: Boolean, default: false },
@@ -75,6 +86,16 @@ const LeavePolicySchema = new mongoose.Schema({
         applicableGender: { type: String, enum: ['All', 'Male', 'Female', 'Other'], default: 'All' },
         maxChildrenLimit: { type: Number, default: 0 },
 
+        // Maternity-specific: tiered entitlements based on child birth order
+        maternityChildRules: [{
+            label: { type: String, trim: true },           // e.g. "1st & 2nd Child"
+            childCountFrom: { type: Number, default: 1 },  // inclusive lower bound
+            childCountTo: { type: Number, default: null },  // null = unlimited (3rd Child+)
+            daysEntitled: { type: Number, default: 0 },    // e.g. 182
+            fullyPaid: { type: Boolean, default: true },
+            preDeliveryDaysAllowed: { type: Number, default: 0 } // e.g. 56 (8 weeks)
+        }],
+
         gradeOverrides: [{
             gradeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Grade', default: null },
             gradeCode: { type: String, trim: true, uppercase: true, default: '' },
@@ -89,6 +110,17 @@ const LeavePolicySchema = new mongoose.Schema({
             monthlyAccrualRate: { type: Number, default: null },
             proRataApplicable: { type: Boolean, default: null },
             accrualDependsOnAttendance: { type: Boolean, default: null },
+            minAttendanceDays: { type: Number, default: null },
+            countPresent: { type: Boolean, default: null },
+            countOnDuty: { type: Boolean, default: null },
+            countCompOff: { type: Boolean, default: null },
+            countHoliday: { type: Boolean, default: null },
+            countWeeklyOff: { type: Boolean, default: null },
+            countPaidLeave: { type: Boolean, default: null },
+            accrualSlabs: [{
+                minAttendanceDays: { type: Number, default: null },
+                creditDays: { type: Number, default: null }
+            }],
             allowNegativeBalance: { type: Boolean, default: null },
             carryForwardAllowed: { type: Boolean, default: null },
             maxCarryForward: { type: Number, default: null },

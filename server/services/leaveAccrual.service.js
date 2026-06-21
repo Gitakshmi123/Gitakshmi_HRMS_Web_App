@@ -84,8 +84,81 @@ async function runMonthlyAccrual(tenantDB, tenantId, year, month) {
                 }
 
                 const leaveType = String(rule.leaveType || '').toUpperCase();
-                const accrualAmount = getMonthlyAccrualAmount(rule);
+                let accrualAmount = getMonthlyAccrualAmount(rule);
                 const maxLeaveCap = Number(rule.maxLeaveCap || 0);
+
+                let eligibleDays = 0;
+                let formulaApplied = '';
+                let isAttendanceBased = !!rule.accrualDependsOnAttendance;
+
+                if (isAttendanceBased) {
+                    // Fetch attendance records for this month
+                    const startDate = new Date(Number(year), Number(month) - 1, 1);
+                    const endDate = new Date(Number(year), Number(month), 0, 23, 59, 59, 999);
+
+                    const Attendance = tenantDB.model('Attendance');
+                    const attendances = await Attendance.find({
+                        tenant: tenantId,
+                        employee: employee._id,
+                        date: { $gte: startDate, $lte: endDate }
+                    });
+
+                    for (const att of attendances) {
+                        let recordWeight = 0;
+                        const countPresent = rule.countPresent !== false;
+                        const countOnDuty = rule.countOnDuty !== false;
+                        const countCompOff = rule.countCompOff !== false;
+                        const countHoliday = rule.countHoliday !== false;
+                        const countWeeklyOff = rule.countWeeklyOff !== false;
+                        const countPaidLeave = !!rule.countPaidLeave;
+
+                        if (countPresent && att.status === 'present') {
+                            recordWeight = 1;
+                        } else if (countPresent && att.status === 'half_day') {
+                            recordWeight = 0.5;
+                        } else if (countOnDuty && att.isOnDuty) {
+                            recordWeight = 1;
+                        } else if (countCompOff && att.isCompOffDay) {
+                            recordWeight = 1;
+                        } else if (countHoliday && att.status === 'holiday') {
+                            recordWeight = 1;
+                        } else if (countWeeklyOff && att.status === 'weekly_off') {
+                            recordWeight = 1;
+                        } else if (countPaidLeave && att.status === 'leave') {
+                            recordWeight = 1;
+                        }
+                        eligibleDays += recordWeight;
+                    }
+
+                    // Evaluate slabs
+                    const slabs = rule.accrualSlabs && rule.accrualSlabs.length > 0 ? rule.accrualSlabs : [];
+                    const activeSlabs = slabs.length > 0 
+                        ? slabs 
+                        : [{ minAttendanceDays: (rule.minAttendanceDays !== undefined && rule.minAttendanceDays !== null ? rule.minAttendanceDays : 20), creditDays: accrualAmount }];
+
+                    const sortedSlabs = [...activeSlabs].sort((a, b) => b.minAttendanceDays - a.minAttendanceDays);
+
+                    let matchedSlab = null;
+                    for (const slab of sortedSlabs) {
+                        if (eligibleDays >= slab.minAttendanceDays) {
+                            matchedSlab = slab;
+                            break;
+                        }
+                    }
+
+                    if (matchedSlab) {
+                        accrualAmount = matchedSlab.creditDays;
+                        formulaApplied = `>=${matchedSlab.minAttendanceDays}`;
+                    } else {
+                        accrualAmount = 0;
+                        formulaApplied = 'Else';
+                    }
+                }
+
+                // If not attendance based and accrual rate <= 0, we can skip
+                if (!isAttendanceBased && accrualAmount <= 0) {
+                    continue;
+                }
 
                 let balance = await LeaveBalance.findOne({
                     tenant: tenantId,
@@ -117,15 +190,18 @@ async function runMonthlyAccrual(tenantDB, tenantId, year, month) {
                 }
 
                 const prevAvailable = balance.available || 0;
-                balance.accrued = (balance.accrued || 0) + accrualAmount;
-                balance.total = (balance.opening || 0) + balance.accrued;
 
-                if (maxLeaveCap > 0) {
-                    balance.total = Math.min(balance.total, maxLeaveCap);
+                if (accrualAmount > 0) {
+                    balance.accrued = (balance.accrued || 0) + accrualAmount;
+                    balance.total = (balance.opening || 0) + balance.accrued;
+
+                    if (maxLeaveCap > 0) {
+                        balance.total = Math.min(balance.total, maxLeaveCap);
+                    }
+
+                    balance.expiresAt = getBalanceExpiryDate(year, rule.expiryMonths);
+                    await balance.save();
                 }
-
-                balance.expiresAt = getBalanceExpiryDate(year, rule.expiryMonths);
-                await balance.save();
 
                 try {
                     const LeaveLedger = tenantDB.model('LeaveLedger');
@@ -138,7 +214,13 @@ async function runMonthlyAccrual(tenantDB, tenantId, year, month) {
                         days: accrualAmount,
                         previousBalance: prevAvailable,
                         newBalance: balance.available,
-                        remarks: `Monthly leave accrual credit`,
+                        eligibleDays: isAttendanceBased ? eligibleDays : null,
+                        formulaApplied: isAttendanceBased ? formulaApplied : '',
+                        remarks: isAttendanceBased
+                            ? (accrualAmount > 0 
+                                ? `Monthly attendance credit: ${accrualAmount} EL (Eligible Days: ${eligibleDays}, slab: ${formulaApplied})`
+                                : `Ineligible for monthly attendance credit: 0 EL (Eligible Days: ${eligibleDays}, criteria not met)`)
+                            : `Monthly leave accrual credit`,
                         date: new Date()
                     });
                 } catch (ledgerErr) {
@@ -156,7 +238,9 @@ async function runMonthlyAccrual(tenantDB, tenantId, year, month) {
                     employeeId: employee._id,
                     policyId: policy._id,
                     leaveType,
-                    accrued: accrualAmount
+                    accrued: accrualAmount,
+                    eligibleDays: isAttendanceBased ? eligibleDays : null,
+                    formulaApplied: isAttendanceBased ? formulaApplied : ''
                 });
             }
         }

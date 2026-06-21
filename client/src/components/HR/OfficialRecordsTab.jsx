@@ -250,6 +250,81 @@ export default function OfficialRecordsTab({
         </TabularRow>
         <TabularRow columns={4}>
           <TabularField label="DOJ (JOINING DATE)" required>
+          </div>
+          {errors.employeeId && generationMode === 'MANUAL' && <p className="text-[9px] font-bold text-rose-500 uppercase tracking-widest pl-1 mt-1">{errors.employeeId}</p>}
+        </div>
+
+        {/* Shift Assignment */}
+        <div className="flex flex-col gap-2">
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] pl-1 h-4 flex items-center whitespace-nowrap">
+            Shift Assignment</label>
+          <select
+            value={shiftId}
+            onChange={(e) => setShiftId?.(e.target.value)}
+            className={`w-full h-[42px] px-4 bg-white dark:bg-slate-900 border-2 rounded-2xl outline-none text-sm font-bold text-slate-700 transition-all ${errors.shiftId ? 'border-rose-200 focus:border-rose-500' : 'border-slate-100 dark:border-slate-800 focus:border-slate-400'}`}
+          >
+            <option value="">Select Shift (Optional)</option>
+            {(shifts || []).map((s) => (
+              <option key={s._id} value={s._id}>
+                {s.name} ({s.startTime} - {s.endTime})
+              </option>
+            ))}
+          </select>
+          {errors.shiftId && <p className="text-[9px] font-bold text-rose-500 uppercase tracking-widest pl-1 mt-1">{errors.shiftId}</p>}
+        </div>
+
+
+        {/* Grade selection */}
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between pl-1 h-4">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] flex items-center whitespace-nowrap">
+              Employee Grade
+            </label>
+          </div>
+          <select
+            value={grade}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (val === "") {
+                setGradeId?.('');
+                setGrade?.('');
+                setBand?.('');
+              } else {
+                setGradeId?.('');
+                setGrade?.(val);
+                
+                // Robust Auto-fill Band from Mapping or Central Grade
+                const normalizedVal = String(val).trim().toUpperCase();
+                const foundGrade = dropdownGrades.find(g => String(g.code).trim().toUpperCase() === normalizedVal);
+                
+                if (foundGrade && foundGrade.band) {
+                  console.log(`[AUTO_BAND] Found via dropdownGrades: ${foundGrade.band}`);
+                  setBand?.(foundGrade.band);
+                } else {
+                  const linkedBand = gradeToBandMap.get(normalizedVal);
+                  if (linkedBand) {
+                    console.log(`[AUTO_BAND] Found via map: ${linkedBand}`);
+                    setBand?.(linkedBand);
+                  }
+                }
+              }
+            }}
+            className={`w-full h-[42px] px-4 bg-white dark:bg-slate-900 border-2 rounded-2xl outline-none text-sm font-bold text-slate-700 transition-all ${errors.grade ? 'border-rose-200 focus:border-rose-500 shadow-sm shadow-rose-100' : 'border-slate-100 dark:border-slate-800 focus:border-slate-400'}`}
+          >
+            <option value="">Select Grade</option>
+            {dropdownGrades.map((g) => (
+              <option key={g.code} value={g.code}>
+                Grade {g.code} {!g.isActive ? '[Inactive]' : ''}
+              </option>
+            ))}
+          </select>
+          {errors.grade && <p className="text-[9px] font-bold text-rose-500 uppercase tracking-widest pl-1 mt-1">{errors.grade}</p>}
+        </div>
+
+        {/* Band selection */}
+        <div className="flex flex-col gap-2">
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] pl-1 h-4 flex items-center whitespace-nowrap">
+            Employee Band</label>
             <input
               type="text"
               placeholder="DD/MM/YYYY"
@@ -405,11 +480,25 @@ export default function OfficialRecordsTab({
                   {g.code} {g.name ? `- ${g.name}` : ''} {g.band ? `[${g.band}]` : ''} {!g.isActive ? '(Inactive)' : ''}
                 </option>
               ))}
-            </select>
-            {errors.gradeId && <p className="text-[10px] font-medium text-rose-500 mt-1">{errors.gradeId}</p>}
-          </TabularField>
-        </TabularRow>
-      </TabularContainer>
+          </select>
+        </div>
+        {/* Leave Policy */}
+        <div className="flex flex-col gap-2">
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] pl-1 h-4 flex items-center whitespace-nowrap">
+            Leave Policy</label>
+          <select
+            value={leavePolicy}
+            onChange={(e) => setLeavePolicy?.(e.target.value)}
+            className="w-full h-[42px] px-4 bg-white dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 rounded-2xl outline-none focus:border-slate-400 text-sm font-bold text-slate-700 transition-all"
+          >
+            <option value="">Select Leave Policy</option>
+            {applicablePolicies.map((p) => (
+              <option key={p._id} value={p._id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
 
       {/* Compensation & Additional */}
       <TabularContainer>

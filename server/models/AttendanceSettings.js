@@ -23,6 +23,9 @@ const AttendanceSettingsSchema = new mongoose.Schema({
 
     // Leave Policy Quota Configuration
     leaveCycleStartMonth: { type: Number, default: 0 }, // 0 = Jan, 3 = April etc.
+    maxConsecutiveLeaves: { type: Number, default: 15 },
+    clPriorNotice: { type: Number, default: 1 },
+    elPriorNotice: { type: Number, default: 15 },
 
     // ========== PUNCH POLICY CONFIGURATION ==========
 

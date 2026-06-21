@@ -4,7 +4,7 @@ require('dotenv').config();
 async function run() {
     try {
         await mongoose.connect(process.env.MONGO_URI);
-        const dbsToDelete = ['blogdb', 'demoDB', 'serchApi', 'taskDB'];
+        const dbsToDelete = ['blogdb', 'demoDB', 'serchApi', 'taskDB', 'company_company_pnr', 'test'];
         for (const dbName of dbsToDelete) {
             console.log(`Deleting ${dbName}...`);
             await mongoose.connection.client.db(dbName).dropDatabase();

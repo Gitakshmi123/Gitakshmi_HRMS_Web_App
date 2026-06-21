@@ -571,7 +571,7 @@ exports.getTenantBasicDetails = async (req, res) => {
     const { tenantId: identifier } = req.params;
     if (!identifier) return res.status(400).json({ error: "Tenant ID required" });
 
-    const tenant = await findTenantByIdentifier(identifier, 'name code logo');
+    const tenant = await findTenantByIdentifier(identifier, 'name code logo companyName companyCode');
 
     if (!tenant) {
       // Local/dev compatibility: master tenant row may be missing, but tenant DB can still exist.

@@ -17,7 +17,7 @@ const filterBalances = (balances, employee) => {
 
     const gender = String(employee.gender || '').trim().toLowerCase();
     const maritalStatus = String(employee.maritalStatus || '').trim().toLowerCase();
-    const isMarried = maritalStatus === 'married';
+    const isMarried = ['married', 'मेरेड', 'मेरेડ', 'विवाहित', 'vivahit'].includes(maritalStatus);
 
     return balances.filter(b => {
         const lt = String(b.leaveType || '').toUpperCase();
@@ -219,6 +219,8 @@ export default function LeaveApprovals({
     const [viewReason, setViewReason] = useState(null);
     const [actionModal, setActionModal] = useState(null);
     const [remark, setRemark] = useState('');
+    const [snapshot, setSnapshot] = useState(null);
+    const [snapshotLoading, setSnapshotLoading] = useState(false);
     
     // Partial Approval State
     const [approvalDates, setApprovalDates] = useState({
@@ -228,6 +230,37 @@ export default function LeaveApprovals({
         halfDayTarget: 'Start',
         halfDaySession: 'First Half'
     });
+
+    useEffect(() => {
+        if (!actionModal || !actionModal.req) {
+            setSnapshot(null);
+            return;
+        }
+        const fetchSnapshot = async () => {
+            setSnapshotLoading(true);
+            try {
+                const req = actionModal.req;
+                const employeeId = req.employee?._id || req.employee;
+                const startDate = req.startDate ? req.startDate.split('T')[0] : '';
+                const endDate = req.endDate ? req.endDate.split('T')[0] : '';
+                const res = await api.get('/employee/leaves/workforce-visibility', {
+                    params: {
+                        employeeId,
+                        startDate,
+                        endDate
+                    }
+                });
+                if (res.data?.success && res.data?.snapshot) {
+                    setSnapshot(res.data.snapshot);
+                }
+            } catch (err) {
+                console.error("Failed to fetch workforce snapshot for manager:", err);
+            } finally {
+                setSnapshotLoading(false);
+            }
+        };
+        fetchSnapshot();
+    }, [actionModal]);
 
     useEffect(() => {
         fetchRequests(pagination.page);
@@ -673,6 +706,86 @@ export default function LeaveApprovals({
                                         </div>
                                     )}
                                 </div>
+                            </div>
+                        )}
+
+                        {/* Workforce Availability Snapshot */}
+                        {actionModal.req && (
+                            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-6 space-y-4 text-left">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-105 pb-2 flex items-center justify-between">
+                                    <span>Workforce Impact Details</span>
+                                    {snapshotLoading ? (
+                                        <span className="text-[8px] text-slate-400 animate-pulse">Analyzing...</span>
+                                    ) : (
+                                        <span className="text-[8px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded font-black">Live Info</span>
+                                    )}
+                                </p>
+
+                                {snapshotLoading ? (
+                                    <div className="py-4 text-center">
+                                        <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Loading availability...</p>
+                                    </div>
+                                ) : snapshot ? (
+                                    <div className="space-y-3">
+                                        {/* Headcounts */}
+                                        <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                                            <div className="bg-white p-2 rounded-xl border border-slate-100">
+                                                <span className="text-[8px] font-bold text-slate-400 block mb-0.5">Team Strength</span>
+                                                <span className="font-semibold text-slate-700">{snapshot.teamStrength}</span>
+                                            </div>
+                                            <div className="bg-white p-2 rounded-xl border border-slate-105">
+                                                <span className="text-[8px] font-bold text-slate-400 block mb-0.5">Overlap Leaves</span>
+                                                <span className="font-semibold text-slate-700">
+                                                    {snapshot.alreadyOnLeave.length + snapshot.pendingLeaves.length}
+                                                </span>
+                                            </div>
+                                            <div className={`p-2 rounded-xl border ${snapshot.available <= 1 ? "bg-rose-50/20 border-rose-100" : "bg-emerald-50/20 border-emerald-100"}`}>
+                                                <span className="text-[8px] font-bold text-slate-400 block mb-0.5">Available Headcount</span>
+                                                <span className={`font-bold ${snapshot.available <= 1 ? "text-rose-600" : "text-emerald-600"}`}>
+                                                    {snapshot.available}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Critical alert */}
+                                        {snapshot.isCritical && (
+                                            <div className="flex items-start gap-2 bg-rose-50 p-3 rounded-xl border border-rose-100 text-left">
+                                                <AlertCircle size={14} className="text-rose-600 shrink-0 mt-0.5" />
+                                                <div>
+                                                    <p className="text-[10px] font-black text-rose-700 uppercase tracking-wide leading-none">Critical Resource Alert</p>
+                                                    <p className="text-[9px] text-rose-600 font-medium mt-1 leading-normal">
+                                                        This employee is the only active team member with their designation in the department.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Overlap details */}
+                                        {(snapshot.alreadyOnLeave.length > 0 || snapshot.pendingLeaves.length > 0) && (
+                                            <div className="flex items-start gap-2 bg-amber-50 p-3 rounded-xl border border-amber-100 text-left">
+                                                <AlertCircle size={14} className="text-amber-600 shrink-0 mt-0.5" />
+                                                <div>
+                                                    <p className="text-[10px] font-black text-amber-700 uppercase tracking-wide leading-none font-inter">Overlap Warnings</p>
+                                                    <div className="text-[9px] text-amber-750 font-medium mt-2 leading-relaxed">
+                                                        {snapshot.alreadyOnLeave.length > 0 && (
+                                                            <div>
+                                                                Approved: <span className="font-semibold">{snapshot.alreadyOnLeave.map(l => `${l.employee?.firstName || ''} ${l.employee?.lastName || ''}`.trim()).join(', ')}</span>
+                                                            </div>
+                                                        )}
+                                                        {snapshot.pendingLeaves.length > 0 && (
+                                                            <div className="mt-1">
+                                                                Pending: <span className="font-semibold">{snapshot.pendingLeaves.map(l => `${l.employee?.firstName || ''} ${l.employee?.lastName || ''}`.trim()).join(', ')}</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <p className="text-[10px] text-slate-400 font-semibold text-center py-2">No availability data retrieved.</p>
+                                )}
                             </div>
                         )}
 

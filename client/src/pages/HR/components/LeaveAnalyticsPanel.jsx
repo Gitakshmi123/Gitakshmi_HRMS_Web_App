@@ -207,9 +207,6 @@ export default function LeaveAnalyticsPanel() {
             } else if (subView === 'sick') {
                 const res = await api.get('/hr/leaves/analytics/sick-leave', { params: { year, minDays: sickMinDays } });
                 setSickLeaveReport(res.data);
-            } else if (subView === 'liability') {
-                const res = await api.get('/hr/leaves/analytics/liability', { params: { year } });
-                setLiability(res.data);
             }
         } catch (err) {
             console.error(err);
@@ -445,8 +442,7 @@ export default function LeaveAnalyticsPanel() {
                     { id: 'ledger', label: 'Audit Ledger Logs', icon: <Calendar size={14} /> },
                     { id: 'trends', label: 'Monthly Leave Trends', icon: <TrendingUp size={14} /> },
                     { id: 'leaderboard', label: 'High Leave Users', icon: <Award size={14} /> },
-                    { id: 'sick', label: 'Sick Leave Analysis', icon: <AlertCircle size={14} /> },
-                    { id: 'liability', label: 'Leave Liability', icon: <Settings size={14} /> }
+                    { id: 'sick', label: 'Sick Leave Analysis', icon: <AlertCircle size={14} /> }
                 ].map(item => (
                     <button
                         key={item.id}
@@ -485,7 +481,6 @@ export default function LeaveAnalyticsPanel() {
                             {subView === 'trends' && 'Monthly Leave Trends'}
                             {subView === 'leaderboard' && 'High Leave Users'}
                             {subView === 'sick' && 'Sick Leave Analysis'}
-                            {subView === 'liability' && 'Leave Liability'}
                         </h2>
                     </div>
 
@@ -1446,10 +1441,10 @@ export default function LeaveAnalyticsPanel() {
                                                                 </span>
                                                             </td>
                                                             <td className="px-4 py-3 text-center font-mono font-black text-emerald-600">
-                                                                {log.credit > 0 ? `+${log.credit}` : '—'}
+                                                                {log.credit > 0 ? log.credit : '—'}
                                                             </td>
                                                             <td className="px-4 py-3 text-center font-mono font-black text-rose-600">
-                                                                {log.debit > 0 ? `-${log.debit}` : '—'}
+                                                                {log.debit > 0 ? log.debit : '—'}
                                                             </td>
                                                             <td className="px-4 py-3 text-center font-mono font-bold text-slate-800">
                                                                 {log.newBalance}
@@ -1590,48 +1585,7 @@ export default function LeaveAnalyticsPanel() {
                             </div>
                         )}
 
-                        {/* 10. LEAVE LIABILITY */}
-                        {subView === 'liability' && (
-                            <div className="space-y-4">
-                            <div className="flex justify-end">
-                                <button onClick={() => handleExportXLSX([{metric:'Total EL Days Liability',value:liability.totalELDays},{metric:'Active Employees',value:liability.activeEmployeesCount},{metric:'Avg EL Per Employee',value:liability.activeEmployeesCount>0?(liability.totalELDays/liability.activeEmployeesCount).toFixed(2):0}],[{header:'Metric',key:'metric'},{header:'Value',key:'value'}],'Leave_Liability')} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-sm">
-                                    <Download size={12} /> Download Excel
-                                </button>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start py-4">
-                                <div className="bg-slate-900 rounded-3xl p-6 text-white shadow-lg space-y-4">
-                                    <div>
-                                        <h3 className="text-white/70 font-bold text-xs uppercase tracking-widest">Leave Liability (EL/PL)</h3>
-                                        <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest mt-0.5">Calculated based on active employees</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <div className="text-4xl font-extrabold font-mono text-emerald-400">
-                                            {liability.totalELDays} <span className="text-xs font-black uppercase text-white/50 tracking-widest font-sans ml-1">Days</span>
-                                        </div>
-                                        <p className="text-[10px] text-white/60 font-semibold leading-relaxed">
-                                            This represents the total unused Privilege/Earned leave balance currently accrued by your employees which might carry financial liability.
-                                        </p>
-                                    </div>
-                                </div>
 
-                                <div className="border border-slate-150 rounded-2xl p-5 bg-slate-50/30 space-y-3">
-                                    <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider">Report Details</h4>
-                                    <div className="divide-y divide-slate-100 text-xs font-semibold text-slate-700">
-                                        <div className="flex justify-between py-2.5">
-                                            <span className="text-slate-450">Active Employees</span>
-                                            <span className="font-bold text-slate-800">{liability.activeEmployeesCount}</span>
-                                        </div>
-                                        <div className="flex justify-between py-2.5">
-                                            <span className="text-slate-450">Average EL Accrual Per Emp</span>
-                                            <span className="font-bold text-slate-800 font-mono">
-                                                {liability.activeEmployeesCount > 0 ? (liability.totalELDays / liability.activeEmployeesCount).toFixed(2) : 0} Days
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            </div>
-                        )}
 
                     </div>
                 )}

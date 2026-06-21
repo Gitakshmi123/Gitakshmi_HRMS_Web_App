@@ -1,5 +1,6 @@
 import axios from "axios";
 import { getToken } from "./token";
+import GitakshmiLogo from "../assets/gitakshmi-hr-logo.svg";
 
 import APP_CONFIG from "./appConfig";
 
@@ -200,7 +201,7 @@ export const parseAxiosError = (error) => {
  */
 export const resolveTenantLogoUrl = (tenant) => {
   const rawLogo = String(tenant?.logo || tenant?.meta?.logo || "").trim();
-  if (!rawLogo) return null;
+  if (!rawLogo) return GitakshmiLogo;
   if (/^(https?:)?\/\//i.test(rawLogo) || rawLogo.startsWith("data:")) {
     return resolveBrowserSafeAssetUrl(rawLogo);
   }
