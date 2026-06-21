@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import api, { HRMS_API_ROOT } from '../utils/api';
+import TeamAvailabilityCalendar from './TeamAvailabilityCalendar';
 import { showToast } from '../utils/uiNotifications';
 import {
     Calendar as CalendarIcon,
@@ -409,360 +410,370 @@ export default function ApplyLeaveForm({ balances = [], existingLeaves = [], edi
     }, [form.leaveType, leaveOptions]);
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-6 animate-in fade-in duration-500 font-inter">
-            {/* Step 1: Profile Header */}
-            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-4 transition-all">
-                <div className="flex items-center gap-3 mb-3 pb-3 border-b border-slate-200/50">
-                    <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
-                        <Briefcase size={16} />
-                    </div>
-                    <div>
-                        <h4 className="text-[13px] font-bold text-slate-800">Applicant Profile</h4>
-                        <p className="text-[10px] text-slate-400 font-medium">Auto-fetched from employee records</p>
-                    </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                    <div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Employee Name</span>
-                        <span className="font-semibold text-slate-700">{`${profile?.firstName || ''} ${profile?.lastName || ''}`.trim() || 'N/A'}</span>
-                    </div>
-                    <div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Employee Code</span>
-                        <span className="font-semibold text-slate-700">{profile?.employeeId || 'N/A'}</span>
-                    </div>
-                    <div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Department & Title</span>
-                        <span className="font-semibold text-slate-700 truncate block max-w-[170px]">
-                            {profile?.department || profile?.departmentId?.name || 'N/A'} - {profile?.designation || profile?.designationId?.name || 'N/A'}
-                        </span>
-                    </div>
-                    <div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Leave Policy</span>
-                        <span className="font-semibold text-slate-700">{leavePolicy?.name || 'Default Policy'}</span>
-                    </div>
-                </div>
-            </div>
-
-            {/* COMPACT UNIFIED FORM */}
-            <div className="bg-white p-6 rounded-xl border border-[#E2E8F0] shadow-sm transition-all duration-300 hover:shadow-md">
-                <div className="space-y-4">
-                    {/* Category Selection */}
-                    <div className="space-y-1.5">
-                        <label className="text-[12px] font-medium text-[#64748B]">Leave Category</label>
-                        <div className="relative">
-                            <select
-                                required
-                                className="w-full h-[42px] bg-slate-50/50 border border-[#E2E8F0] rounded-lg pl-4 pr-10 text-[14px] font-medium text-[#334155] outline-none focus:ring-4 focus:ring-blue-500/5 focus:border-[#2563EB] transition-all cursor-pointer appearance-none"
-                                value={form.leaveType}
-                                onChange={e => setForm({ ...form, leaveType: e.target.value })}
-                            >
-                                <option value="">Select category...</option>
-                                {leaveOptions
-                                    .filter(option => option.available > 0 || option.leaveType === form.leaveType)
-                                    .map((option) => (
-                                    <option key={option.leaveType} value={option.leaveType} disabled={option.locked}>
-                                        {option.leaveType} ({option.available > 0 ? `${option.available} Available` : 'Exhausted'}{option.locked ? ', Locked' : ''})
-                                    </option>
-                                ))}
-                                <option value="Personal Leave">Personal / LOP (Unpaid)</option>
-                            </select>
-                            <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            <form onSubmit={handleSubmit} className="lg:col-span-5 space-y-6 animate-in fade-in duration-500 font-inter">
+                {/* Step 1: Profile Header */}
+                <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-4 transition-all">
+                    <div className="flex items-center gap-3 mb-3 pb-3 border-b border-slate-200/50">
+                        <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                            <Briefcase size={16} />
                         </div>
+                        <div>
+                            <h4 className="text-[13px] font-bold text-slate-800">Applicant Profile</h4>
+                            <p className="text-[10px] text-slate-400 font-medium">Auto-fetched from employee records</p>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Employee Name</span>
+                            <span className="font-semibold text-slate-700">{`${profile?.firstName || ''} ${profile?.lastName || ''}`.trim() || 'N/A'}</span>
+                        </div>
+                        <div>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Employee Code</span>
+                            <span className="font-semibold text-slate-700">{profile?.employeeId || 'N/A'}</span>
+                        </div>
+                        <div>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Department & Title</span>
+                            <span className="font-semibold text-slate-700 truncate block max-w-[170px]">
+                                {profile?.department || profile?.departmentId?.name || 'N/A'} - {profile?.designation || profile?.designationId?.name || 'N/A'}
+                            </span>
+                        </div>
+                        <div>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Leave Policy</span>
+                            <span className="font-semibold text-slate-700">{leavePolicy?.name || 'Default Policy'}</span>
+                        </div>
+                    </div>
+                </div>
 
-                        {/* Step 2: Selected Category Balance Summary */}
-                        {selectedOption && (
-                            <div className="mt-2.5 p-3 bg-indigo-50/30 border border-indigo-100/60 rounded-xl animate-in slide-in-from-top-2 duration-300">
-                                <div className="flex items-center justify-between mb-1.5">
-                                    <span className="text-[10px] font-bold text-indigo-800 uppercase tracking-wider">
-                                        {selectedOption.leaveType} Balance Summary
-                                    </span>
-                                    <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-indigo-100 text-indigo-700">
-                                        Active Balance
-                                    </span>
-                                </div>
-                                <div className="grid grid-cols-4 gap-1.5 text-center text-xs">
-                                    <div className="bg-white p-1.5 rounded border border-slate-100">
-                                        <p className="text-[8px] font-bold text-slate-400 uppercase mb-0.5">Total</p>
-                                        <p className="font-bold text-slate-700">{selectedOption.total}</p>
-                                    </div>
-                                    <div className="bg-white p-1.5 rounded border border-slate-100">
-                                        <p className="text-[8px] font-bold text-emerald-500 uppercase mb-0.5">Used</p>
-                                        <p className="font-bold text-emerald-600">{selectedOption.used}</p>
-                                    </div>
-                                    <div className="bg-white p-1.5 rounded border border-slate-100">
-                                        <p className="text-[8px] font-bold text-amber-500 uppercase mb-0.5">Pending</p>
-                                        <p className="font-bold text-amber-600">{selectedOption.pending}</p>
-                                    </div>
-                                    <div className="bg-white p-1.5 rounded border border-indigo-100 bg-indigo-50/20">
-                                        <p className="text-[8px] font-bold text-indigo-500 uppercase mb-0.5">Available</p>
-                                        <p className="font-bold text-indigo-600">{selectedOption.available}</p>
-                                    </div>
-                                </div>
+                {/* COMPACT UNIFIED FORM */}
+                <div className="bg-white p-6 rounded-xl border border-[#E2E8F0] shadow-sm transition-all duration-300 hover:shadow-md">
+                    <div className="space-y-4">
+                        {/* Category Selection */}
+                        <div className="space-y-1.5">
+                            <label className="text-[12px] font-medium text-[#64748B]">Leave Category</label>
+                            <div className="relative">
+                                <select
+                                    required
+                                    className="w-full h-[42px] bg-slate-50/50 border border-[#E2E8F0] rounded-lg pl-4 pr-10 text-[14px] font-medium text-[#334155] outline-none focus:ring-4 focus:ring-blue-500/5 focus:border-[#2563EB] transition-all cursor-pointer appearance-none"
+                                    value={form.leaveType}
+                                    onChange={e => setForm({ ...form, leaveType: e.target.value })}
+                                >
+                                    <option value="">Select category...</option>
+                                    {leaveOptions
+                                        .filter(option => option.available > 0 || option.leaveType === form.leaveType)
+                                        .map((option) => (
+                                        <option key={option.leaveType} value={option.leaveType} disabled={option.locked}>
+                                            {option.leaveType} ({option.available > 0 ? `${option.available} Available` : 'Exhausted'}{option.locked ? ', Locked' : ''})
+                                        </option>
+                                    ))}
+                                    <option value="Personal Leave">Personal / LOP (Unpaid)</option>
+                                </select>
+                                <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                             </div>
-                        )}
-                    </div>
 
-                    {/* Date Grid + Half Day - Single Row */}
-                    <div className="grid grid-cols-3 gap-4 items-end">
-                        <div className="space-y-1.5">
-                            <label className="text-[12px] font-medium text-[#64748B]">Start Date</label>
-                            <DatePicker
-                                disabledDate={disabledDate}
-                                placeholder="DD-MM-YYYY"
-                                className="w-full h-[42px] bg-slate-50/50 border border-[#E2E8F0] hover:border-[#2563EB] focus:border-[#2563EB] rounded-lg px-3 text-[14px] font-medium text-[#334155] shadow-none"
-                                value={form.startDate ? dayjs(form.startDate) : null}
-                                onChange={(date) => setForm({ ...form, startDate: date ? date.format('YYYY-MM-DD') : '' })}
-                            />
-                        </div>
-                        <div className="space-y-1.5">
-                            <label className="text-[12px] font-medium text-[#64748B]">End Date</label>
-                            <DatePicker
-                                disabledDate={(current) => (form.startDate && current && current.isBefore(dayjs(form.startDate), 'day')) || disabledDate(current)}
-                                placeholder="DD-MM-YYYY"
-                                className="w-full h-[42px] bg-slate-50/50 border border-[#E2E8F0] hover:border-[#2563EB] focus:border-[#2563EB] rounded-lg px-3 text-[14px] font-medium text-[#334155] shadow-none"
-                                value={form.endDate ? dayjs(form.endDate) : null}
-                                onChange={(date) => setForm({ ...form, endDate: date ? date.format('YYYY-MM-DD') : '' })}
-                            />
-                        </div>
-                        <div className={clsx(
-                            "h-[42px] px-3 rounded-lg border transition-all flex items-center",
-                            form.isHalfDay ? "bg-blue-50/30 border-blue-200" : "bg-slate-50 border-slate-100"
-                        )}>
-                            <label className="flex items-center gap-2.5 cursor-pointer select-none w-full">
-                                <div className={clsx(
-                                    "w-4 h-4 rounded border flex items-center justify-center transition-all shrink-0",
-                                    form.isHalfDay ? "bg-[#2563EB] border-[#2563EB]" : "bg-white border-slate-300"
-                                )}>
-                                    {form.isHalfDay && <CheckCircle size={10} className="text-white" />}
-                                </div>
-                                <input type="checkbox" className="hidden" checked={form.isHalfDay} onChange={e => setForm({ ...form, isHalfDay: e.target.checked })} />
-                                <span className={clsx("text-[13px] font-medium whitespace-nowrap", form.isHalfDay ? "text-[#2563EB]" : "text-[#64748B]")}>Half Day</span>
-                            </label>
-                        </div>
-                    </div>
-
-                    {/* Half Day Settings */}
-                    {form.isHalfDay && (
-                        <div className="space-y-4 p-4 bg-blue-50/20 border border-blue-100/60 rounded-xl animate-in slide-in-from-top-2 duration-300">
-                            {/* If multi-day range, choose Mode */}
-                            {form.startDate && form.endDate && form.startDate !== form.endDate ? (
-                                <>
-                                    <div className="space-y-1.5">
-                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">Half Day Configuration</label>
-                                        <div className="flex gap-2 p-1 bg-white rounded-lg border border-slate-200">
-                                             {[
-                                                 { label: 'First Day Only', value: 'first' },
-                                                 { label: 'Last Day Only', value: 'last' },
-                                                 { label: 'Both Days', value: 'both' }
-                                             ].map(opt => (
-                                                 <button key={opt.value} type="button" onClick={() => setForm({...form, halfDayMode: opt.value})}
-                                                    className={clsx(
-                                                        "flex-1 py-1.5 text-xs font-semibold rounded-md transition-all",
-                                                        form.halfDayMode === opt.value ? "bg-[#2563EB] text-white shadow-sm" : "text-[#64748B] hover:bg-slate-50"
-                                                    )}>{opt.label}</button>
-                                             ))}
-                                        </div>
+                            {/* Step 2: Selected Category Balance Summary */}
+                            {selectedOption && (
+                                <div className="mt-2.5 p-3 bg-indigo-50/30 border border-indigo-100/60 rounded-xl animate-in slide-in-from-top-2 duration-300">
+                                    <div className="flex items-center justify-between mb-1.5">
+                                        <span className="text-[10px] font-bold text-indigo-800 uppercase tracking-wider">
+                                            {selectedOption.leaveType} Balance Summary
+                                        </span>
+                                        <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-indigo-100 text-indigo-700">
+                                            Active Balance
+                                        </span>
                                     </div>
-
-                                    {/* First Day Session Selector */}
-                                    {(form.halfDayMode === 'first' || form.halfDayMode === 'both') && (
-                                        <div className="space-y-1.5 p-2 bg-white rounded-lg border border-slate-100">
-                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">First Day Session ({dayjs(form.startDate).format('DD-MM')})</label>
-                                            <div className="flex gap-2 p-1 bg-slate-50 rounded-md">
-                                                 {['First Half', 'Second Half'].map(s => (
-                                                     <button key={s} type="button" onClick={() => setForm({...form, firstDaySession: s})}
-                                                        className={clsx(
-                                                            "flex-1 py-1 text-xs font-semibold rounded transition-all",
-                                                            form.firstDaySession === s ? "bg-[#2563EB] text-white shadow-sm" : "text-[#64748B] hover:bg-white/80"
-                                                        )}>{s}</button>
-                                                 ))}
-                                            </div>
+                                    <div className="grid grid-cols-4 gap-1.5 text-center text-xs">
+                                        <div className="bg-white p-1.5 rounded border border-slate-100">
+                                            <p className="text-[8px] font-bold text-slate-400 uppercase mb-0.5">Total</p>
+                                            <p className="font-bold text-slate-700">{selectedOption.total}</p>
                                         </div>
-                                    )}
-
-                                    {/* Last Day Session Selector */}
-                                    {(form.halfDayMode === 'last' || form.halfDayMode === 'both') && (
-                                        <div className="space-y-1.5 p-2 bg-white rounded-lg border border-slate-100">
-                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Last Day Session ({dayjs(form.endDate).format('DD-MM')})</label>
-                                            <div className="flex gap-2 p-1 bg-slate-50 rounded-md">
-                                                 {['First Half', 'Second Half'].map(s => (
-                                                     <button key={s} type="button" onClick={() => setForm({...form, lastDaySession: s})}
-                                                        className={clsx(
-                                                            "flex-1 py-1 text-xs font-semibold rounded transition-all",
-                                                            form.lastDaySession === s ? "bg-[#2563EB] text-white shadow-sm" : "text-[#64748B] hover:bg-white/80"
-                                                        )}>{s}</button>
-                                                 ))}
-                                            </div>
+                                        <div className="bg-white p-1.5 rounded border border-slate-100">
+                                            <p className="text-[8px] font-bold text-emerald-500 uppercase mb-0.5">Used</p>
+                                            <p className="font-bold text-emerald-600">{selectedOption.used}</p>
                                         </div>
-                                    )}
-                                </>
-                            ) : (
-                                /* Single Day Selector */
-                                <div className="space-y-1.5">
-                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Half Day Session</label>
-                                    <div className="flex gap-2 p-1 bg-white rounded-lg border border-slate-200">
-                                         {['First Half', 'Second Half'].map(s => (
-                                             <button key={s} type="button" onClick={() => setForm({...form, firstDaySession: s, halfDaySession: s})}
-                                                className={clsx(
-                                                    "flex-1 py-1.5 text-xs font-semibold rounded-md transition-all",
-                                                    (form.firstDaySession === s || form.halfDaySession === s) ? "bg-[#2563EB] text-white shadow-sm" : "text-[#64748B] hover:bg-slate-50"
-                                                )}>{s}</button>
-                                         ))}
+                                        <div className="bg-white p-1.5 rounded border border-slate-100">
+                                            <p className="text-[8px] font-bold text-amber-500 uppercase mb-0.5">Pending</p>
+                                            <p className="font-bold text-amber-600">{selectedOption.pending}</p>
+                                        </div>
+                                        <div className="bg-white p-1.5 rounded border border-indigo-100 bg-indigo-50/20">
+                                            <p className="text-[8px] font-bold text-indigo-500 uppercase mb-0.5">Available</p>
+                                            <p className="font-bold text-indigo-600">{selectedOption.available}</p>
+                                        </div>
                                     </div>
                                 </div>
                             )}
                         </div>
-                    )}
 
-                    {/* Medical Certificate Upload */}
-                    {medicalCertRequired && (
-                        <div className="space-y-1.5 p-4 bg-emerald-50/50 border border-emerald-100 rounded-lg animate-in slide-in-from-top-2 duration-300">
-                            <label className="text-[12px] font-bold text-emerald-800 flex items-center gap-1.5">
-                                <FileText size={14} />
-                                Medical Certificate Required (Duration &ge; {activeRule.medicalCertRequiredAfterDays} Days)
-                            </label>
-                            <div className="mt-2 flex flex-col sm:flex-row items-center gap-3">
-                                <label className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 border border-emerald-200 hover:border-emerald-400 bg-white text-emerald-700 text-xs font-bold rounded-lg cursor-pointer transition-all active:scale-95 shadow-sm">
-                                    <span>Choose File</span>
-                                    <input 
-                                        type="file" 
-                                        accept=".png,.jpg,.jpeg,.pdf" 
-                                        className="hidden" 
-                                        onChange={(e) => {
-                                            if (e.target.files?.[0]) {
-                                                setMedicalCertFile(e.target.files[0]);
-                                            }
-                                        }}
-                                    />
+                        {/* Date Grid + Half Day - Single Row */}
+                        <div className="grid grid-cols-3 gap-4 items-end">
+                            <div className="space-y-1.5">
+                                <label className="text-[12px] font-medium text-[#64748B]">Start Date</label>
+                                <DatePicker
+                                    disabledDate={disabledDate}
+                                    placeholder="DD-MM-YYYY"
+                                    className="w-full h-[42px] bg-slate-50/50 border border-[#E2E8F0] hover:border-[#2563EB] focus:border-[#2563EB] rounded-lg px-3 text-[14px] font-medium text-[#334155] shadow-none"
+                                    value={form.startDate ? dayjs(form.startDate) : null}
+                                    onChange={(date) => setForm({ ...form, startDate: date ? date.format('YYYY-MM-DD') : '' })}
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-[12px] font-medium text-[#64748B]">End Date</label>
+                                <DatePicker
+                                    disabledDate={(current) => (form.startDate && current && current.isBefore(dayjs(form.startDate), 'day')) || disabledDate(current)}
+                                    placeholder="DD-MM-YYYY"
+                                    className="w-full h-[42px] bg-slate-50/50 border border-[#E2E8F0] hover:border-[#2563EB] focus:border-[#2563EB] rounded-lg px-3 text-[14px] font-medium text-[#334155] shadow-none"
+                                    value={form.endDate ? dayjs(form.endDate) : null}
+                                    onChange={(date) => setForm({ ...form, endDate: date ? date.format('YYYY-MM-DD') : '' })}
+                                />
+                            </div>
+                            <div className={clsx(
+                                "h-[42px] px-3 rounded-lg border transition-all flex items-center",
+                                form.isHalfDay ? "bg-blue-50/30 border-blue-200" : "bg-slate-50 border-slate-100"
+                            )}>
+                                <label className="flex items-center gap-2.5 cursor-pointer select-none w-full">
+                                    <div className={clsx(
+                                        "w-4 h-4 rounded border flex items-center justify-center transition-all shrink-0",
+                                        form.isHalfDay ? "bg-[#2563EB] border-[#2563EB]" : "bg-white border-slate-300"
+                                    )}>
+                                        {form.isHalfDay && <CheckCircle size={10} className="text-white" />}
+                                    </div>
+                                    <input type="checkbox" className="hidden" checked={form.isHalfDay} onChange={e => setForm({ ...form, isHalfDay: e.target.checked })} />
+                                    <span className={clsx("text-[13px] font-medium whitespace-nowrap", form.isHalfDay ? "text-[#2563EB]" : "text-[#64748B]")}>Half Day</span>
                                 </label>
-                                <span className="text-xs font-medium text-slate-500 truncate max-w-[200px]">
-                                    {medicalCertFile ? medicalCertFile.name : (medicalCertUrl ? 'Current Certificate Uploaded' : 'No file chosen')}
-                                </span>
-                                {medicalCertUrl && !medicalCertFile && (
-                                    <a 
-                                        href={medicalCertUrl.startsWith('http') ? medicalCertUrl : `${HRMS_API_ROOT}${medicalCertUrl}`} 
-                                        target="_blank" 
-                                        rel="noopener noreferrer"
-                                        className="text-xs font-bold text-emerald-600 hover:underline flex items-center gap-1 shrink-0 ml-auto"
-                                    >
-                                        [View Current]
-                                    </a>
+                            </div>
+                        </div>
+
+                        {/* Half Day Settings */}
+                        {form.isHalfDay && (
+                            <div className="space-y-4 p-4 bg-blue-50/20 border border-blue-100/60 rounded-xl animate-in slide-in-from-top-2 duration-300">
+                                {/* If multi-day range, choose Mode */}
+                                {form.startDate && form.endDate && form.startDate !== form.endDate ? (
+                                    <>
+                                        <div className="space-y-1.5">
+                                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">Half Day Configuration</label>
+                                            <div className="flex gap-2 p-1 bg-white rounded-lg border border-slate-200">
+                                                 {[
+                                                     { label: 'First Day Only', value: 'first' },
+                                                     { label: 'Last Day Only', value: 'last' },
+                                                     { label: 'Both Days', value: 'both' }
+                                                 ].map(opt => (
+                                                     <button key={opt.value} type="button" onClick={() => setForm({...form, halfDayMode: opt.value})}
+                                                        className={clsx(
+                                                            "flex-1 py-1.5 text-xs font-semibold rounded-md transition-all",
+                                                            form.halfDayMode === opt.value ? "bg-[#2563EB] text-white shadow-sm" : "text-[#64748B] hover:bg-slate-50"
+                                                        )}>{opt.label}</button>
+                                                 ))}
+                                            </div>
+                                        </div>
+
+                                        {/* First Day Session Selector */}
+                                        {(form.halfDayMode === 'first' || form.halfDayMode === 'both') && (
+                                            <div className="space-y-1.5 p-2 bg-white rounded-lg border border-slate-100">
+                                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">First Day Session ({dayjs(form.startDate).format('DD-MM')})</label>
+                                                <div className="flex gap-2 p-1 bg-slate-50 rounded-md">
+                                                     {['First Half', 'Second Half'].map(s => (
+                                                         <button key={s} type="button" onClick={() => setForm({...form, firstDaySession: s})}
+                                                            className={clsx(
+                                                                "flex-1 py-1 text-xs font-semibold rounded transition-all",
+                                                                form.firstDaySession === s ? "bg-[#2563EB] text-white shadow-sm" : "text-[#64748B] hover:bg-white/80"
+                                                            )}>{s}</button>
+                                                     ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Last Day Session Selector */}
+                                        {(form.halfDayMode === 'last' || form.halfDayMode === 'both') && (
+                                            <div className="space-y-1.5 p-2 bg-white rounded-lg border border-slate-100">
+                                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Last Day Session ({dayjs(form.endDate).format('DD-MM')})</label>
+                                                <div className="flex gap-2 p-1 bg-slate-50 rounded-md">
+                                                     {['First Half', 'Second Half'].map(s => (
+                                                         <button key={s} type="button" onClick={() => setForm({...form, lastDaySession: s})}
+                                                            className={clsx(
+                                                                "flex-1 py-1 text-xs font-semibold rounded transition-all",
+                                                                form.lastDaySession === s ? "bg-[#2563EB] text-white shadow-sm" : "text-[#64748B] hover:bg-white/80"
+                                                            )}>{s}</button>
+                                                     ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
+                                ) : (
+                                    /* Single Day Selector */
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Half Day Session</label>
+                                        <div className="flex gap-2 p-1 bg-white rounded-lg border border-slate-200">
+                                             {['First Half', 'Second Half'].map(s => (
+                                                 <button key={s} type="button" onClick={() => setForm({...form, firstDaySession: s, halfDaySession: s})}
+                                                    className={clsx(
+                                                        "flex-1 py-1.5 text-xs font-semibold rounded-md transition-all",
+                                                        (form.firstDaySession === s || form.halfDaySession === s) ? "bg-[#2563EB] text-white shadow-sm" : "text-[#64748B] hover:bg-slate-50"
+                                                    )}>{s}</button>
+                                             ))}
+                                        </div>
+                                    </div>
                                 )}
                             </div>
-                            <p className="text-[10px] text-emerald-600 font-medium mt-1">Allowed formats: PNG, JPG, JPEG, PDF (Max 5MB)</p>
-                        </div>
-                    )}
+                        )}
 
-                    {/* Reason Section */}
-                    <div className="space-y-1.5">
-                        <label className="text-[12px] font-medium text-[#64748B]">Justification / Reason</label>
-                        <textarea
-                            required
-                            placeholder="Please provide a brief reason for your request..."
-                            className="w-full bg-slate-50/50 border border-[#E2E8F0] rounded-lg p-4 text-[14px] font-medium text-[#334155] outline-none focus:ring-4 focus:ring-blue-500/5 focus:border-[#2563EB] transition-all resize-none shadow-none min-h-[100px]"
-                            value={form.reason}
-                            onChange={e => setForm({ ...form, reason: e.target.value })}
-                        />
+                        {/* Medical Certificate Upload */}
+                        {medicalCertRequired && (
+                            <div className="space-y-1.5 p-4 bg-emerald-50/50 border border-emerald-100 rounded-lg animate-in slide-in-from-top-2 duration-300">
+                                <label className="text-[12px] font-bold text-emerald-800 flex items-center gap-1.5">
+                                    <FileText size={14} />
+                                    Medical Certificate Required (Duration &ge; {activeRule.medicalCertRequiredAfterDays} Days)
+                                </label>
+                                <div className="mt-2 flex flex-col sm:flex-row items-center gap-3">
+                                    <label className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 border border-emerald-200 hover:border-emerald-400 bg-white text-emerald-700 text-xs font-bold rounded-lg cursor-pointer transition-all active:scale-95 shadow-sm">
+                                        <span>Choose File</span>
+                                        <input 
+                                            type="file" 
+                                            accept=".png,.jpg,.jpeg,.pdf" 
+                                            className="hidden" 
+                                            onChange={(e) => {
+                                                if (e.target.files?.[0]) {
+                                                    setMedicalCertFile(e.target.files[0]);
+                                                }
+                                            }}
+                                        />
+                                    </label>
+                                    <span className="text-xs font-medium text-slate-500 truncate max-w-[200px]">
+                                        {medicalCertFile ? medicalCertFile.name : (medicalCertUrl ? 'Current Certificate Uploaded' : 'No file chosen')}
+                                    </span>
+                                    {medicalCertUrl && !medicalCertFile && (
+                                        <a 
+                                            href={medicalCertUrl.startsWith('http') ? medicalCertUrl : `${HRMS_API_ROOT}${medicalCertUrl}`} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className="text-xs font-bold text-emerald-600 hover:underline flex items-center gap-1 shrink-0 ml-auto"
+                                        >
+                                            [View Current]
+                                        </a>
+                                    )}
+                                </div>
+                                <p className="text-[10px] text-emerald-600 font-medium mt-1">Allowed formats: PNG, JPG, JPEG, PDF (Max 5MB)</p>
+                            </div>
+                        )}
+
+                        {/* Reason Section */}
+                        <div className="space-y-1.5">
+                            <label className="text-[12px] font-medium text-[#64748B]">Justification / Reason</label>
+                            <textarea
+                                required
+                                placeholder="Please provide a brief reason for your request..."
+                                className="w-full bg-slate-50/50 border border-[#E2E8F0] rounded-lg p-4 text-[14px] font-medium text-[#334155] outline-none focus:ring-4 focus:ring-blue-500/5 focus:border-[#2563EB] transition-all resize-none shadow-none min-h-[100px]"
+                                value={form.reason}
+                                onChange={e => setForm({ ...form, reason: e.target.value })}
+                            />
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            {/* Step 3: Duration Breakdown */}
-            {duration > 0 && validationErrors.length === 0 && (
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/60 animate-in fade-in duration-300">
-                    <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-                        <CalendarIcon size={12} />
-                        Duration Breakdown
-                    </h5>
-                    <div className="grid grid-cols-4 gap-2 text-center text-xs">
-                        <div className="bg-white p-2 rounded-lg border border-slate-100">
-                            <span className="text-[8px] font-bold text-slate-400 block mb-0.5">Total Days</span>
-                            <span className="font-semibold text-slate-700">{calcDetails.totalDays}</span>
-                        </div>
-                        <div className="bg-white p-2 rounded-lg border border-slate-100">
-                            <span className="text-[8px] font-bold text-slate-400 block mb-0.5">Sundays</span>
-                            <span className="font-semibold text-slate-700">{calcDetails.weeklyOffs}</span>
-                        </div>
-                        <div className="bg-white p-2 rounded-lg border border-slate-100">
-                            <span className="text-[8px] font-bold text-slate-400 block mb-0.5">Holidays</span>
-                            <span className="font-semibold text-slate-700">{calcDetails.holidaysInBetween}</span>
-                        </div>
-                        <div className="bg-indigo-50/20 p-2 rounded-lg border border-indigo-100">
-                            <span className="text-[8px] font-bold text-indigo-500 block mb-0.5">Net Days</span>
-                            <span className="font-bold text-indigo-600">{calcDetails.netDays}</span>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Step 5: Leave Impact Preview */}
-            {selectedOption && duration > 0 && validationErrors.length === 0 && (
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/60 animate-in fade-in duration-300">
-                    <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2.5">Leave Impact & Workflow Preview</h5>
-                    <div className="grid grid-cols-3 gap-3 items-center text-center text-xs mb-3">
-                        <div className="bg-white p-2 rounded-lg border border-slate-100">
-                            <span className="text-[8px] font-bold text-slate-400 block mb-0.5">Current Balance</span>
-                            <span className="font-semibold text-slate-700">{selectedOption.available}</span>
-                        </div>
-                        <div className="flex flex-col items-center justify-center">
-                            <span className="text-[8px] font-bold text-indigo-500 uppercase tracking-widest block mb-0.5">Requested</span>
-                            <div className="flex items-center gap-1">
-                                <div className="h-0.5 w-4 bg-indigo-300"></div>
-                                <span className="font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded text-[10px]">-{duration}</span>
-                                <div className="h-0.5 w-4 bg-indigo-300"></div>
+                {/* Step 3: Duration Breakdown */}
+                {duration > 0 && validationErrors.length === 0 && (
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/60 animate-in fade-in duration-300">
+                        <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                            <CalendarIcon size={12} />
+                            Duration Breakdown
+                        </h5>
+                        <div className="grid grid-cols-4 gap-2 text-center text-xs">
+                            <div className="bg-white p-2 rounded-lg border border-slate-100">
+                                <span className="text-[8px] font-bold text-slate-400 block mb-0.5">Total Days</span>
+                                <span className="font-semibold text-slate-700">{calcDetails.totalDays}</span>
+                            </div>
+                            <div className="bg-white p-2 rounded-lg border border-slate-100">
+                                <span className="text-[8px] font-bold text-slate-400 block mb-0.5">Sundays</span>
+                                <span className="font-semibold text-slate-700">{calcDetails.weeklyOffs}</span>
+                            </div>
+                            <div className="bg-white p-2 rounded-lg border border-slate-100">
+                                <span className="text-[8px] font-bold text-slate-400 block mb-0.5">Holidays</span>
+                                <span className="font-semibold text-slate-700">{calcDetails.holidaysInBetween}</span>
+                            </div>
+                            <div className="bg-indigo-50/20 p-2 rounded-lg border border-indigo-100">
+                                <span className="text-[8px] font-bold text-indigo-500 block mb-0.5">Net Days</span>
+                                <span className="font-bold text-indigo-600">{calcDetails.netDays}</span>
                             </div>
                         </div>
-                        <div className="bg-indigo-50/10 p-2 rounded-lg border border-indigo-100">
-                            <span className="text-[8px] font-bold text-indigo-500 block mb-0.5">Remaining</span>
-                            <span className="font-bold text-indigo-700">
-                                {Math.max(0, selectedOption.available - duration)}
-                            </span>
-                        </div>
                     </div>
-                    <div className="flex items-center justify-between bg-white px-3 py-2 rounded-lg border border-slate-100 text-[10px] font-medium text-slate-500">
-                        <span className="font-bold text-[9px] text-slate-400 uppercase">Approval Path:</span>
-                        <div className="flex items-center gap-1.5">
-                            <span className="bg-slate-50 border border-slate-200 px-2 py-0.5 rounded text-slate-700">Manager Approval</span>
-                            <span className="text-slate-400">&rarr;</span>
-                            <span className="bg-slate-50 border border-slate-200 px-2 py-0.5 rounded text-slate-700">HR Processing</span>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Calculations & Alerts */}
-            {(validationErrors.length > 0 || validationWarnings.length > 0) && (
-                <div className="space-y-2">
-                    {validationErrors.map((errText, idx) => (
-                        <div key={`err-${idx}`} className="flex items-start gap-2.5 bg-[#FEF2F2] p-3 rounded-lg border border-[#FEE2E2] animate-in shake duration-500">
-                            <AlertCircle size={15} className="text-[#DC2626] shrink-0 mt-0.5" />
-                            <span className="text-xs font-semibold text-[#DC2626] leading-relaxed">{errText}</span>
-                        </div>
-                    ))}
-                    {validationWarnings.map((warnText, idx) => (
-                        <div key={`warn-${idx}`} className="flex items-start gap-2.5 bg-[#FFFBEB] p-3 rounded-lg border border-[#FEF3C7] animate-in fade-in duration-300">
-                            <Info size={15} className="text-[#F59E0B] shrink-0 mt-0.5" />
-                            <span className="text-[12px] font-medium text-[#B45309] leading-relaxed">{warnText}</span>
-                        </div>
-                    ))}
-                </div>
-            )}
-
-             {/* Actions */}
-            <div className="flex flex-col gap-3 pt-2">
-                <button 
-                    type="submit" 
-                    disabled={isSubmitting || validationErrors.length > 0 || duration <= 0 || !form.leaveType || !form.startDate || !form.endDate || !form.reason.trim() || (medicalCertRequired && !medicalCertFile && !medicalCertUrl)} 
-                    className="w-full flex items-center justify-center gap-2 h-[44px] rounded-lg bg-[#2563EB] text-white text-[14px] font-semibold transition-all hover:bg-blue-700 active:scale-[0.98] disabled:opacity-40 shadow-sm shadow-blue-500/10"
-                >
-                    <Send size={16} />
-                    <span>Apply for Leave</span>
-                </button>
-                {editData && (
-                    <button type="button" onClick={onCancelEdit} className="w-full py-2 text-sm font-medium text-[#64748B] hover:text-[#334155] transition-all">Discard Changes</button>
                 )}
+
+                {/* Step 5: Leave Impact Preview */}
+                {selectedOption && duration > 0 && validationErrors.length === 0 && (
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/60 animate-in fade-in duration-300">
+                        <h5 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2.5">Leave Impact & Workflow Preview</h5>
+                        <div className="grid grid-cols-3 gap-3 items-center text-center text-xs mb-3">
+                            <div className="bg-white p-2 rounded-lg border border-slate-100">
+                                <span className="text-[8px] font-bold text-slate-400 block mb-0.5">Current Balance</span>
+                                <span className="font-semibold text-slate-700">{selectedOption.available}</span>
+                            </div>
+                            <div className="flex flex-col items-center justify-center">
+                                <span className="text-[8px] font-bold text-indigo-500 uppercase tracking-widest block mb-0.5">Requested</span>
+                                <div className="flex items-center gap-1">
+                                    <div className="h-0.5 w-4 bg-indigo-300"></div>
+                                    <span className="font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded text-[10px]">-{duration}</span>
+                                    <div className="h-0.5 w-4 bg-indigo-300"></div>
+                                </div>
+                            </div>
+                            <div className="bg-indigo-50/10 p-2 rounded-lg border border-indigo-100">
+                                <span className="text-[8px] font-bold text-indigo-500 block mb-0.5">Remaining</span>
+                                <span className="font-bold text-indigo-700">
+                                    {Math.max(0, selectedOption.available - duration)}
+                                </span>
+                            </div>
+                        </div>
+                        <div className="flex items-center justify-between bg-white px-3 py-2 rounded-lg border border-slate-100 text-[10px] font-medium text-slate-500">
+                            <span className="font-bold text-[9px] text-slate-400 uppercase">Approval Path:</span>
+                            <div className="flex items-center gap-1.5">
+                                <span className="bg-slate-50 border border-slate-200 px-2 py-0.5 rounded text-slate-700">Manager Approval</span>
+                                <span className="text-slate-400">&rarr;</span>
+                                <span className="bg-slate-50 border border-slate-200 px-2 py-0.5 rounded text-slate-700">HR Processing</span>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Calculations & Alerts */}
+                {(validationErrors.length > 0 || validationWarnings.length > 0) && (
+                    <div className="space-y-2">
+                        {validationErrors.map((errText, idx) => (
+                            <div key={`err-${idx}`} className="flex items-start gap-2.5 bg-[#FEF2F2] p-3 rounded-lg border border-[#FEE2E2] animate-in shake duration-500">
+                                <AlertCircle size={15} className="text-[#DC2626] shrink-0 mt-0.5" />
+                                <span className="text-xs font-semibold text-[#DC2626] leading-relaxed">{errText}</span>
+                            </div>
+                        ))}
+                        {validationWarnings.map((warnText, idx) => (
+                            <div key={`warn-${idx}`} className="flex items-start gap-2.5 bg-[#FFFBEB] p-3 rounded-lg border border-[#FEF3C7] animate-in fade-in duration-300">
+                                <Info size={15} className="text-[#F59E0B] shrink-0 mt-0.5" />
+                                <span className="text-[12px] font-medium text-[#B45309] leading-relaxed">{warnText}</span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                 {/* Actions */}
+                <div className="flex flex-col gap-3 pt-2">
+                    <button 
+                        type="submit" 
+                        disabled={isSubmitting || validationErrors.length > 0 || duration <= 0 || !form.leaveType || !form.startDate || !form.endDate || !form.reason.trim() || (medicalCertRequired && !medicalCertFile && !medicalCertUrl)} 
+                        className="w-full flex items-center justify-center gap-2 h-[44px] rounded-lg bg-[#2563EB] text-white text-[14px] font-semibold transition-all hover:bg-blue-700 active:scale-[0.98] disabled:opacity-40 shadow-sm shadow-blue-500/10"
+                    >
+                        <Send size={16} />
+                        <span>Apply for Leave</span>
+                    </button>
+                    {editData && (
+                        <button type="button" onClick={onCancelEdit} className="w-full py-2 text-sm font-medium text-[#64748B] hover:text-[#334155] transition-all">Discard Changes</button>
+                    )}
+                </div>
+            </form>
+
+            <div className="lg:col-span-7 bg-white p-6 rounded-xl border border-[#E2E8F0] shadow-sm">
+                <TeamAvailabilityCalendar
+                    startDate={form.startDate}
+                    endDate={form.endDate}
+                    employeeId={profile?._id || targetEmployeeId}
+                />
             </div>
-        </form>
+        </div>
     );
 }
 

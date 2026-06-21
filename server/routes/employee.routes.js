@@ -51,6 +51,8 @@ router.get('/leaves/balances', auth.authenticate, leaveCheck, checkPermission('e
 router.get('/leaves/approved-dates', auth.authenticate, leaveCheck, checkPermission('employee.attendance', 'view'), requestCtrl.getApprovedDates);
 router.post('/leaves/opening-balance', auth.authenticate, leaveCheck, auth.requireHr, requestCtrl.setOpeningBalance);
 router.get('/leaves/ledger', auth.authenticate, leaveCheck, requestCtrl.getLeaveLedger);
+router.get('/leaves/workforce-visibility', auth.authenticate, leaveCheck, checkPermission('employee.attendance', 'view'), requestCtrl.getWorkforceVisibility);
+
 
 // leave encashment (employee side)
 const encashmentCtrl = require('../controllers/leaveEncashment.controller');

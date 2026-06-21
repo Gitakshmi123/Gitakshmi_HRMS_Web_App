@@ -3162,10 +3162,38 @@ const COMMON_POLICY_TEMPLATES = [
     },
     {
         id: 'maternity',
-        label: 'Maternity Leave Policy (84 Days)',
+        label: 'Maternity Leave Policy (1st & 2nd Child: 182 Days, 3rd+: 84 Days)',
         name: 'Maternity Leave Policy',
         rules: [
-            { leaveType: 'MATERNITY', totalPerYear: 84, requiresApproval: true, color: '#ec4899', carryForwardAllowed: false, maxCarryForward: 0, halfDayAllowed: false, applicableGender: 'Female', maxChildrenLimit: 2 }
+            {
+                leaveType: 'MATERNITY',
+                totalPerYear: 182,
+                requiresApproval: true,
+                color: '#ec4899',
+                carryForwardAllowed: false,
+                maxCarryForward: 0,
+                halfDayAllowed: false,
+                applicableGender: 'Female',
+                maxChildrenLimit: 0,
+                maternityChildRules: [
+                    {
+                        label: 'First and Second Child',
+                        childCountFrom: 1,
+                        childCountTo: 2,
+                        daysEntitled: 182,
+                        fullyPaid: true,
+                        preDeliveryDaysAllowed: 56
+                    },
+                    {
+                        label: 'Third Child and Beyond',
+                        childCountFrom: 3,
+                        childCountTo: null,
+                        daysEntitled: 84,
+                        fullyPaid: true,
+                        preDeliveryDaysAllowed: 0
+                    }
+                ]
+            }
         ]
     },
     {
