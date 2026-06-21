@@ -82,17 +82,21 @@ export default function EmployeeExcelUploadModal({ isOpen, onClose, onSuccess })
       if (!isNaN(d.getTime())) return d;
     }
     
-    const dateStr = String(dateVal).trim();
+    const dateStr = String(dateVal).trim().replace(/[\u200B-\u200D\uFEFF]/g, ''); // Remove zero-width spaces
     if (!dateStr) return null;
     
     // Try YYYY-MM-DD
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-      const d = new Date(dateStr + 'T00:00:00Z');
+    const matchYmd = dateStr.match(/(\d{4})[./-](\d{1,2})[./-](\d{1,2})/);
+    if (matchYmd) {
+      const year = parseInt(matchYmd[1], 10);
+      const month = parseInt(matchYmd[2], 10) - 1;
+      const day = parseInt(matchYmd[3], 10);
+      const d = new Date(Date.UTC(year, month, day));
       if (!isNaN(d.getTime())) return d;
     }
     
     // Try DD.MM.YYYY or DD/MM/YYYY or DD-MM-YYYY
-    const matchDmy = dateStr.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
+    const matchDmy = dateStr.match(/(\d{1,2})[./-](\d{1,2})[./-](\d{4})/);
     if (matchDmy) {
       const day = parseInt(matchDmy[1], 10);
       const month = parseInt(matchDmy[2], 10) - 1; // 0-indexed month
@@ -111,7 +115,7 @@ export default function EmployeeExcelUploadModal({ isOpen, onClose, onSuccess })
   const getFieldValue = (row, patterns) => {
     for (const key of Object.keys(row)) {
       const normKey = normalizeColumnName(key);
-      if (patterns.some(p => normKey === p || normKey.startsWith(p))) {
+      if (patterns.some(p => normKey === p)) {
         const val = String(row[key] || '').trim();
         if (val) return val;
       }
@@ -125,12 +129,23 @@ export default function EmployeeExcelUploadModal({ isOpen, onClose, onSuccess })
     const warnings = [];
 
     // ── Extract key fields ──────────────────────────────────────────────────
-    const firstName    = getFieldValue(row, ['firstname','first']);
-    const lastName     = getFieldValue(row, ['lastname','last']);
-    const officialEmail= getFieldValue(row, ['officialemail','email','companymailid','mailid','emailaddress']);
+    let firstName    = getFieldValue(row, ['firstname','first']);
+    let lastName     = getFieldValue(row, ['lastname','last']);
+    
+    // Fallback: If no explicit first/last name, try to split a single 'name' column
+    if (!firstName && !lastName) {
+       const fullName = getFieldValue(row, ['name', 'employeename', 'fullname', 'empname']);
+       if (fullName) {
+          const parts = fullName.trim().split(/\s+/);
+          firstName = parts[0] || '';
+          lastName = parts.slice(1).join(' ') || 'Unknown';
+       }
+    }
+    
+    const officialEmail= getFieldValue(row, ['officialemail','email','companymailid','mailid','emailaddress','emailid','loginemail','employeeemail','username','personalemail','personalemailid']);
     const joiningDate  = getFieldValue(row, ['joiningdate','joining','doj','dateofjoining']);
     const gender       = getFieldValue(row, ['gender']);
-    const dob          = getFieldValue(row, ['dateofbirth','dob','birthdate']);
+    const dob          = getFieldValue(row, ['dateofbirth','dob','birthdate','birthyear','yearofbirth','birth']);
     const contact      = getFieldValue(row, ['contactnumber','contactno','mobile','phone']);
     const bloodGroup   = getFieldValue(row, ['bloodgroup','blood']);
     const marital      = getFieldValue(row, ['maritalstatus','marital']);
@@ -140,7 +155,9 @@ export default function EmployeeExcelUploadModal({ isOpen, onClose, onSuccess })
     const dept         = getFieldValue(row, ['department','dept']);
     const grade        = getFieldValue(row, ['grade']);
     const band         = getFieldValue(row, ['band']);
-    const empType      = getFieldValue(row, ['employeetype','emptype','jobtype']);
+    let empType        = getFieldValue(row, ['employeetype','emptype','jobtype']);
+    if (!empType) empType = 'Full-Time'; // Default to Full-Time if missing
+    
     const eduType      = getFieldValue(row, ['educationtype','education']);
     const aadhar       = getFieldValue(row, ['aadharnumber','aadhar','adhaar']);
     const pan          = getFieldValue(row, ['pannumber','pan','panno']);
@@ -152,26 +169,29 @@ export default function EmployeeExcelUploadModal({ isOpen, onClose, onSuccess })
     const empId        = getFieldValue(row, ['employeeid', 'empid', 'employeecode']);
 
     // ── Required field checks ────────────────────────────────────────────────
-    if (!firstName)         errors.push('First Name is missing (Required)');
+    if (!firstName)         errors.push('First Name (or Name) is missing (Required)');
     else if (firstName.length < 2) warnings.push('First Name should be at least 2 characters');
 
-    if (!lastName)          errors.push('Last Name is missing (Required)');
+    if (!lastName)          warnings.push('Last Name is missing');
     else if (lastName.length < 2)  warnings.push('Last Name should be at least 2 characters');
 
-    if (!officialEmail)     errors.push('Official Email is missing (Required)');
+    if (!officialEmail)     warnings.push('Official Email is missing (Employee will not be able to login without an email)');
     else if (!EMAIL_REGEX.test(officialEmail)) errors.push(`Official Email format invalid: "${officialEmail}"`);
 
     // If Employee ID exists, it's an update, so password is not strictly required.
-    if (!password && !empId) {
-      errors.push('Password is missing (Required for new employees)');
+    if (!password && !empId && officialEmail) {
+      warnings.push('Password is missing (Auto-generation may fail if DOB is missing)');
     } else if (password && password.length < 6) {
       warnings.push('Password should be at least 6 characters');
     }
 
     // Joining Date
-    const parsedJoinDate = parseFlexibleDate(joiningDate);
-    if (!joiningDate)       errors.push('Joining Date is missing (Required) — use format YYYY-MM-DD');
-    else if (!parsedJoinDate) errors.push(`Joining Date format invalid: "${joiningDate}" — use YYYY-MM-DD`);
+    if (!joiningDate) {
+       warnings.push('Joining Date is missing (Will default to today)');
+    } else {
+       const parsedJoinDate = parseFlexibleDate(joiningDate);
+       if (!parsedJoinDate) errors.push(`Joining Date format invalid: "${joiningDate}" — use YYYY-MM-DD`);
+    }
 
     // Date of Birth
     if (dob) {
@@ -249,18 +269,12 @@ export default function EmployeeExcelUploadModal({ isOpen, onClose, onSuccess })
 
     // Minimum required column presence checks
     const requiredChecks = [
-      { display: 'First Name',              patterns: ['firstname','first'] },
-      { display: 'Last Name',               patterns: ['lastname','last'] },
-      { display: 'Official Email / Email',  patterns: ['officialemail','email','emailaddress','companymailid','mailid'] },
-      { display: 'Joining Date',            patterns: ['joiningdate','doj','dateofjoining','joining'] },
-      { display: 'Department',              patterns: ['department','dept'] },
-      { display: 'Employee Type',           patterns: ['employeetype','emptype','jobtype'] },
-      { display: 'Password',               patterns: ['password','pwd'] },
+      { display: 'First Name (or Name)',    patterns: ['firstname','first', 'name', 'employeename', 'fullname'] },
     ];
 
     const missingCols = [];
     requiredChecks.forEach(({ display, patterns }) => {
-      const found = normalizedAvailable.some(norm => patterns.some(p => norm === p || norm.startsWith(p)));
+      const found = normalizedAvailable.some(norm => patterns.some(p => norm === p));
       if (!found) missingCols.push(display);
     });
 
@@ -342,17 +356,78 @@ export default function EmployeeExcelUploadModal({ isOpen, onClose, onSuccess })
         const workbook = XLSX.read(data, { type: 'array', cellDates: true });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        const rawData = XLSX.utils.sheet_to_json(worksheet, { range: 1, defval: '' });
-        // The new template has [Required]/[Optional] tags in the first data row (Excel Row 3), skip it
-        const dataRows = rawData.length > 0 ? rawData.slice(1) : [];
+        const rawAoA = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+        
+        let headerRowIndex = -1;
+        const searchPatterns = [
+          'name', 'employeename', 'fullname', 'empname', 
+          'firstname', 'lastname', 'email', 'emailaddress', 
+          'companymailid', 'personalemailid', 'mailid',
+          'department', 'role', 'gender', 'dob', 'dateofbirth'
+        ];
+
+        for (let i = 0; i < rawAoA.length; i++) {
+          const row = rawAoA[i];
+          if (!Array.isArray(row)) continue;
+          
+          let matchCount = 0;
+          for (let j = 0; j < row.length; j++) {
+            const cellVal = String(row[j] || '').replace(/\([^)]*\)/g, '').trim().toLowerCase().replace(/\s/g, '').replace(/[^a-z0-9]/g, '');
+            if (searchPatterns.includes(cellVal)) {
+              matchCount++;
+            }
+          }
+          
+          // Consider it the header row if we find at least 2 matching key columns
+          if (matchCount >= 2) {
+            headerRowIndex = i;
+            break;
+          }
+        }
+
+        if (headerRowIndex === -1) {
+          setUploadErrors(['Could not find valid headers (like First Name, Email) in the Excel file. Please use the downloaded template.']);
+          setUploadedFile(null);
+          return;
+        }
+
+        const headers = rawAoA[headerRowIndex].map(h => String(h || '').trim());
+        const dataRows = [];
+        
+        for (let i = headerRowIndex + 1; i < rawAoA.length; i++) {
+          const rowArr = rawAoA[i];
+          // Skip completely empty rows
+          if (!rowArr || rowArr.length === 0 || rowArr.every(cell => !String(cell).trim())) continue;
+
+          // Skip template instruction rows
+          const instructionKeywords = ['required', 'optional', 'mandatory', 'yyyy-mm-dd'];
+          let instructionCellCount = 0;
+          
+          for (const cell of rowArr) {
+             const str = String(cell || '').trim().toLowerCase();
+             if (instructionKeywords.some(kw => str.includes(kw))) {
+                 instructionCellCount++;
+             }
+          }
+          
+          if (instructionCellCount >= 2) continue; // It's an instruction row
+          
+          const obj = {};
+          for (let j = 0; j < Math.max(headers.length, rowArr.length); j++) {
+             const key = headers[j] ? headers[j] : `__EMPTY_${j}`;
+             obj[key] = rowArr[j] !== undefined ? rowArr[j] : '';
+          }
+          dataRows.push(obj);
+        }
 
         // Filter out blank/non-employee rows (e.g. rows with only a serial number or blank padding)
         const jsonData = dataRows.filter(row => {
           if (!row || typeof row !== 'object') return false;
           const identityPatterns = [
             'name', 'employeename', 'fullname', 'empname', 
-            'firstname', 'lastname', 'email', 'emailaddress', 
-            'companymailid', 'personalemailid', 'mailid'
+            'firstname', 'lastname', 'email', 'emailaddress', 'emailid', 
+            'companymailid', 'personalemailid', 'mailid', 'loginemail', 'employeeemail', 'username',
+            'employeeid', 'empid', 'employeecode', 'empcode'
           ];
           for (const key of Object.keys(row)) {
             const normKey = String(key)
@@ -366,6 +441,90 @@ export default function EmployeeExcelUploadModal({ isOpen, onClose, onSuccess })
             }
           }
           return false;
+        }).map(row => {
+          let fnKey, lnKey, dobKey, pwdKey, emailKey, nameKey, empIdKey;
+          let emailCandidates = [];
+          for (const key of Object.keys(row)) {
+             const normKey = normalizeColumnName(key);
+             if (['firstname', 'first'].includes(normKey)) fnKey = key;
+             if (['lastname', 'last'].includes(normKey)) lnKey = key;
+             if (['name', 'employeename', 'fullname'].includes(normKey)) nameKey = key;
+             if (['dateofbirth', 'dob', 'birthdate', 'birthyear', 'yearofbirth', 'birth'].includes(normKey)) dobKey = key;
+             if (['password', 'pwd'].includes(normKey)) pwdKey = key;
+             if (['officialemail', 'email', 'companymailid', 'mailid', 'emailaddress', 'emailid', 'loginemail', 'employeeemail', 'username', 'personalemail', 'personalemailid'].includes(normKey)) {
+                emailCandidates.push(key);
+             }
+             if (['employeeid', 'empid', 'employeecode', 'empcode'].includes(normKey)) empIdKey = key;
+          }
+          
+          let password = '';
+          let fn = row[fnKey] ? String(row[fnKey]).trim() : '';
+          let ln = row[lnKey] ? String(row[lnKey]).trim() : '';
+          
+          if (!fn && !ln && nameKey && row[nameKey]) {
+             const parts = String(row[nameKey]).trim().split(/\s+/);
+             fn = parts[0] || '';
+             ln = parts.slice(1).join(' ') || 'Unknown';
+          }
+          
+          const dob = row[dobKey] ? String(row[dobKey]).trim() : '';
+          
+          if (!password && dobKey && row[dobKey]) {
+             const dobStr = String(row[dobKey]).trim();
+             const dateObj = parseFlexibleDate(dobStr);
+             const birthYearStr = dateObj ? dateObj.getFullYear().toString() : '2026';
+             
+             let word1 = fn;
+             let word2 = ln;
+             
+             if (!fn && nameKey && row[nameKey]) {
+                const nameStr = String(row[nameKey]).trim();
+                const parts = nameStr.split(/\s+/);
+                word1 = parts[0] || '';
+                word2 = parts.length > 1 ? parts[1] : '';
+             }
+             
+             const w1_3 = word1.substring(0, 3).toLowerCase();
+             const w2_3 = word2.substring(0, 3).toLowerCase();
+             
+             password = `${w1_3}${w2_3}@${birthYearStr}`;
+          }
+          if (!pwdKey) pwdKey = 'Password';
+          if (!emailKey) emailKey = 'Official Email';
+          
+          if (password) {
+             row[pwdKey] = password;
+          }
+          
+          // Find the first email candidate that has a non-empty value
+          let finalEmail = '';
+          for (const key of emailCandidates) {
+             if (row[key] && String(row[key]).trim()) {
+                finalEmail = String(row[key]).trim();
+                emailKey = key;
+                break;
+             }
+          }
+          
+          if (!finalEmail) {
+             const empCodeStr = row[empIdKey] ? String(row[empIdKey]).trim().toLowerCase() : '';
+             if (empCodeStr) {
+                finalEmail = `${empCodeStr}@gitakshmi.com`;
+             } else if (fn) {
+                finalEmail = `${fn.toLowerCase()}.${ln.toLowerCase().replace(/\s/g, '')}@gitakshmi.com`;
+             }
+             if (emailKey) row[emailKey] = finalEmail;
+             else {
+                emailKey = 'Official Email';
+                row[emailKey] = finalEmail;
+             }
+          }
+          
+          row._generatedEmail = finalEmail;
+          row._generatedPassword = password;
+          row._generatedName = `${fn} ${ln}`.trim();
+          row._generatedEmpCode = row[empIdKey] || 'Auto-generated';
+          return row;
         });
 
         if (jsonData.length === 0) {
@@ -466,7 +625,12 @@ export default function EmployeeExcelUploadModal({ isOpen, onClose, onSuccess })
             : '0.00',
           errors: res.data.errors || [],
           warnings: res.data.warnings || [],
-          autoGeneratedIds: res.data.autoGeneratedIds || []
+          autoGeneratedIds: res.data.autoGeneratedIds || [],
+          generatedCredentials: uploadedData.allData.map(emp => ({
+            name: emp._generatedName,
+            email: emp._generatedEmail,
+            password: emp._generatedPassword
+          }))
         };
 
         setUploadResult(result);
@@ -584,6 +748,30 @@ export default function EmployeeExcelUploadModal({ isOpen, onClose, onSuccess })
                   )}
                 </div>
               </div>
+            </div>
+          )}
+
+          {uploadResult.uploadedCount > 0 && uploadResult.generatedCredentials && uploadResult.generatedCredentials.length > 0 && (
+            <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-3 mb-4 text-left max-h-48 overflow-y-auto">
+              <p className="text-xs font-black text-slate-700 dark:text-slate-300 mb-2">🔐 Generated Credentials</p>
+              <table className="w-full text-xs text-left">
+                 <thead>
+                    <tr className="border-b border-slate-200 dark:border-slate-700 text-slate-500">
+                       <th className="pb-1 font-semibold">Emp Code</th>
+                       <th className="pb-1 font-semibold">Email</th>
+                       <th className="pb-1 font-semibold">Password</th>
+                    </tr>
+                 </thead>
+                 <tbody>
+                    {uploadResult.generatedCredentials.map((cred, idx) => (
+                       <tr key={idx} className="border-b border-slate-100 dark:border-slate-700/50 last:border-0 text-slate-600 dark:text-slate-400">
+                          <td className="py-1.5">{cred.name || 'Unknown'}</td>
+                          <td className="py-1.5">{cred.email || 'N/A'}</td>
+                          <td className="py-1.5 font-mono">{cred.password || 'N/A'}</td>
+                       </tr>
+                    ))}
+                 </tbody>
+              </table>
             </div>
           )}
 
@@ -764,6 +952,36 @@ export default function EmployeeExcelUploadModal({ isOpen, onClose, onSuccess })
               </div>
             )}
           </div>
+
+          {/* Data Preview */}
+          {uploadedFile && uploadedData?.allData?.length > 0 && uploadErrors.length === 0 && (
+            <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+              <p className="text-xs font-black text-slate-700 dark:text-slate-300 mb-3 flex justify-between items-center">
+                <span className="uppercase tracking-widest">🔐 Extracted Credentials</span>
+                <span className="text-[10px] bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full font-semibold">{uploadedData.allData.length} records</span>
+              </p>
+              <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+                <table className="w-full text-xs text-left">
+                   <thead className="bg-slate-50 dark:bg-slate-800/50 sticky top-0">
+                      <tr className="border-b border-slate-200 dark:border-slate-700 text-slate-500">
+                         <th className="px-3 py-2 font-semibold">Emp Code</th>
+                         <th className="px-3 py-2 font-semibold">Email</th>
+                         <th className="px-3 py-2 font-semibold">Password</th>
+                      </tr>
+                   </thead>
+                   <tbody>
+                      {uploadedData.allData.map((emp, idx) => (
+                         <tr key={idx} className="border-b border-slate-100 dark:border-slate-800 last:border-0 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+                            <td className="px-3 py-2 font-medium">{emp._generatedEmpCode}</td>
+                            <td className="px-3 py-2">{emp._generatedEmail || 'N/A'}</td>
+                            <td className="px-3 py-2 font-mono text-blue-600 dark:text-blue-400">{emp._generatedPassword || 'N/A'}</td>
+                         </tr>
+                      ))}
+                   </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           {/* Error Messages */}
           {uploadErrors.length > 0 && (

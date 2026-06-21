@@ -177,6 +177,7 @@ export default function EmployeeForm({
   const [ifscLoading, setIfscLoading] = useState(false);
   const [passwordLock, setPasswordLock] = useState(!!employee?._id);
   const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
+  const [passwordEdited, setPasswordEdited] = useState(false);
 
   // Reset password input whenever switching to an existing employee record
   // (we must not attempt to show hashed password).
@@ -190,6 +191,24 @@ export default function EmployeeForm({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [employee?._id]);
+
+  // Auto-generate password based on firstName, lastName, and dob
+  useEffect(() => {
+    if (!passwordLock && !employee?._id && !passwordEdited) {
+      if (firstName && lastName && dob) {
+        const fn3 = firstName.substring(0, 3).toLowerCase();
+        const ln3 = lastName.substring(0, 3).toLowerCase();
+        const year = dob.split('-')[0];
+        if (fn3 && ln3 && year) {
+          setPassword(`${ln3}${fn3}@${year}`);
+        } else {
+          setPassword('');
+        }
+      } else {
+        setPassword('');
+      }
+    }
+  }, [firstName, lastName, dob, passwordLock, employee?._id, passwordEdited]);
 
   // Payroll / Compensation State (Step 10)
   const [salaryTemplateId, setSalaryTemplateId] = useState(employee?.salaryTemplateId?._id || employee?.salaryTemplateId || '');
@@ -2892,7 +2911,12 @@ export default function EmployeeForm({
                         <input
                           type={showPassword ? "text" : "password"}
                           value={passwordLock ? "••••••••••••" : password}
-                          onChange={e => !passwordLock && setPassword(e.target.value)}
+                          onChange={e => {
+                            if (!passwordLock) {
+                              setPassword(e.target.value);
+                              setPasswordEdited(e.target.value !== '');
+                            }
+                          }}
                           onFocus={() => { if (passwordLock) setShowPasswordConfirm(true); }}
                           readOnly={passwordLock}
                           className={`w-full pl-5 pr-20 py-3 bg-transparent dark:bg-slate-900/50 border-2 rounded-xl outline-none transition-all text-sm font-bold tracking-[0.2em] text-slate-700 dark:text-slate-200 ${errors.password ? 'border-rose-200' : 'border-slate-100 dark:border-slate-800'} ${passwordLock ? 'cursor-not-allowed bg-slate-100/50 dark:bg-slate-950/50' : ''}`}

@@ -19,6 +19,7 @@ import {
     ArrowLeft
 } from 'lucide-react';
 import CareerPreview from '../HR/CareerBuilder/CareerPreview';
+import GitakshmiLogo from '../../assets/gitakshmi-hr-logo.svg';
 
 export default function JobsList() {
     const [searchParams] = useSearchParams();
@@ -358,15 +359,23 @@ export default function JobsList() {
                                     )}
                                 </div>
                             ) : (
-                                <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-lg shadow-blue-100">
-                                    <Briefcase size={20} />
+                                <div 
+                                    style={{ height: `${logoHeight}px` }}
+                                    className="rounded-xl overflow-hidden bg-slate-50 border border-slate-100 flex items-center justify-center shadow-md p-1.5"
+                                >
+                                    <img 
+                                        src={GitakshmiLogo} 
+                                        alt="Logo" 
+                                        style={{ height: '100%', width: 'auto' }}
+                                        className="object-contain" 
+                                    />
                                 </div>
                             )}
                             <span 
                                 style={{ color: customization?.theme?.companyNameColor || '#111827' }}
                                 className="text-xl font-black tracking-tight"
                             >
-                                {finalCompanyName}
+                                {finalCompanyName === companyCode ? 'Careers' : finalCompanyName}
                             </span>
                         </div>
 
