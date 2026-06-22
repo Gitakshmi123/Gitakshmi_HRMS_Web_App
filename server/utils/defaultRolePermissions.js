@@ -133,13 +133,14 @@ const HR_PERMS = buildPerms({
  * employee: minimal — own data only + core ESS pages
  */
 const EMPLOYEE_PERMS = buildPerms({
-  'employee.dashboard':   actions(['view']),
-  'employee.attendance':  actions(['view']),
-  'employee.payslips':    actions(['view']),
-  'employee.documents':   actions(['view']),
-  'employee.jobs':        actions(['view']),
-  'employee.tickets':     actions(['view', 'create']),
-  'employee.exit':        actions(['view', 'create']),
+  'employee.dashboard':   actions(['view', 'create', 'edit', 'delete']),
+  'employee.attendance':  actions(['view', 'create', 'edit', 'delete']),
+  'employee.payslips':    actions(['view', 'create', 'edit', 'delete']),
+  'employee.documents':   actions(['view', 'create', 'edit', 'delete']),
+  'employee.jobs':        actions(['view', 'create', 'edit', 'delete']),
+  'employee.tickets':     actions(['view', 'create', 'edit', 'delete']),
+  'employee.exit':        actions(['view', 'create', 'edit', 'delete']),
+  'employee.manpowerRequisition': actions(['view', 'create', 'edit', 'delete']),
   'overview.dashboard':   actions(['view']), // basic view only
   'onboarding.dashboard': actions(['view']),
   'onboarding.tasks': actions(['view', 'edit']),
@@ -151,12 +152,12 @@ const EMPLOYEE_PERMS = buildPerms({
  * manager: employee + team management
  */
 const MANAGER_PERMS = buildPerms({
-  'employee.dashboard':   actions(['view']),
-  'employee.attendance':  actions(['view']),
-  'employee.payslips':    actions(['view']),
-  'employee.documents':   actions(['view']),
-  'employee.jobs':        actions(['view']),
-  'employee.tickets':     actions(['view', 'create']),
+  'employee.dashboard':   actions(['view', 'create', 'edit', 'delete']),
+  'employee.attendance':  actions(['view', 'create', 'edit', 'delete']),
+  'employee.payslips':    actions(['view', 'create', 'edit', 'delete']),
+  'employee.documents':   actions(['view', 'create', 'edit', 'delete']),
+  'employee.jobs':        actions(['view', 'create', 'edit', 'delete']),
+  'employee.tickets':     actions(['view', 'create', 'edit', 'delete']),
   'attendance.dashboard': actions(['view', 'edit']),
   'attendance.calendar':  actions(['view']),
   'leave.requests':       actions(['view', 'create', 'edit']),
