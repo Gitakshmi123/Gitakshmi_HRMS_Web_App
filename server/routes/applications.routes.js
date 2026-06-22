@@ -5,9 +5,16 @@ const auth = require('../middleware/auth.jwt');
 const workflowController = require('../controllers/recruitment.workflow.controller');
 const { validateHiringFlow, isStrictHiringStatus } = require('../utils/validateHiringFlow');
 const applicantCtrl = require('../controllers/applicant.controller');
+const externalRecordCtrl = require('../controllers/externalEmployeeRecord.controller');
 
 // Same auth behavior as recruitment workflow routes
 router.use(auth.authenticate);
+
+// External employee records created from candidate document upload tokens.
+router.get('/external-records/list', externalRecordCtrl.list);
+router.post('/external-records/:id/approve', externalRecordCtrl.approve);
+router.post('/external-records/:id/reject', externalRecordCtrl.reject);
+router.post('/external-records/:id/request-changes', externalRecordCtrl.requestChanges);
 
 // GET /api/applications/:id — Fetch single application with status
 router.get('/:id', applicantCtrl.getApplicantById);

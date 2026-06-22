@@ -498,13 +498,21 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
     };
 
     const canGenerateOffer = (app) => {
-        // Strict: only from INTERVIEW stage
-        if (!isInterviewStage(app)) return false;
-        // Block if offer already active/pending/accepted/signed
+        const status = String(app?.status || '');
+        const hasApprovedDraft = Boolean(app?.employeeId) && ['Draft Employee', 'Document Verified', 'Profile Approved'].includes(status);
+        if (!hasApprovedDraft) return false;
         if (isOfferPendingStage(app) || isOfferAcceptedStage(app) || isOfferSignedStage(app)) return false;
         // Block if documents not approved
         if (app.documentRequestStatus !== 'Approved') return false;
         return true;
+    };
+
+    const canSendDocuments = (app) => {
+        const status = String(app?.status || '');
+        const stage = String(app?.currentStage?.stageName || '').toLowerCase();
+        return (status === 'Finalized' || status === 'Selected' || stage === 'finalized')
+            && !app?.employeeId
+            && !['Document Requested', 'Document Draft Saved', 'Profile Submitted', 'Draft Employee'].includes(status);
     };
 
     const canIssueJoining = (app) => {
@@ -4355,6 +4363,24 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
                                                                         )}
                                                                     </div>
                                                                 </div>
+                                                            ) : canSendDocuments(app) ? (
+                                                                <button
+                                                                    onClick={async (e) => {
+                                                                        e.stopPropagation();
+                                                                        try {
+                                                                            const res = await api.post(`/applications/${app._id}/request-documents`);
+                                                                            if (res.data.success) {
+                                                                                showToast('success', 'Documents Sent', 'Candidate has been notified to complete their employment profile.');
+                                                                                loadApplicants();
+                                                                            }
+                                                                        } catch (err) {
+                                                                            showToast('error', 'Request Failed', err.response?.data?.message || 'Failed to send documents');
+                                                                        }
+                                                                    }}
+                                                                    className="w-full lg:w-auto px-6 py-2.5 text-[10px] font-black rounded-2xl transition-all shadow-lg dark:shadow-none uppercase tracking-widest bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-100"
+                                                                >
+                                                                    Send Documents
+                                                                </button>
                                                             ) : (
                                                               <div className="flex flex-col gap-2 w-full lg:w-auto">
                                                                 {app.documentRequestStatus !== 'Approved' && (
@@ -5865,7 +5891,7 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
                                     >
                                         <Download size={16} /> Download Resume
                                     </button>
-                                    {(selectedApplicant.status === 'Applied' || selectedApplicant.status === 'Shortlisted') && (
+                                    {canSendDocuments(selectedApplicant) && (
                                         <button
                                             onClick={async () => {
                                                 try {
@@ -5880,7 +5906,7 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
                                             }}
                                             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm flex items-center gap-2 shadow-sm transition"
                                         >
-                                            <FileText size={16} /> Request Profile & Documents
+                                            <FileText size={16} /> Send Documents
                                         </button>
                                     )}
                                     {selectedApplicant.status === 'Profile Submitted' && (

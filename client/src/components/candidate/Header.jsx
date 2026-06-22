@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate, NavLink, useLocation } from 'react-router-dom';
 import { useJobPortalAuth } from '../../context/JobPortalAuthContext';
 import { getCompany } from '../../utils/auth';
-import { ArrowLeft, LogOut, User as UserIcon, LayoutDashboard, Briefcase, FileText, User } from 'lucide-react';
+import { ArrowLeft, LogOut, User as UserIcon, LayoutDashboard, Briefcase, FileText, User, UploadCloud } from 'lucide-react';
 import CandidateNotificationDropdown from './CandidateNotificationDropdown';
 
 export default function Header() {
@@ -40,6 +40,7 @@ export default function Header() {
         { name: 'Open Positions', path: '/candidate/open-positions', icon: Briefcase },
         { name: 'My Applications', path: '/candidate/applications', icon: FileText },
         { name: 'My Profile', path: '/candidate/profile', icon: User },
+        { name: 'Upload Documents', path: '/candidate/upload-documents', icon: UploadCloud },
     ];
 
     return (

@@ -196,6 +196,7 @@ export default function EmployeeForm({
   const [managers, setManagers] = useState([]);
   const [_departmentHead, _setDepartmentHead] = useState(employee?.departmentHead || false);
   const [saving, setSaving] = useState(false);
+  const externalAutoSaveRef = useRef(null);
   const [errors, setErrors] = useState({});
   const [showPassword, setShowPassword] = useState(false);
   const [pincodeLoading, setPincodeLoading] = useState(false);
@@ -740,6 +741,9 @@ export default function EmployeeForm({
 
   const ensureDepartmentForSave = useCallback(async () => {
     const typedName = normalizeDepartmentName(department);
+    if (externalMode) {
+      return { department: typedName || undefined, departmentId: undefined };
+    }
     const existingById = departments.find((dept) => String(dept?._id || dept || '') === String(departmentId || ''));
     const existingByName = departments.find((dept) => {
       const deptName = normalizeDepartmentName(typeof dept === 'string' ? dept : dept?.name);
@@ -798,7 +802,7 @@ export default function EmployeeForm({
     setDepartmentId('');
     setDepartment(typedName);
     return { department: typedName, departmentId: undefined };
-  }, [department, departmentId, departments, makeDepartmentCode, normalizeDepartmentName]);
+  }, [department, departmentId, departments, externalMode, makeDepartmentCode, normalizeDepartmentName]);
 
   // Fetch employees for manager dropdown
   const loadManagers = useCallback(async () => {
@@ -1637,7 +1641,7 @@ export default function EmployeeForm({
 
 
       // If employee is marked as "Dep Head", update the department's head field
-      if (role === 'Dep Head' && departmentId) {
+      if (!externalMode && role === 'Dep Head' && departmentId) {
         const empId = empResult?.data?.data?._id || empResult?.data?._id || employee?._id;
         if (empId) {
           await api.put(`/hr/departments/${departmentId}`, { head: empId })
@@ -1669,7 +1673,7 @@ export default function EmployeeForm({
     }
   }
 
-  async function saveDraft(e) {
+  async function saveDraft(e, options = {}) {
     if (e) e.preventDefault();
     const uploadEndpoint = isExternal ? `/public/candidate-documents/upload/${token}` : '/uploads/doc';
     setSaving(true);
@@ -1858,7 +1862,9 @@ export default function EmployeeForm({
         draftResponse = await api.post('/hr/employees', payload);
       }
       const savedDraft = draftResponse?.data?.data || draftResponse?.data || null;
-      showToast('success', 'Success', 'Draft saved successfully!');
+      if (!options.silent) {
+        showToast('success', 'Success', 'Draft saved successfully!');
+      }
       if (savedDraft && onDraftSaved) {
         onDraftSaved(savedDraft);
       }
