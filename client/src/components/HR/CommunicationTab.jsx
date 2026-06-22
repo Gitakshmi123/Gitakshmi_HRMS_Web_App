@@ -6,7 +6,7 @@ import { TabularContainer, TabularRow, TabularField } from './TabularForm';
  * Tab 3: Communication & Emergency — Primary phone, Address (temp/perm), Emergency contact.
  * Uses existing form state; no logic change.
  */
-export default function CommunicationTab({
+const CommunicationTab = React.memo(function CommunicationTab({
   contactNo,
   setContactNo,
   emergencyContactName,
@@ -242,4 +242,6 @@ export default function CommunicationTab({
 
     </div>
   );
-}
+});
+
+export default CommunicationTab;

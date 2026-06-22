@@ -53,7 +53,7 @@ export default function JobPortalLayout() {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans flex flex-col selection:bg-indigo-100 selection:text-indigo-600">
+    <div className="h-screen overflow-hidden bg-slate-50 font-sans flex flex-col selection:bg-indigo-100 selection:text-indigo-600">
       {/* LUXURY TOP HEADER */}
       <header className="h-16 bg-white/80 backdrop-blur-xl border-b border-gray-100 flex items-center justify-between px-6 lg:px-10 sticky top-0 z-50 shadow-sm">
         <div className="flex items-center gap-6 min-w-0">

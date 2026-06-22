@@ -112,7 +112,7 @@ export default function FormulaBuilder({ onSave, initialData, leaveTypes = [] })
     };
 
     return (
-        <div className="bg-slate-50 border border-slate-200 rounded-[20px] overflow-hidden shadow-sm flex h-[850px] font-sans text-slate-800">
+        <div className="bg-slate-50 border border-slate-200 rounded-[20px] overflow-hidden shadow-sm flex h-full font-sans text-slate-800">
             
             {/* LEFT PANEL: Policy Designer */}
             <div className="flex-1 flex flex-col overflow-y-auto custom-scrollbar bg-white">
@@ -300,7 +300,7 @@ export default function FormulaBuilder({ onSave, initialData, leaveTypes = [] })
                     <hr className="border-slate-200 my-8"/>
 
                     {/* Advanced Custom Rules (Exceptions) */}
-                    <div className="space-y-4">
+                    <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
                         <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2"><Settings size={16} className="text-slate-500"/> Advanced Custom Rules</h3>
                         
                         {customRules.map((rule, idx) => (

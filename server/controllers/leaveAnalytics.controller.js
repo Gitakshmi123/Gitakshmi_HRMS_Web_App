@@ -145,37 +145,34 @@ exports.getLeaveBalanceAnalytics = async (req, res) => {
             employee: { $in: empIds }
         }).lean();
 
-        // 4. Aggregate department-wise CL, SL, EL
-        const deptBalances = {}; // { IT: { CL: 0, SL: 0, EL: 0 } }
+        // 4. Aggregate department-wise balances dynamically
+        const deptBalances = {};
+        const allLeaveTypes = new Set();
+        
         balances.forEach(bal => {
             const empIdStr = bal.employee.toString();
             const dept = empDeptMap.get(empIdStr) || 'Unassigned';
-            const leaveType = String(bal.leaveType || '').toUpperCase().trim();
+            const leaveType = String(bal.leaveType || 'Others').trim();
+            allLeaveTypes.add(leaveType);
 
             if (!deptBalances[dept]) {
-                deptBalances[dept] = { CL: 0, SL: 0, EL: 0, Others: 0 };
+                deptBalances[dept] = {};
             }
-
-            if (leaveType === 'CL') {
-                deptBalances[dept].CL += bal.available || 0;
-            } else if (leaveType === 'SL' || leaveType === 'SICK LEAVE') {
-                deptBalances[dept].SL += bal.available || 0;
-            } else if (leaveType === 'EL' || leaveType === 'EARNED LEAVE' || leaveType === 'PL' || leaveType === 'PRIVILEGE LEAVE') {
-                deptBalances[dept].EL += bal.available || 0;
-            } else {
-                deptBalances[dept].Others += bal.available || 0;
+            if (!deptBalances[dept][leaveType]) {
+                deptBalances[dept][leaveType] = 0;
             }
+            deptBalances[dept][leaveType] += bal.available || 0;
         });
 
-        const formatted = Object.keys(deptBalances).map(dept => ({
-            department: dept,
-            CL: Number(deptBalances[dept].CL.toFixed(2)),
-            SL: Number(deptBalances[dept].SL.toFixed(2)),
-            EL: Number(deptBalances[dept].EL.toFixed(2)),
-            Others: Number(deptBalances[dept].Others.toFixed(2))
-        }));
+        const formatted = Object.keys(deptBalances).map(dept => {
+            const result = { department: dept };
+            allLeaveTypes.forEach(type => {
+                result[type] = Number((deptBalances[dept][type] || 0).toFixed(2));
+            });
+            return result;
+        });
 
-        res.json(formatted);
+        res.json({ data: formatted, columns: Array.from(allLeaveTypes) });
     } catch (e) {
         console.error('getLeaveBalanceAnalytics Error:', e);
         res.status(500).json({ error: e.message });
@@ -426,12 +423,29 @@ exports.getSickLeaveAnalysis = async (req, res) => {
         const startDate = new Date(year, 0, 1);
         const endDate = new Date(year, 11, 31, 23, 59, 59);
 
+        // Dynamically find Sick Leave types
+        const LeavePolicy = req.tenantDB.model('LeavePolicy');
+        const policies = await LeavePolicy.find({ tenant: tenantId }).lean();
+        const sickLeaveTypes = new Set();
+        policies.forEach(p => {
+            (p.rules || []).forEach(r => {
+                const typeUpper = String(r.leaveType || '').toUpperCase();
+                if (typeUpper.includes('SICK') || typeUpper === 'SL' || r.medicalCertRequiredAfterDays > 0 || r.medicalCertificateMandatoryAfterDays > 0) {
+                    sickLeaveTypes.add(r.leaveType);
+                }
+            });
+        });
+        const sickLeaveArray = Array.from(sickLeaveTypes);
+        if (sickLeaveArray.length === 0) {
+            sickLeaveArray.push('SL', 'Sick Leave', 'SICK LEAVE'); // Fallback
+        }
+
         const aggregate = await LeaveRequest.aggregate([
             {
                 $match: {
                     tenant: tenantId,
                     status: 'Approved',
-                    leaveType: { $in: ['SL', 'Sick Leave', 'SICK LEAVE'] },
+                    leaveType: { $in: sickLeaveArray },
                     startDate: { $gte: startDate, $lte: endDate }
                 }
             },
@@ -487,12 +501,26 @@ exports.getLeaveLiability = async (req, res) => {
 
         const activeEmpIds = activeEmployees.map(e => e._id);
 
+        // Dynamically find Encashable Leave types
+        const LeavePolicy = req.tenantDB.model('LeavePolicy');
+        const policies = await LeavePolicy.find({ tenant: tenantId }).lean();
+        const encashableLeaveTypes = new Set();
+        policies.forEach(p => {
+            (p.rules || []).forEach(r => {
+                if (r.encashmentAllowed) encashableLeaveTypes.add(r.leaveType);
+            });
+        });
+        const encashableArray = Array.from(encashableLeaveTypes);
+        if (encashableArray.length === 0) {
+            encashableArray.push('EL', 'PL', 'Earned Leave', 'Privilege Leave', 'EARNED LEAVE', 'PRIVILEGE LEAVE'); // Fallback
+        }
+
         // Liability is typically calculated on Privilege / Earned Leaves (EL/PL)
         const balances = await LeaveBalance.find({
             tenant: tenantId,
             year,
             employee: { $in: activeEmpIds },
-            leaveType: { $in: ['EL', 'PL', 'Earned Leave', 'Privilege Leave', 'EARNED LEAVE', 'PRIVILEGE LEAVE'] }
+            leaveType: { $in: encashableArray }
         }).lean();
 
         const totalELDays = balances.reduce((sum, bal) => sum + (bal.available || 0), 0);
@@ -522,7 +550,7 @@ exports.getLeaveLiability = async (req, res) => {
                 tenant: tenantId,
                 year,
                 employee: { $in: empIds },
-                leaveType: { $in: ['EL', 'PL', 'Earned Leave', 'Privilege Leave', 'EARNED LEAVE', 'PRIVILEGE LEAVE'] },
+                leaveType: { $in: encashableArray },
                 actionType: 'Accrual'
             }).lean();
 
@@ -793,65 +821,50 @@ exports.getEmployeeLeaveSummary = async (req, res) => {
         }).lean();
 
         const empBalancesMap = new Map();
+        const allLeaveTypes = new Set();
+
         balances.forEach(bal => {
             const empIdStr = bal.employee.toString();
-            const leaveType = String(bal.leaveType || '').toUpperCase().trim();
-            
+            const leaveType = String(bal.leaveType || 'Others').trim();
+            allLeaveTypes.add(leaveType);
+
             if (!empBalancesMap.has(empIdStr)) {
-                empBalancesMap.set(empIdStr, {
-                    CL: { total: 0, used: 0, available: 0 },
-                    SL: { total: 0, used: 0, available: 0 },
-                    EL: { total: 0, used: 0, available: 0 },
-                    Others: { total: 0, used: 0, available: 0 }
-                });
+                empBalancesMap.set(empIdStr, {});
             }
 
             const data = empBalancesMap.get(empIdStr);
-            let category = 'Others';
-            if (leaveType === 'CL') category = 'CL';
-            else if (leaveType === 'SL' || leaveType === 'SICK LEAVE') category = 'SL';
-            else if (leaveType === 'EL' || leaveType === 'EARNED LEAVE' || leaveType === 'PL' || leaveType === 'PRIVILEGE LEAVE') category = 'EL';
+            if (!data[leaveType]) {
+                data[leaveType] = { total: 0, used: 0, available: 0 };
+            }
 
-            data[category].total += bal.total || 0;
-            data[category].used += bal.used || 0;
-            data[category].available += bal.available || 0;
+            data[leaveType].total += bal.total || 0;
+            data[leaveType].used += bal.used || 0;
+            data[leaveType].available += bal.available || 0;
         });
 
         const formatted = employees.map(emp => {
             const empIdStr = emp._id.toString();
-            const b = empBalancesMap.get(empIdStr) || {
-                CL: { total: 0, used: 0, available: 0 },
-                SL: { total: 0, used: 0, available: 0 },
-                EL: { total: 0, used: 0, available: 0 },
-                Others: { total: 0, used: 0, available: 0 }
-            };
+            const b = empBalancesMap.get(empIdStr) || {};
 
-            return {
+            const result = {
                 _id: emp._id,
                 employeeName: `${emp.firstName || ''} ${emp.lastName || ''}`.trim(),
                 employeeId: emp.employeeId || '—',
                 department: emp.departmentId?.name || emp.department || '—',
                 branch: emp.branchId?.name || '—',
-                
-                clAllocated: Number(b.CL.total.toFixed(2)),
-                clUsed: Number(b.CL.used.toFixed(2)),
-                clAvailable: Number(b.CL.available.toFixed(2)),
-
-                slAllocated: Number(b.SL.total.toFixed(2)),
-                slUsed: Number(b.SL.used.toFixed(2)),
-                slAvailable: Number(b.SL.available.toFixed(2)),
-
-                elAllocated: Number(b.EL.total.toFixed(2)),
-                elUsed: Number(b.EL.used.toFixed(2)),
-                elAvailable: Number(b.EL.available.toFixed(2)),
-
-                othersAllocated: Number(b.Others.total.toFixed(2)),
-                othersUsed: Number(b.Others.used.toFixed(2)),
-                othersAvailable: Number(b.Others.available.toFixed(2))
             };
+
+            allLeaveTypes.forEach(type => {
+                const bal = b[type] || { total: 0, used: 0, available: 0 };
+                result[`${type} Allocated`] = Number(bal.total.toFixed(2));
+                result[`${type} Used`] = Number(bal.used.toFixed(2));
+                result[`${type} Available`] = Number(bal.available.toFixed(2));
+            });
+
+            return result;
         });
 
-        res.json(formatted);
+        res.json({ data: formatted, columns: Array.from(allLeaveTypes) });
     } catch (e) {
         console.error('getEmployeeLeaveSummary Error:', e);
         res.status(500).json({ error: e.message });
@@ -1006,29 +1019,26 @@ exports.getMasterLeaveReport = async (req, res) => {
 
         // Sheet 3: Employee Leave Balance dataset (grouped by employee)
         const empBalancesMap = new Map();
+        const allLeaveTypes = new Set();
+        
         balances.forEach(bal => {
             const empIdStr = bal.employee.toString();
-            const leaveType = String(bal.leaveType || '').toUpperCase().trim();
+            const leaveType = String(bal.leaveType || 'Others').trim();
+            allLeaveTypes.add(leaveType);
             
             if (!empBalancesMap.has(empIdStr)) {
-                empBalancesMap.set(empIdStr, {
-                    CL: { total: 0, used: 0, pending: 0, available: 0 },
-                    SL: { total: 0, used: 0, pending: 0, available: 0 },
-                    EL: { total: 0, used: 0, pending: 0, available: 0 },
-                    Others: { total: 0, used: 0, pending: 0, available: 0 }
-                });
+                empBalancesMap.set(empIdStr, {});
             }
 
             const data = empBalancesMap.get(empIdStr);
-            let category = 'Others';
-            if (leaveType === 'CL') category = 'CL';
-            else if (leaveType === 'SL' || leaveType === 'SICK LEAVE') category = 'SL';
-            else if (leaveType === 'EL' || leaveType === 'EARNED LEAVE' || leaveType === 'PL' || leaveType === 'PRIVILEGE LEAVE') category = 'EL';
+            if (!data[leaveType]) {
+                data[leaveType] = { total: 0, used: 0, pending: 0, available: 0 };
+            }
 
-            data[category].total += bal.total || 0;
-            data[category].used += bal.used || 0;
-            data[category].pending += bal.pending || 0;
-            data[category].available += bal.available || 0;
+            data[leaveType].total += bal.total || 0;
+            data[leaveType].used += bal.used || 0;
+            data[leaveType].pending += bal.pending || 0;
+            data[leaveType].available += bal.available || 0;
         });
 
         const employeeBalance = [];
@@ -1036,35 +1046,24 @@ exports.getMasterLeaveReport = async (req, res) => {
             const empIdStr = emp._id.toString();
             const hasBalances = balances.some(b => String(b.employee) === empIdStr);
             if (hasBalances) {
-                const b = empBalancesMap.get(empIdStr) || {
-                    CL: { total: 0, used: 0, pending: 0, available: 0 },
-                    SL: { total: 0, used: 0, pending: 0, available: 0 },
-                    EL: { total: 0, used: 0, pending: 0, available: 0 },
-                    Others: { total: 0, used: 0, pending: 0, available: 0 }
-                };
+                const b = empBalancesMap.get(empIdStr) || {};
 
-                employeeBalance.push({
+                const row = {
                     "Emp Code": emp.employeeId || '',
                     "Employee Name": `${emp.firstName || ''} ${emp.lastName || ''}`.trim(),
                     "Department": emp.departmentId?.name || emp.department || 'Unassigned',
-                    "Policy": emp.leavePolicy?.name || 'None',
-                    "CL Allocated": Number(b.CL.total.toFixed(2)),
-                    "CL Used": Number(b.CL.used.toFixed(2)),
-                    "CL Pending": Number(b.CL.pending.toFixed(2)),
-                    "CL Balance": Number(b.CL.available.toFixed(2)),
-                    "SL Allocated": Number(b.SL.total.toFixed(2)),
-                    "SL Used": Number(b.SL.used.toFixed(2)),
-                    "SL Pending": Number(b.SL.pending.toFixed(2)),
-                    "SL Balance": Number(b.SL.available.toFixed(2)),
-                    "EL Allocated": Number(b.EL.total.toFixed(2)),
-                    "EL Used": Number(b.EL.used.toFixed(2)),
-                    "EL Pending": Number(b.EL.pending.toFixed(2)),
-                    "EL Balance": Number(b.EL.available.toFixed(2)),
-                    "Others Allocated": Number(b.Others.total.toFixed(2)),
-                    "Others Used": Number(b.Others.used.toFixed(2)),
-                    "Others Pending": Number(b.Others.pending.toFixed(2)),
-                    "Others Balance": Number(b.Others.available.toFixed(2))
+                    "Policy": emp.leavePolicy?.name || 'None'
+                };
+
+                allLeaveTypes.forEach(type => {
+                    const bal = b[type] || { total: 0, used: 0, pending: 0, available: 0 };
+                    row[`${type} Allocated`] = Number(bal.total.toFixed(2));
+                    row[`${type} Used`] = Number(bal.used.toFixed(2));
+                    row[`${type} Pending`] = Number(bal.pending.toFixed(2));
+                    row[`${type} Balance`] = Number(bal.available.toFixed(2));
                 });
+
+                employeeBalance.push(row);
             }
         });
 

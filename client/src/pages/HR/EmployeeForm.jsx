@@ -60,6 +60,7 @@ import CommunicationTab from '../../components/HR/CommunicationTab';
 import OfficialRecordsTab from '../../components/HR/OfficialRecordsTab';
 import AcademicQualificationsTab from '../../components/HR/AcademicQualificationsTab';
 import EmploymentHistoryTab from '../../components/HR/EmploymentHistoryTab';
+import SalaryBreakupStep from '../../components/HR/SalaryBreakupStep';
 import { TabularContainer, TabularRow, TabularField, TabularCustomFieldLabel } from '../../components/HR/TabularForm';
 const BACKEND_URL = API_ROOT || '';
 const NATIONALITIES = ['Indian', 'American', 'British', 'Canadian', 'Australian', 'Other'];
@@ -74,7 +75,7 @@ export default function EmployeeForm({
 }) {
   const [step, setStep] = useState(() => {
     const last = (employee?.status === 'Draft' ? employee?.lastStep : 1) || 1;
-    return Math.min(Math.max(1, last), isExternal ? 8 : 10);
+    return Math.min(Math.max(1, last), isExternal ? 8 : 11);
   });
 
   const getActualStep = (s) => {
@@ -241,6 +242,7 @@ export default function EmployeeForm({
   const [salaryEffectiveDate, setSalaryEffectiveDate] = useState(employee?.joiningDate ? dayjs(employee.joiningDate).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD'));
   const [salaryStatus, setSalaryStatus] = useState('Active');
   const [salaryTemplates, setSalaryTemplates] = useState([]);
+  const [salaryAssigned, setSalaryAssigned] = useState(!!employee?.salaryAssigned);
 
   // Sync Salary Effective Date with Joining Date if it's currently earlier
   useEffect(() => {
@@ -518,6 +520,9 @@ export default function EmployeeForm({
       }
       if (employee.salaryTemplateId) {
         setSalaryTemplateId(employee.salaryTemplateId?._id || employee.salaryTemplateId);
+      }
+      if (employee.salaryAssigned !== undefined) {
+        setSalaryAssigned(!!employee.salaryAssigned);
       }
       if (employee.gradeId) {
         setGradeId(employee.gradeId?._id || employee.gradeId);
@@ -1225,6 +1230,12 @@ export default function EmployeeForm({
         if (password && password.length < 6) e.password = 'Password min 6 chars';
         if (!employee?._id && !password) e.password = 'Password is required';
       }
+    }
+
+    if (actualStepNum === 11) {
+      if (!salaryTemplateId && !salaryAssigned) {
+        e.salaryTemplateId = "Salary structure must be assigned (use 'Confirm & Assign') or selected.";
+      }
       if (!salaryEffectiveDate) e.effectiveDate = "Effective Date is required";
       if (joiningDate && salaryEffectiveDate < joiningDate) e.effectiveDate = "Cannot be before Joining Date";
     }
@@ -1506,7 +1517,8 @@ export default function EmployeeForm({
         departmentHead: _departmentHead,
         profilePic: profilePicUrl,
         status: 'Active',
-        lastStep: 10,
+        lastStep: isExternal ? 8 : 11,
+        salaryAssigned: salaryAssigned,
         leavePolicy: leavePolicy || undefined,
         shiftId: shiftId || undefined,
         spouseDetails: showDependents ? spouseDetails : undefined,
@@ -1825,6 +1837,7 @@ export default function EmployeeForm({
         profilePic: profilePicUrl,
         status: 'Draft',
         lastStep: step,
+        salaryAssigned: salaryAssigned,
         leavePolicy: leavePolicy || undefined, // Add Leave Policy
         shiftId: shiftId || undefined, // Shift assignment
         gradeId: gradeId || undefined, // Grade assignment
@@ -1870,7 +1883,7 @@ export default function EmployeeForm({
 
   const stepTitles = isExternal
     ? ['General Details', 'Academic Qualifications', 'Identity Documents', 'Employment History', 'Bank Details', 'Language Proficiency', 'References & Related', 'Additional Benefits']
-    : ['General Details', 'Job Information', 'Academic Qualifications', 'Identity Documents', 'Employment History', 'Bank Details', 'Language Proficiency', 'References & Related', 'Additional Benefits', 'Employment Setup'];
+    : ['General Details', 'Job Information', 'Academic Qualifications', 'Identity Documents', 'Employment History', 'Bank Details', 'Language Proficiency', 'References & Related', 'Additional Benefits', 'Employment Setup', 'Salary Breakup'];
 
   return (
     <div className="w-full h-full overflow-hidden flex flex-col bg-white">
@@ -2790,40 +2803,6 @@ export default function EmployeeForm({
                   </TabularRow>
                 </TabularContainer>
 
-                <TabularContainer>
-                  <div className="bg-slate-100 dark:bg-slate-800/80 p-3 text-xs font-bold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 uppercase flex items-center gap-2">
-                    <IndianRupee className="w-4 h-4 text-emerald-500" /> Job Assignment
-                  </div>
-                  <TabularRow columns={2}>
-                    <TabularField label="SALARY TEMPLATE" required>
-                      <select
-                        value={salaryTemplateId}
-                        onChange={e => setSalaryTemplateId(e.target.value)}
-                        className={`w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium text-slate-700 dark:text-slate-200 ${errors.salaryTemplateId ? 'text-rose-500' : ''}`}
-                      >
-                        <option value="">Select Structure</option>
-                        {salaryTemplates.map(t => (
-                          <option key={t._id} value={t._id}>{t.name} (CTC: {t.annualCTC})</option>
-                        ))}
-                      </select>
-                      {errors.salaryTemplateId && <div className="text-[9px] font-bold text-rose-500 mt-1 uppercase">{errors.salaryTemplateId}</div>}
-                    </TabularField>
-                    <TabularField label="EFFECTIVE DATE" required>
-                      <div className="flex flex-col w-full h-[38px] justify-center px-3">
-                        <input
-                          type="date"
-                          value={salaryEffectiveDate}
-                          onChange={e => setSalaryEffectiveDate(e.target.value)}
-                          className={`w-full bg-transparent outline-none text-sm font-medium ${errors.effectiveDate ? 'text-rose-500' : ''}`}
-                        />
-                      </div>
-                      {errors.effectiveDate && <div className="text-[9px] font-bold text-rose-500 mt-1 px-3 uppercase">{errors.effectiveDate}</div>}
-                      {!errors.effectiveDate && <div className="text-[9px] font-medium text-slate-400 mt-1 px-3">Note: Cannot be before {joiningDate || 'Joining Date'}</div>}
-                    </TabularField>
-                  </TabularRow>
-                </TabularContainer>
-
-
                 {/* Password Change Confirmation Modal */}
                 {showPasswordConfirm && (
                    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
@@ -2854,6 +2833,20 @@ export default function EmployeeForm({
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Step 11: Salary Breakup Step */}
+            {actualStep === 11 && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <SalaryBreakupStep
+                  employee={employee}
+                  joiningDate={joiningDate}
+                  salaryEffectiveDate={salaryEffectiveDate}
+                  setSalaryEffectiveDate={setSalaryEffectiveDate}
+                  viewOnly={viewOnly}
+                  onSalaryAssigned={() => setSalaryAssigned(true)}
+                />
               </div>
             )}
           </div>

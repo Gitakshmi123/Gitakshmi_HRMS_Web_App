@@ -8,6 +8,8 @@ const idGenerator = require('../utils/idGenerator');
 const leaveManagementService = require('../services/leaveManagement.service');
 const gradeBandAssignmentService = require('../services/gradeBandAssignment.service');
 const UserSchema = require('../models/User');
+const CandidateSchema = require('../models/Candidate');
+const ExternalEmployeeRecordSchema = require('../models/ExternalEmployeeRecord');
 const { sanitizeEmployee } = require('../utils/apiSanitizer');
 const { getDefaultPerms } = require('../utils/defaultRolePermissions');
 const companyIdConfigController = require('./companyIdConfig.controller');
@@ -89,6 +91,12 @@ function getModels(req) {
     if (!db.models.Grade) {
       try { db.model('Grade', require('../models/Grade')); } catch (e) { }
     }
+    if (!db.models.Candidate) {
+      try { db.model('Candidate', CandidateSchema); } catch (e) { }
+    }
+    if (!db.models.ExternalEmployeeRecord) {
+      try { db.model('ExternalEmployeeRecord', ExternalEmployeeRecordSchema); } catch (e) { }
+    }
 
     return {
       Employee: db.model("Employee"),
@@ -103,13 +111,52 @@ function getModels(req) {
       BGVCase: db.model("BGVCase"),
       Applicant: db.model("Applicant"),
       Shift: db.model("Shift"),
-      EmployeeSalarySnapshot: db.model("EmployeeSalarySnapshot")
+      EmployeeSalarySnapshot: db.model("EmployeeSalarySnapshot"),
+      Candidate: db.model("Candidate"),
+      ExternalEmployeeRecord: db.model("ExternalEmployeeRecord")
     };
   } catch (err) {
     console.error("[getModels] Error retrieving models:", err.message);
     console.error("[getModels] Error stack:", err.stack);
     throw new Error(`Failed to retrieve models from tenant database: ${err.message}`);
   }
+}
+
+const firstNonEmpty = (...values) => values.find((value) => typeof value === 'string' && value.trim());
+
+async function backfillExternalCandidateProfilePic(req, emp) {
+  if (!emp || emp.profilePic || !emp.meta?.candidateId) return emp;
+
+  try {
+    const { Employee, Candidate, ExternalEmployeeRecord } = getModels(req);
+    const [candidate, externalRecord] = await Promise.all([
+      Candidate.findById(emp.meta.candidateId).select('profilePic').lean(),
+      ExternalEmployeeRecord.findOne({
+        candidateId: emp.meta.candidateId,
+        ...(emp.meta.jobId ? { jobId: emp.meta.jobId } : {})
+      }).select('personalDetails documentDetails').lean()
+    ]);
+
+    const profilePic = firstNonEmpty(
+      externalRecord?.personalDetails?.profilePic,
+      externalRecord?.personalDetails?.profileImage,
+      externalRecord?.personalDetails?.photo,
+      externalRecord?.documentDetails?.profilePic,
+      externalRecord?.documentDetails?.profileImage,
+      externalRecord?.documentDetails?.profilePhoto,
+      externalRecord?.documentDetails?.photo,
+      candidate?.profilePic
+    );
+
+    if (profilePic) {
+      await Employee.updateOne({ _id: emp._id }, { $set: { profilePic } });
+      emp.profilePic = profilePic;
+    }
+  } catch (error) {
+    console.warn('[EMPLOYEE_PROFILE_PIC_BACKFILL_SKIPPED]', error.message);
+  }
+
+  return emp;
 }
 
 function hasTenantValue(value) {
@@ -1168,6 +1215,7 @@ exports.get = async (req, res) => {
       .lean();
     if (!emp) return res.status(404).json({ success: false, error: "not_found" });
     await backfillEmployeeTenant(Employee, emp, tenantId);
+    await backfillExternalCandidateProfilePic(req, emp);
     // Security: strip sensitive fields before responding
     res.json({ success: true, data: sanitizeEmployee(emp) });
 

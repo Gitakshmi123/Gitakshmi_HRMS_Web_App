@@ -24,7 +24,7 @@ const editLockPdf = (inputPath, outputPath) => {
             outputPath
         ];
 
-        const qpdf = spawn("qpdf",args);
+        const qpdf = spawn("qpdf", args, { windowsHide: true });
 
         qpdf.on("error", error => reject("error"));
 

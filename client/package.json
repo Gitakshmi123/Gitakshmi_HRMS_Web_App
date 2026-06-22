@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "powershell -NoProfile -Command \"$port = if ($env:VITE_DEV_PORT) { [int]$env:VITE_DEV_PORT } else { 5176 }; $p=(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1).OwningProcess; if($p){Write-Host \\\"[dev] Port $port busy, killing PID $p\\\"; Stop-Process -Id $p -Force}\" && vite",
     "clean": "node scripts/clean-dist.js",
-    "build": "npm run clean && vite build && node generate-fake-sourcemap.js",
+    "build": "npm run clean && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },

@@ -67,6 +67,7 @@ export default function LeaveAnalyticsPanel() {
     const [loadingEmployees, setLoadingEmployees] = useState(false);
 
     const [balancesAnalytics, setBalancesAnalytics] = useState([]);
+    const [balancesColumns, setBalancesColumns] = useState([]);
     const [balanceFilters, setBalanceFilters] = useState({
         branchId: '',
         departmentId: '',
@@ -91,9 +92,9 @@ export default function LeaveAnalyticsPanel() {
     
     const [liability, setLiability] = useState({ totalELDays: 0, activeEmployeesCount: 0 });
 
-    // New detailed report states
     const [allRequestsReport, setAllRequestsReport] = useState([]);
     const [employeeSummaryReport, setEmployeeSummaryReport] = useState([]);
+    const [employeeSummaryColumns, setEmployeeSummaryColumns] = useState([]);
     const [employees, setEmployees] = useState([]);
 
     // New filter/search states
@@ -183,11 +184,13 @@ export default function LeaveAnalyticsPanel() {
                 setAllRequestsReport(res.data);
             } else if (subView === 'employeeSummary') {
                 const res = await api.get('/hr/leaves/analytics/employee-summary', { params: { year } });
-                setEmployeeSummaryReport(res.data);
+                setEmployeeSummaryReport(res.data.data || []);
+                setEmployeeSummaryColumns(res.data.columns || []);
             } else if (subView === 'balances') {
                 const params = { year, ...balanceFilters };
                 const res = await api.get('/hr/leaves/analytics/balances', { params });
-                setBalancesAnalytics(res.data);
+                setBalancesAnalytics(res.data.data || []);
+                setBalancesColumns(res.data.columns || []);
             } else if (subView === 'utilization') {
                 const res = await api.get('/hr/leaves/analytics/utilization', { params: { year } });
                 setUtilizationReport(res.data);
@@ -318,32 +321,24 @@ export default function LeaveAnalyticsPanel() {
                 { header: 'Status', key: 'status' }
             ], 'All_Leave_Requests');
         } else if (subView === 'employeeSummary') {
-            handleExportXLSX(filteredEmployeeSummary, [
+            const cols = [
                 { header: 'Employee Name', key: 'employeeName' },
                 { header: 'Employee ID', key: 'employeeId' },
                 { header: 'Department', key: 'department' },
-                { header: 'Branch', key: 'branch' },
-                { header: 'CL Allocated', key: 'clAllocated' },
-                { header: 'CL Used', key: 'clUsed' },
-                { header: 'CL Available', key: 'clAvailable' },
-                { header: 'SL Allocated', key: 'slAllocated' },
-                { header: 'SL Used', key: 'slUsed' },
-                { header: 'SL Available', key: 'slAvailable' },
-                { header: 'EL Allocated', key: 'elAllocated' },
-                { header: 'EL Used', key: 'elUsed' },
-                { header: 'EL Available', key: 'elAvailable' },
-                { header: 'Others Allocated', key: 'othersAllocated' },
-                { header: 'Others Used', key: 'othersUsed' },
-                { header: 'Others Available', key: 'othersAvailable' }
-            ], 'Employee_Leave_Summary');
+                { header: 'Branch', key: 'branch' }
+            ];
+            employeeSummaryColumns.forEach(c => {
+                cols.push({ header: `${c} Allocated`, key: `${c} Allocated` });
+                cols.push({ header: `${c} Used`, key: `${c} Used` });
+                cols.push({ header: `${c} Available`, key: `${c} Available` });
+            });
+            handleExportXLSX(filteredEmployeeSummary, cols, 'Employee_Leave_Summary');
         } else if (subView === 'balances') {
-            handleExportXLSX(balancesAnalytics, [
+            const cols = [
                 { header: 'Department', key: 'department' },
-                { header: 'CL Balance', key: 'CL' },
-                { header: 'SL Balance', key: 'SL' },
-                { header: 'EL Balance', key: 'EL' },
-                { header: 'Others', key: 'Others' }
-            ], 'Leave_Balances');
+                ...balancesColumns.map(col => ({ header: `${col} Balance`, key: col }))
+            ];
+            handleExportXLSX(balancesAnalytics, cols, 'Leave_Balances');
         } else if (subView === 'utilization') {
             handleExportXLSX(utilizationReport, [
                 { header: 'Leave Type', key: 'leaveType' },
@@ -747,38 +742,37 @@ export default function LeaveAnalyticsPanel() {
                                                         <th className="px-4 py-3">Name</th>
                                                         <th className="px-4 py-3">Department</th>
                                                         <th className="px-4 py-3">Policy</th>
-                                                        <th className="px-4 py-3 text-center bg-blue-50/30">CL (Alloc/Used/Bal)</th>
-                                                        <th className="px-4 py-3 text-center bg-amber-50/20">SL (Alloc/Used/Bal)</th>
-                                                        <th className="px-4 py-3 text-center bg-emerald-50/20">EL (Alloc/Used/Bal)</th>
-                                                        <th className="px-4 py-3 text-center bg-slate-100/50">Others (Alloc/Used/Bal)</th>
+                                                        {(() => {
+                                                            const items = masterReport.sheets?.employeeBalance || [];
+                                                            const cols = items.length > 0 ? Object.keys(items[0]).filter(k => k.endsWith(' Allocated')).map(k => k.replace(' Allocated', '')) : [];
+                                                            return cols.map(col => (
+                                                                <th key={col} className="px-4 py-3 text-center">{col} (Alloc/Used/Bal)</th>
+                                                            ));
+                                                        })()}
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-slate-100 font-bold text-slate-700">
                                                     {(!masterReport.sheets?.employeeBalance || masterReport.sheets.employeeBalance.length === 0) ? (
                                                         <tr>
-                                                            <td colSpan={8} className="p-8 text-center text-slate-400 font-medium">No employee leave balance records found.</td>
+                                                            <td colSpan={10} className="p-8 text-center text-slate-400 font-medium">No employee leave balance records found.</td>
                                                         </tr>
                                                     ) : (
-                                                        masterReport.sheets.employeeBalance.slice((empBalPage - 1) * EMP_BAL_PER_PAGE, empBalPage * EMP_BAL_PER_PAGE).map((item, idx) => (
-                                                            <tr key={idx} className="hover:bg-slate-50/50">
-                                                                <td className="px-5 py-3 text-slate-500 font-mono text-[11px]">{item["Emp Code"]}</td>
-                                                                <td className="px-4 py-3 text-slate-900">{item["Employee Name"]}</td>
-                                                                <td className="px-4 py-3 text-slate-600">{item["Department"]}</td>
-                                                                <td className="px-4 py-3 text-slate-500 font-medium text-[11px]">{item["Policy"]}</td>
-                                                                <td className="px-4 py-3 text-center font-mono text-[11px] bg-blue-50/10">
-                                                                    <span className="text-slate-500">{item["CL Allocated"]}</span> / <span className="text-amber-600">{item["CL Used"]}</span> / <span className="text-blue-700 font-black">{item["CL Balance"]}</span>
-                                                                </td>
-                                                                <td className="px-4 py-3 text-center font-mono text-[11px] bg-amber-50/10">
-                                                                    <span className="text-slate-500">{item["SL Allocated"]}</span> / <span className="text-amber-600">{item["SL Used"]}</span> / <span className="text-amber-700 font-black">{item["SL Balance"]}</span>
-                                                                </td>
-                                                                <td className="px-4 py-3 text-center font-mono text-[11px] bg-emerald-50/10">
-                                                                    <span className="text-slate-500">{item["EL Allocated"]}</span> / <span className="text-amber-600">{item["EL Used"]}</span> / <span className="text-emerald-700 font-black">{item["EL Balance"]}</span>
-                                                                </td>
-                                                                <td className="px-4 py-3 text-center font-mono text-[11px] bg-slate-100/20">
-                                                                    <span className="text-slate-400">{item["Others Allocated"]}</span> / <span className="text-slate-500">{item["Others Used"]}</span> / <span className="text-slate-700 font-black">{item["Others Balance"]}</span>
-                                                                </td>
-                                                            </tr>
-                                                        ))
+                                                        masterReport.sheets.employeeBalance.slice((empBalPage - 1) * EMP_BAL_PER_PAGE, empBalPage * EMP_BAL_PER_PAGE).map((item, idx) => {
+                                                            const cols = Object.keys(item).filter(k => k.endsWith(' Allocated')).map(k => k.replace(' Allocated', ''));
+                                                            return (
+                                                                <tr key={idx} className="hover:bg-slate-50/50">
+                                                                    <td className="px-5 py-3 text-slate-500 font-mono text-[11px]">{item["Emp Code"]}</td>
+                                                                    <td className="px-4 py-3 text-slate-900">{item["Employee Name"]}</td>
+                                                                    <td className="px-4 py-3 text-slate-600">{item["Department"]}</td>
+                                                                    <td className="px-4 py-3 text-slate-500 font-medium text-[11px]">{item["Policy"]}</td>
+                                                                    {cols.map(col => (
+                                                                        <td key={col} className="px-4 py-3 text-center font-mono text-[11px] bg-slate-50/50">
+                                                                            <span className="text-slate-500">{item[`${col} Allocated`] ?? 0}</span> / <span className="text-amber-600">{item[`${col} Used`] ?? 0}</span> / <span className="text-blue-700 font-black">{item[`${col} Balance`] ?? 0}</span>
+                                                                        </td>
+                                                                    ))}
+                                                                </tr>
+                                                            );
+                                                        })
                                                     )}
                                                 </tbody>
                                             </table>
@@ -1102,10 +1096,9 @@ export default function LeaveAnalyticsPanel() {
                                                 <tr>
                                                     <th className="px-5 py-3 w-[20%]">Employee</th>
                                                     <th className="px-4 py-3 w-[15%]">Department</th>
-                                                    <th className="px-4 py-3 text-center bg-blue-50/30">CL (Alloc/Used/Bal)</th>
-                                                    <th className="px-4 py-3 text-center bg-amber-50/20">SL (Alloc/Used/Bal)</th>
-                                                    <th className="px-4 py-3 text-center bg-emerald-50/20">EL (Alloc/Used/Bal)</th>
-                                                    <th className="px-4 py-3 text-center bg-slate-100/50">Others (Alloc/Used/Bal)</th>
+                                                    {employeeSummaryColumns.map(col => (
+                                                        <th key={col} className="px-4 py-3 text-center">{col} (Alloc/Used/Bal)</th>
+                                                    ))}
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-100 font-bold text-slate-700">
@@ -1124,18 +1117,11 @@ export default function LeaveAnalyticsPanel() {
                                                                 <div>{emp.department}</div>
                                                                 <div className="text-[8px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">{emp.branch}</div>
                                                             </td>
-                                                            <td className="px-4 py-3 text-center font-mono text-[11px] bg-blue-50/10">
-                                                                <span className="text-slate-500">{emp.clAllocated}</span> / <span className="text-amber-600">{emp.clUsed}</span> / <span className="text-blue-700 font-black">{emp.clAvailable}</span>
-                                                            </td>
-                                                            <td className="px-4 py-3 text-center font-mono text-[11px] bg-amber-50/10">
-                                                                <span className="text-slate-500">{emp.slAllocated}</span> / <span className="text-amber-600">{emp.slUsed}</span> / <span className="text-amber-700 font-black">{emp.slAvailable}</span>
-                                                            </td>
-                                                            <td className="px-4 py-3 text-center font-mono text-[11px] bg-emerald-50/10">
-                                                                <span className="text-slate-500">{emp.elAllocated}</span> / <span className="text-amber-600">{emp.elUsed}</span> / <span className="text-emerald-700 font-black">{emp.elAvailable}</span>
-                                                            </td>
-                                                            <td className="px-4 py-3 text-center font-mono text-[11px] bg-slate-100/20">
-                                                                <span className="text-slate-400">{emp.othersAllocated}</span> / <span className="text-slate-500">{emp.othersUsed}</span> / <span className="text-slate-700 font-black">{emp.othersAvailable}</span>
-                                                            </td>
+                                                            {employeeSummaryColumns.map(col => (
+                                                                <td key={col} className="px-4 py-3 text-center font-mono text-[11px] bg-slate-50/50">
+                                                                    <span className="text-slate-500">{emp[`${col} Allocated`] ?? 0}</span> / <span className="text-amber-600">{emp[`${col} Used`] ?? 0}</span> / <span className="text-blue-700 font-black">{emp[`${col} Available`] ?? 0}</span>
+                                                                </td>
+                                                            ))}
                                                         </tr>
                                                     ))
                                                 )}
@@ -1210,25 +1196,23 @@ export default function LeaveAnalyticsPanel() {
                                         <thead className="bg-slate-50 font-black text-slate-450 uppercase tracking-widest border-b border-slate-150">
                                             <tr>
                                                 <th className="px-5 py-3 w-[40%]">Department</th>
-                                                <th className="px-4 py-3 text-center">CL Balance</th>
-                                                <th className="px-4 py-3 text-center">SL Balance</th>
-                                                <th className="px-4 py-3 text-center">EL Balance</th>
-                                                <th className="px-4 py-3 text-center">Others</th>
+                                                {balancesColumns.map(col => (
+                                                    <th key={col} className="px-4 py-3 text-center">{col} Balance</th>
+                                                ))}
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100 font-bold text-slate-700">
                                             {balancesAnalytics.length === 0 ? (
                                                 <tr>
-                                                    <td colSpan={5} className="p-8 text-center text-slate-400 font-medium">No department balances found matching criteria.</td>
+                                                    <td colSpan={balancesColumns.length + 1} className="p-8 text-center text-slate-400 font-medium">No department balances found matching criteria.</td>
                                                 </tr>
                                             ) : (
                                                 balancesAnalytics.map((deptRow, idx) => (
                                                     <tr key={idx} className="hover:bg-slate-50/50">
                                                         <td className="px-5 py-3 font-extrabold text-slate-800">{deptRow.department}</td>
-                                                        <td className="px-4 py-3 text-center text-slate-800 font-mono">{deptRow.CL}</td>
-                                                        <td className="px-4 py-3 text-center text-slate-800 font-mono">{deptRow.SL}</td>
-                                                        <td className="px-4 py-3 text-center text-slate-800 font-mono">{deptRow.EL}</td>
-                                                        <td className="px-4 py-3 text-center text-slate-850 font-mono">{deptRow.Others}</td>
+                                                        {balancesColumns.map(col => (
+                                                            <td key={col} className="px-4 py-3 text-center text-slate-800 font-mono">{deptRow[col] ?? 0}</td>
+                                                        ))}
                                                     </tr>
                                                 ))
                                             )}

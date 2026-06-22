@@ -227,44 +227,7 @@ exports.getPolicies = async (req, res) => {
         await healPolicyTenantScope(LeavePolicy, tenantId);
 
 
-        // Ensure "Attendance Based EL Policy" exists
-        let attendancePolicy = await LeavePolicy.findOne({
-            tenant: tenantId,
-            name: 'Attendance Based EL Policy'
-        });
 
-        if (!attendancePolicy) {
-            attendancePolicy = await LeavePolicy.create({
-                tenant: tenantId,
-                name: 'Attendance Based EL Policy',
-                description: 'Attendance based monthly EL accrual policy',
-                status: 'ACTIVE',
-                isActive: true,
-                applicableTo: 'All',
-                leaveTypes: ['EL'],
-                rules: [{
-                    leaveType: 'EL',
-                    totalPerYear: 21,
-                    requiresApproval: true,
-                    color: '#3b82f6',
-                    carryForwardAllowed: true,
-                    maxCarryForward: 15,
-                    halfDayAllowed: true,
-                    monthlyAccrual: true,
-                    accrualType: 'monthly',
-                    monthlyAccrualRate: 1.75,
-                    accrualDependsOnAttendance: true,
-                    minAttendanceDays: 20,
-                    countPresent: true,
-                    countOnDuty: true,
-                    countCompOff: true,
-                    countHoliday: true,
-                    countWeeklyOff: true,
-                    countPaidLeave: false,
-                    accrualSlabs: [{ minAttendanceDays: 20, creditDays: 1.75 }]
-                }]
-            });
-        }
 
         const policies = await LeavePolicy.find({ tenant: tenantId }).sort({ createdAt: -1 }).lean();
         res.json(policies.map((policy) => ({
@@ -500,8 +463,8 @@ exports.updatePolicy = async (req, res) => {
         if (updateData.name) {
             const duplicatePolicy = await LeavePolicy.findOne({
                 tenant: tenantId,
-                name: { $regex: new RegExp(`^\\s*${updateData.name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'i') },
-                _id: { $ne: req.params.id }
+                name: { $regex: new RegExp(`^\\s*${updateData.name.trim().replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}\\s*$`, 'i') },
+                _id: { $ne: new mongoose.Types.ObjectId(req.params.id) }
             });
             if (duplicatePolicy) {
                 return res.status(400).json({ error: 'duplicate_name', message: 'A leave policy with this name already exists.' });

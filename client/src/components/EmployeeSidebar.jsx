@@ -31,21 +31,39 @@ import { useModules } from '../hooks/useModules';
 import { getRoleRoute } from '../utils/navigation';
 import { getScopedStorageKey } from '../utils/sidebarStorage';
 import { isPrivilegedManagementRole } from '../utils/employeeAccess';
+import {
+  EMPLOYEE_SELF_SERVICE_PAGES,
+  EMPLOYEE_TO_MANAGEMENT_PERMISSION_FALLBACK,
+  MANAGEMENT_MODULES,
+  MODULE_ORDER,
+  buildPath,
+} from '../utils/hrmsNavigationHierarchy';
 
 
 const getStaticPages = (pathPrefix, isManagement = false) => {
   const isEss = pathPrefix === '/employee';
-  
-  return [
-    { id: 'dashboard', title: 'Dashboard', icon: <LayoutDashboard size={16} />, path: `${pathPrefix}/dashboard`, permissionKey: 'employee.dashboard' },
-    { id: 'attendance', title: 'My Attendance', icon: <Clock size={16} />, path: `${pathPrefix}/attendance`, permissionKey: 'employee.attendance' },
-    { id: 'payslips', title: 'Payslip', icon: <Banknote size={16} />, path: isEss ? `${pathPrefix}/payslips` : `${pathPrefix}/payroll/payslips`, permissionKey: 'employee.payslips' },
-    { id: 'my-documents', title: 'My Documents', icon: <Files size={16} />, path: `${pathPrefix}/my-documents`, permissionKey: 'employee.documents' },
-    { id: 'internal-jobs', title: 'Internal Jobs', icon: <Briefcase size={16} />, path: `${pathPrefix}/internal-jobs`, permissionKey: 'employee.jobs' },
-    { id: 'manpower-requisition', title: 'Manpower Requisition', icon: <Users size={16} />, path: `${pathPrefix}/manpower-requisition`, permissionKey: 'employee.manpowerRequisition' },
-    { id: 'support-center', title: 'Support Center', icon: <LifeBuoy size={16} />, path: (isEss && !isManagement) ? `${pathPrefix}/support-center` : `${pathPrefix}/tickets`, permissionKey: 'employee.tickets' },
-    { id: 'resignation', title: 'Resignation', icon: <UserMinus size={16} />, path: (isEss && !isManagement) ? `${pathPrefix}/resignation` : `${pathPrefix}/exit-management`, permissionKey: 'employee.exit' },
-  ];
+
+  const iconMap = {
+    dashboard: <LayoutDashboard size={16} />,
+    attendance: <Clock size={16} />,
+    payslips: <Banknote size={16} />,
+    templates: <Files size={16} />,
+    requirements: <Briefcase size={16} />,
+    employees: <Users size={16} />,
+    support: <LifeBuoy size={16} />,
+    exit: <UserMinus size={16} />,
+  };
+
+  return EMPLOYEE_SELF_SERVICE_PAGES.map((page) => {
+    const route = isEss && !isManagement ? page.route : page.managementRoute;
+    return {
+      id: page.id,
+      title: page.title,
+      icon: iconMap[page.icon] || iconMap.dashboard,
+      path: buildPath(pathPrefix, route),
+      permissionKey: page.permissionKey,
+    };
+  });
 };
 
 export default function EmployeeSidebar({
@@ -209,15 +227,6 @@ export default function EmployeeSidebar({
 
   const { employeeSections, managementSections, orgSection, dashSection } = useMemo(() => {
     const STATIC_PAGES = getStaticPages(pathPrefix, allowManagementFallbackForEss);
-    const EMPLOYEE_TO_MANAGEMENT_FALLBACK = {
-      'employee.dashboard': ['overview.dashboard', '/tenant/dashboard', '/hr/dashboard'],
-      'employee.attendance': ['attendance.dashboard', '/tenant/attendance', '/hr/attendance'],
-      'employee.payslips': ['payroll.payslips', '/tenant/payroll/payslips', '/hr/payroll/payslips'],
-      'employee.jobs': ['hiring.internal', 'hiring.jobList', '/tenant/internal-applicants', '/tenant/requirements'],
-      'employee.tickets': ['support.tickets', '/tenant/tickets', '/hr/tickets'],
-      'employee.exit': ['offboarding.exit', 'offboarding.view', 'offboarding.manage', 'exit.view', 'exit.manage', '/tenant/exit-management', '/hr/exit-management'],
-      'onboarding.dashboard': ['onboarding.employeePortal', '/tenant/onboarding/dashboard', '/hr/onboarding/dashboard'],
-    };
 
     const getPermEntryStrict = (key) => {
       if (!key || !permMap) return null;
@@ -252,7 +261,7 @@ export default function EmployeeSidebar({
         return false;
       }
 
-      return hasAnyPermission(EMPLOYEE_TO_MANAGEMENT_FALLBACK[employeePermissionKey] || []);
+      return hasAnyPermission(EMPLOYEE_TO_MANAGEMENT_PERMISSION_FALLBACK[employeePermissionKey] || []);
     };
     const hasExplicitPermissionEntry = (key) => {
       if (!key || !permMap) return false;
@@ -280,7 +289,7 @@ export default function EmployeeSidebar({
           // Backward compatibility: only when employee.* key is missing.
           return (
             hasPermission(p.permissionKey || p.path, 'view') ||
-            hasAnyPermission(EMPLOYEE_TO_MANAGEMENT_FALLBACK[p.permissionKey] || [])
+            hasAnyPermission(EMPLOYEE_TO_MANAGEMENT_PERMISSION_FALLBACK[p.permissionKey] || [])
           );
         })()
     }));
@@ -289,13 +298,16 @@ export default function EmployeeSidebar({
     const management = [];
 
     // Ensure legacy management modules are visible based on explicit page permission.
-    const ensureManagementModule = (category, path, icon, permissionKeys = [], moduleKey = null) => {
+    const ensureManagementModule = ({ moduleName, route, employeeRoute, icon, permissionKeys = [], moduleCode = null }) => {
+      const category = moduleName;
+      const path = buildPath(managementPrefix, currentPathPrefix.startsWith('/employee') ? (employeeRoute || route) : route);
+      const resolvedIcon = ICONS_LOCAL[icon] || ICONS_LOCAL.dashboard;
       const exists = management.some((m) => String(m.category || '').toLowerCase() === String(category).toLowerCase());
       if (exists) return;
       
       // Strict Module Enablement Check
-      if (moduleKey && enabledModules) {
-        const keys = Array.isArray(moduleKey) ? moduleKey : [moduleKey];
+      if (moduleCode && enabledModules) {
+        const keys = Array.isArray(moduleCode) ? moduleCode : [moduleCode];
         const isEnabled = keys.some(k => enabledModules[k] === true || enabledModules[k] === 'true');
         if (!isEnabled) return;
       }
@@ -313,52 +325,12 @@ export default function EmployeeSidebar({
       management.push({
         id: `manual-${category.toLowerCase().replace(/\s+/g, '-')}`,
         category,
-        items: [{ id: `manual-${category.toLowerCase().replace(/\s+/g, '-')}-item`, title: category, icon, path }]
+        items: [{ id: `manual-${category.toLowerCase().replace(/\s+/g, '-')}-item`, title: category, icon: resolvedIcon, path }]
       });
     };
 
     // Ensure management modules are populated even if dynamic modules are still loading or empty
-    ensureManagementModule('Dashboard', `${managementPrefix}/dashboard`, ICONS_LOCAL.dashboard, ['overview.dashboard']);
-    ensureManagementModule('Access', `${managementPrefix}/access`, ICONS_LOCAL.access, ['configuration.access'], 'hr');
-    ensureManagementModule('Employee', `${managementPrefix}/employees`, ICONS_LOCAL.employees, [
-      'people.employees', 'people.departments', 'people.org', 'people.users'
-    ], 'hr');
-    ensureManagementModule('Attendance', `${managementPrefix}/management-attendance`, ICONS_LOCAL.attendance, [
-      'attendance.dashboard', 'attendance.calendar', 'attendance.face'
-    ], 'attendance');
-    ensureManagementModule('Policy', `${managementPrefix}/leave-approvals`, ICONS_LOCAL.leaveRequests, [
-      'leave.requests', 'leave.policies', 'policy.view', 'policy.manage'
-    ], null);
-    ensureManagementModule('Payroll', `${managementPrefix}/payroll/dashboard`, ICONS_LOCAL.salaryComponents, [
-      'payroll.stats', 'payroll.salary', 'payroll.compensation', 'payroll.process', 'payroll.run', 'payroll.payslips'
-    ], 'payroll');
-    ensureManagementModule('Hiring', `${managementPrefix}/requirements`, ICONS_LOCAL.requirements, [
-      'hiring.jobList', 'hiring.createReq', 'hiring.external', 'hiring.internal', 'hiring.tracker', 'hiring.offerTemplates', 'hiring.offersJoining'
-    ], 'recruitment');
-    ensureManagementModule('Onboarding', `${managementPrefix}/onboarding/dashboard`, ICONS_LOCAL.onboarding, ['onboarding.dashboard'], 'onboarding');
-    ensureManagementModule('BGV', `${managementPrefix}/bgv`, ICONS_LOCAL.bgv, ['bgv.caseMaster', 'bgv.emailLogs'], 'backgroundVerification');
-    ensureManagementModule('Settings', `${managementPrefix}/settings/company`, ICONS_LOCAL.settings, [
-      'configuration.company', 'configuration.sequences'
-    ], 'hr');
-    ensureManagementModule('Organization', `${managementPrefix}/organization`, ICONS_LOCAL.organization, ['company.subCompanies', 'people.subCompanies', 'organization.view'], 'hr');
-    ensureManagementModule('Social Media', `${managementPrefix}/settings/social-media`, ICONS_LOCAL.social, [
-      'socialMedia.dashboard', 'socialMedia.accounts', 'socialMedia.create', 'socialMedia.history'
-    ], 'socialMediaIntegration');
-    ensureManagementModule('Portals', `${managementPrefix}/career-builder`, ICONS_LOCAL.viewCareers, [
-      'portals.careerPage', 'portals.applyPage', 'portals.publicPage'
-    ], 'recruitment');
-    ensureManagementModule('Ticket Inbox', `${managementPrefix}/tickets`, ICONS_LOCAL['ticket-inbox'], [
-      'support.tickets', 'support.view'
-    ], 'support');
-    ensureManagementModule('Reports', `${managementPrefix}/reports`, ICONS_LOCAL.Reports, [
-      'reports.staffing', 'reports.movements', 'reports.trends', 'reports.performance'
-    ], 'reports');
-    ensureManagementModule('Offboarding', `${managementPrefix}/exit-management`, ICONS_LOCAL.history, [
-      'offboarding.exit', 'offboarding.manage', 'offboarding.view', 'exit.view', 'exit.manage', '/hr/exit-management', '/tenant/exit-management', 'offboarding.dashboard'
-    ], 'hr');
-    ensureManagementModule('Approvals', `${managementPrefix}/approvals`, ICONS_LOCAL.approvals, [
-      'approval.view', 'approval.approve', 'approval.workflow.manage'
-    ], 'hr');
+    MANAGEMENT_MODULES.forEach((moduleConfig) => ensureManagementModule(moduleConfig));
 
     if (dynamicModules && dynamicModules.length > 0) {
       dynamicModules.forEach(mod => {
@@ -625,7 +597,7 @@ export default function EmployeeSidebar({
             id: 'fixed-support',
             title: 'Ticket Inbox',
             icon: ICONS_LOCAL['ticket-inbox'],
-            path: `${managementPrefix}/tickets`
+            path: buildPath(managementPrefix, 'tickets')
           }]
         });
       }
@@ -634,26 +606,9 @@ export default function EmployeeSidebar({
 
     // Re-order management: strict user-requested sequence
     // Use dynamic sidebarOrder if available, otherwise fallback to hardcoded list
-    const order = (sidebarOrder && Array.isArray(sidebarOrder)) ? sidebarOrder : [
-      'HR Dashboard',
-      'Dashboard',
-      'Attendance',      // 1
-      'Access',          // 3
-      'Employee',        // 4
-      'Policy',          // 5
-      'Payroll',         // 6
-      'Hiring',          // 7
-      'Onboarding',      // 8
-      'Organization',    // 9
-      'BGV',             // 10
-      'Offboarding',     // 11
-      'Ticket Inbox',    // 12
-      'Social Media',    // 13
-      'Portals',         // 14
-      'Reports',         // 15
-      'Approvals',
-      'Settings',        // 16
-    ];
+    const order = (sidebarOrder && Array.isArray(sidebarOrder) && sidebarOrder.length > 0)
+      ? sidebarOrder
+      : MODULE_ORDER;
     
     management.sort((a, b) => {
       // Normalize names for matching with order array

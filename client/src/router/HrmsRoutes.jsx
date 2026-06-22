@@ -122,6 +122,7 @@ const OnboardingTemplates = lazy(() => import('../pages/Onboarding/OnboardingTem
 const OnboardingTaskBoard = lazy(() => import('../pages/Onboarding/OnboardingTaskBoard'));
 const EmployeeOnboardingForm = lazy(() => import('../pages/Onboarding/EmployeeOnboardingForm'));
 const HRApprovalPage = lazy(() => import('../pages/Onboarding/HRApprovalPage'));
+const ApprovalsDashboard = lazy(() => import('../pages/Approvals/ApprovalsDashboard'));
 
 // 🔥 NEW: BGV Pages
 const MyTasks = lazy(() => import('../pages/HR/BGV/MyTasks'));
@@ -456,6 +457,7 @@ export default function HrmsRoutes() {
           <Route path="org" element={<OrgStructure />} />
           <Route path="org-tree" element={<CeoOrg />} />
           <Route path="access" element={<ProtectedModule module="accessControl" permissionKey="configuration.access"><AccessControl /></ProtectedModule>} />
+          <Route path="approvals" element={<ProtectedModule module="hr" permissionKey="approval.view"><ApprovalsDashboard /></ProtectedModule>} />
           <Route path="sidebar-customization" element={<ProtectedModule module="hr" permissionKey="configuration.access"><SidebarCustomizationPage /></ProtectedModule>} />
           <Route path="settings/company" element={<SmartSettingsRoute forceTab="company" />} />
           <Route path="settings/sequences" element={<SmartSettingsRoute forceTab="sequences" />} />
@@ -695,6 +697,7 @@ export default function HrmsRoutes() {
           <Route path="sub-companies/new" element={<Navigate to="/hr/organization" replace />} />
           <Route path="organization" element={<EmployeePermissionRoute module="hr" permissionKey={['company.subCompanies', 'people.subCompanies', 'organization.view', 'people.org']}><Organization /></EmployeePermissionRoute>} />
           <Route path="grades" element={<EmployeePermissionRoute module="hr" permissionKey={['people.org', 'people.departments']}><GradeManagement /></EmployeePermissionRoute>} />
+          <Route path="approvals" element={<EmployeePermissionRoute module="hr" permissionKey="approval.view"><ApprovalsDashboard /></EmployeePermissionRoute>} />
         </Route>
         <Route element={<ProtectedModule module="attendance"><Outlet /></ProtectedModule>}>
           <Route path="management-attendance" element={<EmployeePermissionRoute module="attendance" permissionKey="attendance.dashboard"><AttendanceAdmin /></EmployeePermissionRoute>} />

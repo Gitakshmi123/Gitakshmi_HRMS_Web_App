@@ -153,4 +153,4 @@ const EmploymentHistoryTab = ({ experience, setExperience, errors }) => {
   );
 };
 
-export default EmploymentHistoryTab;
+export default React.memo(EmploymentHistoryTab);

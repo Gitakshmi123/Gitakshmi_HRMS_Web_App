@@ -3,12 +3,25 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import logonew from '../assets/logonew.png';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import api, { API_ROOT, resolveTenantLogoUrl } from '../utils/api';
+import api, { resolveTenantLogoUrl } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { useModules } from '../hooks/useModules';
 import { useRBAC } from '../context/RBACContext';
 import { normalizeModuleCode } from '../utils/moduleConfig';
 import { getScopedStorageKey } from '../utils/sidebarStorage';
+import {
+  EMPLOYEE_SECTION,
+  EMPLOYEE_SELF_SERVICE_PAGES,
+  MANAGEMENT_MODULES,
+  MANAGEMENT_SECTION,
+  MODULE_ORDER,
+  MODULE_PERMISSION_PROBES,
+  buildPath,
+  getManagementModuleOrder,
+  normalizeModuleDisplayName,
+  resolveDynamicRoute,
+  resolveModuleCode,
+} from '../utils/hrmsNavigationHierarchy';
 import {
   LayoutDashboard,
   Users,
@@ -53,21 +66,6 @@ import {
 const ICON_SIZE = 20;
 const SIDEBAR_ORDER_STORAGE_BASE_KEY = 'hrms:sidebar:order:v1';
 const SIDEBAR_ADVANCED_CONFIG_BASE_KEY = 'hrms:sidebar:advanced-config:v1';
-const MODULE_PERMISSION_PROBES = {
-  hr: ['overview.dashboard', 'configuration.access', 'people.employees', 'configuration.company'],
-  attendance: ['attendance.dashboard', 'attendance.calendar', 'attendance.face'],
-  leave: ['leave.requests', 'leave.policies'],
-  payroll: ['payroll.stats', 'payroll.salary', 'payroll.payslips', 'payroll.process'],
-  recruitment: ['hiring.jobList', 'hiring.createReq', 'hiring.internal', 'hiring.external', 'hiring.offerTemplates', 'hiring.offersJoining'],
-  onboarding: ['onboarding.dashboard', 'onboarding.templates', 'onboarding.instances', 'onboarding.tasks', 'onboarding.documents', 'onboarding.employeePortal'],
-  backgroundVerification: ['bgv.caseMaster', 'bgv.emailLogs'],
-  socialMediaIntegration: ['socialMedia.dashboard', 'socialMedia.accounts', 'socialMedia.create', 'socialMedia.history'],
-  employeePortal: ['portals.careerPage', 'portals.applyPage', 'portals.publicPage'],
-  reports: ['reports.staffing', 'reports.movements', 'reports.trends', 'reports.performance'],
-  policy: ['policy.view', 'policy.manage'],
-  accessControl: ['configuration.access'],
-  documentManagement: ['documents.dashboard']
-};
 
 export const ICONS = {
   dashboard: <LayoutDashboard size={ICON_SIZE} />,
@@ -136,11 +134,7 @@ export default function HRSidebar({
     } catch (e) {
       console.error('Sidebar order parse error:', e);
     }
-    return [
-      'Dashboard', 'Access', 'Employee', 'Attendance', 'Leave Master', 'Payroll', 'Hiring',
-      'Onboarding', 'BGV', 'Offboarding', 'Ticket Inbox', 'Social Media', 'Portals',
-      'Reports', 'Settings', 'Sub Companies', 'emp service'
-    ];
+    return MODULE_ORDER;
   });
 
   const [sectionOrder, setSectionOrder] = useState(() => {
@@ -149,7 +143,7 @@ export default function HRSidebar({
       const parsed = saved ? JSON.parse(saved) : null;
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
     } catch (e) {}
-    return ['MANAGEMENT', 'EMPLOYEE'];
+    return [MANAGEMENT_SECTION, EMPLOYEE_SECTION];
   });
 
   const [sidebarStyles, setSidebarStyles] = useState({ bg: '', text: '', active: '' });
@@ -218,40 +212,6 @@ export default function HRSidebar({
   const tenantLogoSrc = useMemo(() => resolveTenantLogoUrl(tenant) || logonew, [tenant]);
 
 
-  const moduleNameToCode = useMemo(() => ({
-    overview: 'hr',
-    dashboard: 'hr',
-    people: 'hr',
-    employee: 'hr',
-    'hr management': 'hr',
-    attendance: 'attendance',
-    'attendance management': 'attendance',
-    leave: 'leave',
-    'leave master': 'leave',
-    policy: 'leave',
-    payroll: 'payroll',
-    'payroll system': 'payroll',
-    hiring: 'recruitment',
-    recruitment: 'recruitment',
-    bgv: 'backgroundVerification',
-    settings: 'hr',
-    access: 'accessControl',
-    'access control': 'accessControl',
-    'social media': 'socialMediaIntegration',
-    'social media integration': 'socialMediaIntegration',
-    portals: 'employeePortal',
-    offboarding: 'hr',
-    support: 'hr',
-    'ticket inbox': 'hr',
-    onboarding: 'onboarding',
-    reports: 'reports',
-    'doc management': 'documentManagement',
-    'document management': 'documentManagement',
-    documents: 'documentManagement',
-    'sub companies': 'hr',
-    'emp service': 'employeePortal'
-  }), []);
-
   const storedModuleCodes = useMemo(() => {
     try {
       const stored = JSON.parse(localStorage.getItem('modules') || '[]');
@@ -281,14 +241,6 @@ export default function HRSidebar({
     return probeKeys.some((permissionKey) => hasPermission(permissionKey, 'any'));
   }, [hasCompanyModule, hasPermission, isPrivilegedSidebarRole, isPsaRole]);
 
-  const resolveModuleCodeForNav = useCallback((mod) => {
-    const fromKey = normalizeModuleCode(mod?.moduleKey);
-    if (fromKey) return fromKey;
-    const byName = moduleNameToCode[String(mod?.name || '').trim().toLowerCase()];
-    if (byName) return byName;
-    return null;
-  }, [moduleNameToCode]);
-
   useEffect(() => {
     if (!isInitialized || !user || user.role === 'candidate') return;
     api.get('/tenants/me').then(res => setTenant(res.data)).catch(() => { });
@@ -316,7 +268,7 @@ export default function HRSidebar({
     (dynamicModules || []).forEach((mod, index) => {
       const lowCaseName = (mod.name || "").toLowerCase();
 
-      const modCode = resolveModuleCodeForNav(mod);
+      const modCode = resolveModuleCode(mod);
       const isCore = false;
       if (modCode && !isCore && !hasModuleAccess(modCode)) {
         // Attendance should still be visible if the user has permission,
@@ -355,18 +307,11 @@ export default function HRSidebar({
       if (filteredPages.length === 0 && !mod.isPlaceholder) return;
 
       const rawModName = (mod.name || "").trim().toLowerCase();
-      let moduleDisplayName = mod.name;
+      let moduleDisplayName = normalizeModuleDisplayName(mod.name);
 
       // Unify variants for both sidebar display and grouping logic
       if (rawModName === 'overview') return; // Handled manually
-      if (rawModName === 'people' || rawModName === 'employee' || rawModName === 'employees') {
-        moduleDisplayName = 'Employee';
-      } else if (rawModName === 'leave') {
-        moduleDisplayName = 'Policy';
-      } else if (rawModName === 'access control') {
-        moduleDisplayName = 'Access';
-      } else if (rawModName === 'support' || rawModName === 'ticket inbox' || rawModName === 'tickets') {
-        moduleDisplayName = 'Ticket Inbox';
+      if (rawModName === 'support' || rawModName === 'ticket inbox' || rawModName === 'tickets') {
         if (rawModName !== 'emp service') hasSupportModule = true;
       }
 
@@ -388,7 +333,7 @@ export default function HRSidebar({
 
       sections.push({
         id: `${mod._id ? (typeof mod._id === 'object' ? (mod._id.$oid || JSON.stringify(mod._id)) : String(mod._id)) : (mod.moduleName || 'module')}-${index}`,
-        title: (mod.name || "").toLowerCase().trim() === 'emp service' ? 'EMPLOYEE' : 'MANAGEMENT',
+        title: (mod.name || "").toLowerCase().trim() === 'emp service' ? EMPLOYEE_SECTION : MANAGEMENT_SECTION,
         moduleName: moduleDisplayName,
         icon: mod.icon,
         items: modulePages.map(p => {
@@ -396,50 +341,7 @@ export default function HRSidebar({
           const rawRoute = p.route || (children.length > 0 ? children[0].route || children[0].to : '') || '';
           let finalRoute = rawRoute;
 
-          // Map employee-centric routes to the current panel prefix (HR/Tenant/Employee)
-          // This ensures that when an HR is viewing their own records, they stay within the HR layout.
-          const ESS_MAP = {
-            'dashboard': 'my-dashboard',
-            'attendance': 'my-attendance',
-            'payslips': 'my-payslips',
-            'payslip': 'my-payslips',
-            'documents': 'my-documents',
-            'my-documents': 'my-documents',
-            'my documents': 'my-documents',
-            'internal-jobs': 'internal-jobs',
-            'internal jobs': 'internal-jobs',
-            'exit': 'resignation',
-            'resignation': 'resignation',
-            'offboarding': 'resignation',
-            'support': 'support-center',
-            'tickets': 'support-center',
-            'support-center': 'support-center',
-            'support center': 'support-center'
-          };
-
-          // If the route looks like an employee route (starts with /employee/ or is in our map)
-          // we force it to use the current pathPrefix.
-          // Normalize slug: remove common prefixes, spaces, and handle URL encoding
-          let slug = rawRoute
-            .replace('/employee/', '')
-            .replace('/hr/', '')
-            .replace('/tenant/', '')
-            .replace(/^\//, '')
-            .replace(/%20/g, ' ')
-            .trim()
-            .toLowerCase();
-
-          if (mod.name === 'emp service' || rawRoute.startsWith('/employee/')) {
-            const target = ESS_MAP[slug] || slug;
-            // Ensure no spaces in the final URL
-            finalRoute = `${pathPrefix}/${target.replace(/\s+/g, '-')}`;
-          } else if (slug === 'attendance' || slug === 'attendance ') {
-            // Force management attendance dashboard for the management module
-            finalRoute = `${pathPrefix}/attendance`;
-          } else if (rawRoute) {
-            // General management route cleanup
-            finalRoute = `${pathPrefix}/${slug.replace(/\s+/g, '-')}`;
-          }
+          finalRoute = resolveDynamicRoute({ moduleName: mod.name, rawRoute, pathPrefix });
 
           return {
             label: ['Resignation', 'Exit Management', 'Exit'].includes(p.name || p.label) ? 'Resignation' :
@@ -476,17 +378,20 @@ export default function HRSidebar({
     }
 
     // Ensure legacy primary modules remain visible in sidebar (old style expected by users).
-    const ensureSingleModule = (moduleName, to, icon, moduleCode, permissionKey, matchPaths = []) => {
+    const ensureSingleModule = ({ moduleName, route, icon, moduleCode, permissionKeys = [], matchRoutes = [] }) => {
       const exists = sections.some(s => s.moduleName === moduleName);
       if (exists) return;
-      const allowedByPerm = !permissionKey || hasPermission(permissionKey, 'any');
+      const keys = Array.isArray(permissionKeys) ? permissionKeys : [permissionKeys].filter(Boolean);
+      const allowedByPerm = keys.length === 0 || keys.some((key) => hasPermission(key, 'any'));
       // Primary filter is RBAC. We don't bypass for privileged roles anymore for visibility.
       const allowedByModule = !moduleCode || hasModuleAccess(moduleCode);
       if (!allowedByPerm || !allowedByModule) return;
+      const to = buildPath(pathPrefix, route);
+      const matchPaths = matchRoutes.map((matchRoute) => buildPath(pathPrefix, matchRoute));
 
       sections.push({
         id: `manual-${moduleName.toLowerCase().replace(/\s+/g, '-')}`,
-        title: 'MANAGEMENT',
+        title: MANAGEMENT_SECTION,
         moduleName,
         icon,
         items: [{ label: moduleName, to, icon: ICONS[icon] || <LayoutDashboard size={ICON_SIZE} />, children: [], matchPaths }]
@@ -494,71 +399,24 @@ export default function HRSidebar({
     };
 
     // Dashboard should ALWAYS be the first item in HR panel when permitted.
-    ensureSingleModule('Dashboard', `${pathPrefix}/dashboard`, 'dashboard', 'hr', 'overview.dashboard');
-    ensureSingleModule('Access', `${pathPrefix}/access`, 'access', 'accessControl', 'configuration.access');
-    ensureSingleModule('Employee', `${pathPrefix}/employees`, 'employees', 'hr', 'people.employees');
-    ensureSingleModule('Attendance', `${pathPrefix}/attendance`, 'attendance', 'attendance', 'attendance.dashboard');
-    ensureSingleModule('Leave Master', `${pathPrefix}/leave-policies`, 'leavePolicies', 'leave', 'leave.policies', [`${pathPrefix}/leave-policies`]);
-    
-
-    ensureSingleModule('Payroll', `${pathPrefix}/payroll/dashboard`, 'payrollDashboard', 'payroll', 'payroll.stats');
-    ensureSingleModule(
-      'Hiring',
-      `${pathPrefix}/requirements`,
-      'requirements',
-      'recruitment',
-      'hiring.jobList',
-      [
-        `${pathPrefix}/requirements`,
-        `${pathPrefix}/create-requirement`,
-        `${pathPrefix}/applicants`,
-        `${pathPrefix}/internal-applicants`,
-        `${pathPrefix}/candidate-status`,
-        `${pathPrefix}/positions`,
-        `${pathPrefix}/offer-templates`,
-        `${pathPrefix}/offers-joining`,
-        `${pathPrefix}/job/`
-      ]
-    );
-    ensureSingleModule('Onboarding', `${pathPrefix}/onboarding/dashboard`, 'onboarding', 'onboarding', 'onboarding.dashboard');
-    ensureSingleModule('BGV', `${pathPrefix}/bgv`, 'bgv', 'backgroundVerification', 'bgv.caseMaster');
-    ensureSingleModule(
-      'Documents',
-      `${pathPrefix}/letters`,
-      'templates',
-      'documentManagement',
-      'documents.dashboard',
-      [
-        `${pathPrefix}/letters`,
-        `${pathPrefix}/letter-templates`,
-        `${pathPrefix}/letter-settings`,
-        `${pathPrefix}/payslip-templates`
-      ]
-    );
-    ensureSingleModule('Settings', `${pathPrefix}/settings/company`, 'company', 'hr', 'configuration.company');
-    ensureSingleModule('Social Media', `${pathPrefix}/settings/social-media`, 'social', 'socialMediaIntegration', 'socialMedia.dashboard');
-    ensureSingleModule('Portals', `${pathPrefix}/career-builder`, 'viewCareers', 'employeePortal', 'portals.careerPage');
-    ensureSingleModule('Ticket Inbox', `${pathPrefix}/tickets`, 'support', 'hr', 'support.tickets');
-    ensureSingleModule('Reports', `${pathPrefix}/reports`, 'history', 'reports', 'reports.staffing');
-    ensureSingleModule('Offboarding', `${pathPrefix}/exit-management`, 'exit', 'hr', 'offboarding.exit');
-    ensureSingleModule('Organization', `${pathPrefix}/organization`, 'organization', 'hr', 'people.org');
+    MANAGEMENT_MODULES.forEach((moduleConfig) => ensureSingleModule(moduleConfig));
 
     // Ensure EMP Service pages exist in HR sidebar (7 ESS pages)
     if (!hasEmpServiceModule && hasCompanyModule('employeePortal')) {
-      const essItems = [
-        { label: 'Dashboard', to: `${pathPrefix}/my-dashboard`, icon: ICONS.dashboard, permissionKey: 'employee.dashboard', children: [] },
-        { label: 'My Attendance', to: `${pathPrefix}/my-attendance`, icon: ICONS.attendance, permissionKey: 'employee.attendance', children: [] },
-        { label: 'My Payslips', to: `${pathPrefix}/my-payslips`, icon: ICONS.payslips, permissionKey: 'employee.payslips', children: [] },
-        { label: 'My Documents', to: `${pathPrefix}/my-documents`, icon: ICONS.templates, permissionKey: 'employee.documents', children: [] },
-        { label: 'Internal Jobs', to: `${pathPrefix}/internal-jobs`, icon: ICONS.requirements, permissionKey: 'employee.jobs', children: [] },
-        { label: 'Support Center', to: `${pathPrefix}/support-center`, icon: ICONS.support, permissionKey: 'employee.tickets', children: [] },
-        { label: 'Resignation', to: `${pathPrefix}/resignation`, icon: ICONS.exit, permissionKey: 'employee.exit', children: [] },
-      ].filter((item) => hasPermission(item.permissionKey, 'any'));
+      const essItems = EMPLOYEE_SELF_SERVICE_PAGES
+        .map((page) => ({
+          label: page.title,
+          to: buildPath(pathPrefix, page.managementRoute),
+          icon: ICONS[page.icon] || ICONS.dashboard,
+          permissionKey: page.permissionKey,
+          children: [],
+        }))
+        .filter((item) => hasPermission(item.permissionKey, 'any'));
 
       if (essItems.length > 0) {
         sections.push({
           id: 'manual-emp-service',
-          title: 'EMPLOYEE',
+          title: EMPLOYEE_SECTION,
           moduleName: 'emp service',
           icon: 'dashboard',
           items: essItems
@@ -572,23 +430,24 @@ export default function HRSidebar({
 
     // Safety: if something upstream removed Dashboard, add it once.
     if (!hasDashSection) {
-      ensureSingleModule('Dashboard', `${pathPrefix}/dashboard`, 'dashboard', 'hr', 'overview.dashboard');
+      const dashboardModule = MANAGEMENT_MODULES.find((moduleConfig) => moduleConfig.moduleName === 'Dashboard');
+      if (dashboardModule) ensureSingleModule(dashboardModule);
     }
 
     if (canRep && hasCompanyModule('reports') && !hasReportsModule && !sections.some((s) => s.moduleName === 'Reports')) {
       sections.push({
         id: 'manual-reports-section',
-        title: 'MANAGEMENT',
+        title: MANAGEMENT_SECTION,
         moduleName: 'Reports',
         icon: 'history',
-        items: [{ label: 'Reports', to: `${pathPrefix}/reports`, icon: <LayoutDashboard size={ICON_SIZE} />, permissionKey: 'overview.reports', children: [] }]
+        items: [{ label: 'Reports', to: buildPath(pathPrefix, 'reports'), icon: <LayoutDashboard size={ICON_SIZE} />, permissionKey: 'overview.reports', children: [] }]
       });
     }
 
     // Sort sections matching the Access Grid order (with Dashboard first)
     // User-requested strict order for MANAGEMENT modules
     // Use the dynamic sidebarOrder state with a fallback array to prevent crashes
-    const order = (sidebarOrder && Array.isArray(sidebarOrder)) ? sidebarOrder : [];
+    const order = getManagementModuleOrder(sidebarOrder);
 
     sections.sort((a, b) => {
       const idxA = typeof order.indexOf === 'function' ? order.indexOf(a.moduleName) : -1;
@@ -611,11 +470,11 @@ export default function HRSidebar({
     }, {});
 
     // RE-ORDER MANAGEMENT: Ensure "Dashboard" (formerly Overview) is FIRST
-    if (groups['MANAGEMENT']) {
-      const dashboardIdx = groups['MANAGEMENT'].findIndex(m => m.moduleName === 'Dashboard');
+    if (groups[MANAGEMENT_SECTION]) {
+      const dashboardIdx = groups[MANAGEMENT_SECTION].findIndex(m => m.moduleName === 'Dashboard');
       if (dashboardIdx > -1) {
-        const [dash] = groups['MANAGEMENT'].splice(dashboardIdx, 1);
-        groups['MANAGEMENT'].unshift(dash);
+        const [dash] = groups[MANAGEMENT_SECTION].splice(dashboardIdx, 1);
+        groups[MANAGEMENT_SECTION].unshift(dash);
       }
     }
 
@@ -624,9 +483,9 @@ export default function HRSidebar({
     const keys = Object.keys(groups).sort((a, b) => {
       const idxA = sectionOrder.indexOf(a);
       const idxB = sectionOrder.indexOf(b);
-      // Fallback: MANAGEMENT = 0, others = high number
-      const valA = idxA > -1 ? idxA : (a === 'MANAGEMENT' ? 0 : 99);
-      const valB = idxB > -1 ? idxB : (b === 'MANAGEMENT' ? 0 : 99);
+      // Fallback: management first, others after.
+      const valA = idxA > -1 ? idxA : (a === MANAGEMENT_SECTION ? 0 : 99);
+      const valB = idxB > -1 ? idxB : (b === MANAGEMENT_SECTION ? 0 : 99);
       return valA - valB;
     });
     keys.forEach(k => orderedGroups[k] = groups[k]);
@@ -637,7 +496,7 @@ export default function HRSidebar({
         mods.filter(m => !hiddenModules.includes(m.moduleName))
       ])
     );
-  }, [dynamicModules, hasPermission, pathPrefix, isPrivilegedSidebarRole, hasCompanyModule, hasModuleAccess, resolveModuleCodeForNav, sidebarOrder, sectionOrder, hiddenModules]);
+  }, [dynamicModules, hasPermission, pathPrefix, isPrivilegedSidebarRole, hasCompanyModule, hasModuleAccess, sidebarOrder, sectionOrder, hiddenModules]);
 
 
   const orderedNavSections = navSections;

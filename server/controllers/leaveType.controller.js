@@ -9,7 +9,7 @@ exports.createLeaveType = async (req, res) => {
             return res.status(400).json({ success: false, error: 'Name and Code are required' });
         }
 
-        const existing = await LeaveType.findOne({ code: code.toUpperCase() });
+        const existing = await LeaveType.findOne({ code: code.toUpperCase(), tenant: req.tenantId });
         if (existing) {
             return res.status(400).json({ success: false, error: `Leave Type with code ${code} already exists` });
         }
