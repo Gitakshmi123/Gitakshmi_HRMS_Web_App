@@ -184,6 +184,7 @@ function CandidatePortalRoutesContent() {
         <Route path="applications" element={<CandidateApplications />} />
         <Route path="upload-documents" element={<CandidateDocumentRedirect />} />
         <Route path="profile" element={<CandidateProfile />} />
+        <Route path="upload-documents" element={<CandidateApplications />} />
       </Route>
 
       <Route

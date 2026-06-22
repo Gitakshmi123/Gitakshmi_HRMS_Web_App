@@ -399,6 +399,92 @@ const validateGeoFencing = (latitude, longitude, settings) => {
     return { valid: true, distance: Math.round(distance), mode: 'radius' };
 };
 
+const normalizeOfficePolygon = (settings) => {
+    const points = settings?.officeGeofence?.points?.length
+        ? settings.officeGeofence.points
+        : settings?.geofance;
+    return Array.isArray(points)
+        ? points.map(p => ({ lat: Number(p.lat), lng: Number(p.lng) }))
+            .filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng))
+        : [];
+};
+
+const resolveAddress = async (lat, lng) => {
+    const fallback = `${Number(lat).toFixed(6)}, ${Number(lng).toFixed(6)}`;
+    try {
+        const base = process.env.REVERSE_GEOCODING_URL || 'https://nominatim.openstreetmap.org/reverse';
+        const url = `${base}?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}`;
+        const response = await fetch(url, {
+            headers: { 'User-Agent': process.env.GEOCODING_USER_AGENT || 'GitakshmiHRMS/1.0' },
+            signal: AbortSignal.timeout(3500)
+        });
+        if (!response.ok) return fallback;
+        const data = await response.json();
+        return String(data.display_name || fallback).slice(0, 500);
+    } catch {
+        return fallback;
+    }
+};
+
+exports.verifyPunchLocation = async (req, res) => {
+    try {
+        const lat = Number(req.body?.lat ?? req.body?.latitude);
+        const lng = Number(req.body?.lng ?? req.body?.longitude);
+        const accuracy = Number(req.body?.accuracy);
+        if (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lng) || lng < -180 || lng > 180) {
+            return res.status(422).json({ success: false, error: 'invalid_location', message: 'Valid latitude and longitude are required.' });
+        }
+        const { AttendanceSettings } = getModels(req);
+        const settings = await AttendanceSettings.findOne({ tenant: req.tenantId }).lean();
+        const polygon = normalizeOfficePolygon(settings);
+        const enabled = Boolean(settings?.officeGeofence?.enabled || settings?.geoFencingEnabled);
+        const geofenceMode = settings?.geofenceMode || (polygon.length >= 3 ? 'polygon' : 'radius');
+        let inRange = true;
+
+        if (enabled) {
+            if (geofenceMode === 'radius') {
+                const officeLat = Number(settings?.officeLatitude);
+                const officeLng = Number(settings?.officeLongitude);
+                if (Number.isFinite(officeLat) && Number.isFinite(officeLng)) {
+                    const R = 6371e3; // Earth radius in meters
+                    const φ1 = officeLat * Math.PI / 180;
+                    const φ2 = lat * Math.PI / 180;
+                    const Δφ = (lat - officeLat) * Math.PI / 180;
+                    const Δλ = (lng - officeLng) * Math.PI / 180;
+                    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+                              Math.cos(φ1) * Math.cos(φ2) *
+                              Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+                    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                    const distance = R * c;
+                    const allowedRadius = Number(settings?.allowedRadiusMeters || 100);
+                    inRange = distance <= allowedRadius + (accuracy || 0);
+                }
+            } else {
+                inRange = polygon.length < 3 || isInsidePolygon({ lat, lng }, polygon);
+            }
+        }
+
+        const address = await resolveAddress(lat, lng);
+        return res.json({
+            success: true,
+            data: {
+                inRange,
+                address,
+                lat,
+                lng,
+                accuracy: Number.isFinite(accuracy) ? accuracy : null,
+                geofenceConfigured: geofenceMode === 'radius'
+                    ? (Number.isFinite(settings?.officeLatitude) && Number.isFinite(settings?.officeLongitude))
+                    : (polygon.length === 4),
+                geofenceName: settings?.officeGeofence?.name || 'Main Office',
+                requiresReason: !inRange
+            }
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, error: 'location_verification_failed', message: error.message });
+    }
+};
+
 // Helper: Validate IP Address
 const validateIPAddress = (ipAddress, settings) => {
     if (!settings.ipRestrictionEnabled || !settings.allowedIPs || settings.allowedIPs.length === 0) {
@@ -1135,6 +1221,23 @@ exports.updateSettings = async (req, res) => {
 
         // Filter out empty IP addresses
         const updateData = { ...req.body, updatedBy: req.user.id };
+        if (updateData.officeGeofence) {
+            const points = normalizeOfficePolygon({ officeGeofence: updateData.officeGeofence });
+            if (updateData.officeGeofence.enabled && points.length !== 4) {
+                return res.status(422).json({ error: 'INVALID_OFFICE_GEOFENCE', message: 'Exactly 4 valid latitude/longitude points are required.' });
+            }
+            if (points.some(p => p.lat < -90 || p.lat > 90 || p.lng < -180 || p.lng > 180)) {
+                return res.status(422).json({ error: 'INVALID_OFFICE_GEOFENCE', message: 'Office geofence contains invalid coordinates.' });
+            }
+            const unique = new Set(points.map(p => `${p.lat},${p.lng}`));
+            if (updateData.officeGeofence.enabled && unique.size !== 4) {
+                return res.status(422).json({ error: 'INVALID_OFFICE_GEOFENCE', message: 'All 4 office points must be unique.' });
+            }
+            updateData.officeGeofence = { ...updateData.officeGeofence, points };
+            updateData.geofance = points;
+            const isCircularEnabled = updateData.geofenceMode === 'radius' && updateData.geoFencingEnabled;
+            updateData.geoFencingEnabled = Boolean(updateData.officeGeofence.enabled || isCircularEnabled);
+        }
         if (updateData.allowedIPs) {
             updateData.allowedIPs = updateData.allowedIPs.filter(ip => ip && ip.trim() !== '');
         }
@@ -1236,14 +1339,25 @@ exports.getCalendar = async (req, res) => {
         }
 
         // Get holidays for the month (including past and future for full visibility)
-        const holidays = await Holiday.find({
-            tenant: tenantId,
-            $or: [
-                { date: { $gte: startDate, $lte: endDate } },
-                { endDate: { $gte: startDate, $lte: endDate } },
-                { date: { $lte: startDate }, endDate: { $gte: endDate } }
-            ]
-        }).sort({ date: 1 });
+        let holidays = [];
+        if (employeeId) {
+            const { getHolidaysForEmployee } = require('../utils/holidayHelper');
+            holidays = await getHolidaysForEmployee({
+                employeeId,
+                year: targetYear,
+                tenantDB: req.tenantDB,
+                tenantId
+            });
+        } else {
+            holidays = await Holiday.find({
+                tenant: tenantId,
+                $or: [
+                    { date: { $gte: startDate, $lte: endDate } },
+                    { endDate: { $gte: startDate, $lte: endDate } },
+                    { date: { $lte: startDate }, endDate: { $gte: endDate } }
+                ]
+            }).sort({ date: 1 });
+        }
 
         // Create holiday map for quick lookup
         const holidayMap = {};
@@ -3493,6 +3607,12 @@ exports.getFaceUpdateRequests = async (req, res) => {
             }
         }
 
+        const { FaceData } = getModels(req);
+        const faceDataDocs = await FaceData.find({ tenant: tenantId }).select('employee registeredFaceImage').lean();
+        const faceImgMap = new Map(
+            faceDataDocs.map(f => [String(f.employee), f.registeredFaceImage])
+        );
+
         const hydratedRequests = requests.map((request) => {
             const directEmployee = employeesById.get(String(request.employee));
             const fallbackEmployee = resolvedEmployeesByLegacyUserId.get(String(request.employee));
@@ -3509,7 +3629,8 @@ exports.getFaceUpdateRequests = async (req, res) => {
                         profilePic: employee.profilePic || '',
                         email: employee.email || ''
                     }
-                    : null
+                    : null,
+                registeredFaceImage: faceImgMap.get(String(request.employee)) || null
             };
         });
 
@@ -3535,7 +3656,7 @@ exports.actionFaceUpdate = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Rejection reason is required' });
         }
 
-        const { FaceUpdateRequest } = getModels(req);
+        const { FaceUpdateRequest, FaceData } = getModels(req);
 
         const request = await FaceUpdateRequest.findOne({ _id: requestId, tenant: tenantId });
         if (!request) {
@@ -3552,9 +3673,94 @@ exports.actionFaceUpdate = async (req, res) => {
         request.rejectionReason = status === 'rejected' ? String(rejectionReason || '').trim() : '';
 
         await request.save();
+
+        if (status === 'approved') {
+            // Find and activate the pending FaceData for this employee
+            const faceData = await FaceData.findOne({
+                tenant: tenantId,
+                employee: request.employee,
+                status: 'PENDING_REVIEW'
+            });
+            if (faceData) {
+                faceData.status = 'ACTIVE';
+                faceData.isVerified = true;
+                await faceData.save();
+
+                // Mark the request status as 'used' directly since the registration is active now
+                request.status = 'used';
+                await request.save();
+            }
+        } else if (status === 'rejected') {
+            // Delete the pending FaceData for this employee so they can retry initial registration
+            await FaceData.deleteOne({
+                tenant: tenantId,
+                employee: request.employee,
+                status: 'PENDING_REVIEW'
+            });
+        }
+
         res.json({ success: true, message: `Request ${status} successfully` });
     } catch (err) {
         console.error('Action face update request error:', err);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+};
+
+// 🔹 Get All Registered Faces (HR)
+exports.getRegisteredFaces = async (req, res) => {
+    try {
+        const tenantId = req.tenantId;
+        const { FaceData, Employee } = getModels(req);
+
+        // Get all active employees
+        const employees = await Employee.find({
+            tenant: tenantId,
+            isActive: { $ne: false }
+        }).select('firstName lastName employeeId departmentId email').lean();
+
+        // Get all face data registrations
+        const faceRegistrations = await FaceData.find({ tenant: tenantId }).lean();
+        const faceMap = new Map(
+            faceRegistrations.map(f => [String(f.employee), f])
+        );
+        const result = employees.map(emp => {
+            const face = faceMap.get(String(emp._id));
+            return {
+                employeeId: emp._id,
+                employeeCode: emp.employeeId,
+                name: `${emp.firstName || ''} ${emp.lastName || ''}`.trim(),
+                email: emp.email,
+                isFaceRegistered: !!face,
+                faceStatus: face ? face.status : 'NOT_REGISTERED',
+                registeredAt: face?.registration?.registeredAt || null,
+                qualityScore: face?.quality?.confidence || null,
+                registeredFaceImage: face?.registeredFaceImage || null
+            };
+        });
+
+        res.json({ success: true, data: result });
+    } catch (err) {
+        console.error('getRegisteredFaces error:', err);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+};
+
+// 🔹 Delete Employee Face Registration (HR Admin)
+exports.deleteEmployeeFaceHR = async (req, res) => {
+    try {
+        const tenantId = req.tenantId;
+        const { employeeId } = req.params;
+        const { FaceData, FaceUpdateRequest } = getModels(req);
+
+        // Delete face template
+        await FaceData.deleteOne({ tenant: tenantId, employee: employeeId });
+
+        // Update or delete update requests to keep it clean
+        await FaceUpdateRequest.deleteMany({ tenant: tenantId, employee: employeeId });
+
+        res.json({ success: true, message: 'Face registration deleted successfully' });
+    } catch (err) {
+        console.error('deleteEmployeeFaceHR error:', err);
         res.status(500).json({ success: false, message: 'Internal server error' });
     }
 };

@@ -11,6 +11,7 @@ const LEGEND_LABELS = {
     PRESENT: 'Present',
     ABSENT: 'Absent',
     HALF_DAY: 'Half Day',
+    ON_DUTY: 'On Duty',
     DEFAULT: '',
 };
 
@@ -50,6 +51,13 @@ const getStatusPalette = (status) => {
                 text: 'text-emerald-700',
                 pill: 'bg-emerald-50',
                 accent: 'bg-emerald-300',
+            };
+        case STATUS.ON_DUTY:
+            return {
+                dot: 'bg-indigo-400',
+                text: 'text-indigo-700',
+                pill: 'bg-indigo-50',
+                accent: 'bg-indigo-300',
             };
         case STATUS.ABSENT:
             return {
@@ -200,7 +208,11 @@ export default function AttendanceCalendar({
 
         // 2. Attendance Record Status
         const attStatus = (dayObj?.status || '').toString().toUpperCase();
-        if (attStatus === 'PRESENT') return STATUS.PRESENT;
+        const isWfh = dayObj?.isWFH || attStatus === 'WFH';
+        const isOnDuty = dayObj?.isOnDuty || ['ON_DUTY', 'ON-DUTY', 'ONDUTY'].includes(attStatus);
+
+        if (attStatus === 'PRESENT' || isWfh) return STATUS.PRESENT;
+        if (isOnDuty) return STATUS.ON_DUTY;
         if (attStatus === 'HALF_DAY') return STATUS.HALF_DAY;
         if (attStatus === 'ABSENT') return STATUS.ABSENT;
         if (attStatus === 'LEAVE') return STATUS.LEAVE;

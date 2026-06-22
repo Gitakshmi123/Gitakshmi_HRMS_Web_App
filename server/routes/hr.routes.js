@@ -173,6 +173,10 @@ if (calendarCtrl && typeof calendarCtrl.getAttendanceCalendar === 'function') {
 if (calendarCtrl && typeof calendarCtrl.getAttendanceCalendarDetail === 'function') {
    router.get('/hr/attendance-calendar/detail', auth.authenticate, checkPermission('attendance.calendar', 'view'), auth.requireHr, calendarCtrl.getAttendanceCalendarDetail);
 }
+if (calendarCtrl && typeof calendarCtrl.getWorkforceAnalyticsCalendar === 'function') {
+   router.get('/hr/workforce-analytics-calendar', auth.authenticate, checkPermission('attendance.calendar', 'view'), auth.requireHr, calendarCtrl.getWorkforceAnalyticsCalendar);
+}
+
 
 // Offer Templates
 router.use('/hr/offer-templates', require('./offerTemplate.routes'));

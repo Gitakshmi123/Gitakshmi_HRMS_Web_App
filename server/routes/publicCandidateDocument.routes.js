@@ -4,6 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const candidateDocumentController = require('../controllers/candidateDocument.controller');
+const externalRecordCtrl = require('../controllers/externalEmployeeRecord.controller');
 const CloudinaryService = require('../services/CloudinaryService');
 
 // Ensure uploads folder exists

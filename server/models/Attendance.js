@@ -126,6 +126,8 @@ const AttendanceSchema = new mongoose.Schema({
     similarity: { type: Number, default: 0 },
     method: { type: String, default: 'SYSTEM' }
   },
+  checkInImage: { type: String, default: '' },
+  checkOutImage: { type: String, default: '' },
   tracking: {
     sessionId: { type: mongoose.Schema.Types.ObjectId, ref: 'LiveTrackingSession', default: null },
     status: {

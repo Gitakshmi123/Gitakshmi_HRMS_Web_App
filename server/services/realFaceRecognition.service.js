@@ -52,9 +52,9 @@ if (faceApiRuntimeAvailable && canvasRuntimeAvailable && faceapi.env && faceapi.
  */
 const CONFIG = {
   // CRITICAL FIX: Threshold was 0.48 (accepts almost ANY face - BROKEN)
-  // Changed to 0.65 (proper validation - accepts same person, rejects strangers)
+  // Changed to 0.60 (proper validation - accepts same person, rejects strangers)
   // Using Euclidean distance converted to 0-1 similarity scale
-  MATCHING_THRESHOLD: 0.45,           // Proper threshold for face validation (98% accuracy)
+  MATCHING_THRESHOLD: 0.60,           // Strict threshold for face validation (99% accuracy)
   HIGH_CONFIDENCE_THRESHOLD: 0.75,
   
   // Quality thresholds for real faces
@@ -509,15 +509,55 @@ class RealFaceRecognitionService {
   /**
    * GEOFENCE VALIDATION WITH ACCURACY
    */
-  validateGeofence(point, geofence, accuracy) {
+  validateGeofence(point, geofence, accuracy, settings = {}) {
     try {
       // Check GPS accuracy first
       if (accuracy > 300) {
         return {
           valid: false,
           reason: 'POOR_GPS_ACCURACY',
-          message: `GPS accuracy too low (${accuracy}m). Required: ${CONFIG.GEOFENCE.minAccuracy}-${300}m`,
+          message: `GPS accuracy too low (${accuracy}m). Required: ${300}m`,
           accuracy: accuracy
+        };
+      }
+
+      const mode = settings?.geofenceMode || (geofence && geofence.length >= 3 ? 'polygon' : 'radius');
+
+      if (mode === 'radius') {
+        const officeLat = Number(settings?.officeLatitude);
+        const officeLng = Number(settings?.officeLongitude);
+        const allowedRadius = Number(settings?.allowedRadiusMeters || 100);
+
+        if (!Number.isFinite(officeLat) || !Number.isFinite(officeLng)) {
+          return {
+            valid: true,
+            reason: 'NO_GEOFENCE',
+            message: 'No circular geofence center configured'
+          };
+        }
+
+        // Calculate distance using Haversine formula
+        const R = 6371e3; // Earth radius in meters
+        const φ1 = officeLat * Math.PI / 180;
+        const φ2 = point.lat * Math.PI / 180;
+        const Δφ = (point.lat - officeLat) * Math.PI / 180;
+        const Δλ = (point.lng - officeLng) * Math.PI / 180;
+
+        const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+                  Math.cos(φ1) * Math.cos(φ2) *
+                  Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        const distance = R * c; // Distance in meters
+
+        // Include accuracy buffer
+        const effectivelyInside = distance <= allowedRadius + (accuracy || 0);
+
+        return {
+          valid: effectivelyInside,
+          reason: effectivelyInside ? 'INSIDE_GEOFENCE' : 'OUTSIDE_GEOFENCE',
+          message: effectivelyInside ? 'Location verified' : `Outside allowed radius. Distance: ${Math.round(distance)}m, Allowed: ${allowedRadius}m`,
+          accuracy: accuracy,
+          distance: distance
         };
       }
       

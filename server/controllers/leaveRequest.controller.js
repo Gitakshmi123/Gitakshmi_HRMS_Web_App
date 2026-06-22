@@ -137,15 +137,26 @@ const calculateNetDays = async (req, startDate, endDate, employeeId = null) => {
 
     // Fall through to the day-by-day loop below to ensure 100% timezone-safe calculation
 
-    const holidays = await Holiday.find({
-        tenant: req.tenantId,
-        date: { $lte: end },
-        $or: [
-            { endDate: { $exists: false } },
-            { endDate: null, date: { $gte: start } },
-            { endDate: { $gte: start } }
-        ]
-    }).lean();
+    let holidays = [];
+    if (employeeId) {
+        const { getHolidaysForEmployee } = require('../utils/holidayHelper');
+        holidays = await getHolidaysForEmployee({
+            employeeId,
+            year: start.getFullYear(),
+            tenantDB: req.tenantDB,
+            tenantId: req.tenantId
+        });
+    } else {
+        holidays = await Holiday.find({
+            tenant: req.tenantId,
+            date: { $lte: end },
+            $or: [
+                { endDate: { $exists: false } },
+                { endDate: null, date: { $gte: start } },
+                { endDate: { $gte: start } }
+            ]
+        }).lean();
+    }
     const holidaySet = new Set();
     holidays.forEach(h => {
         const s = new Date(h.date);
@@ -1481,19 +1492,29 @@ exports.getAllLeaves = async (req, res) => {
 
         const { LeaveRequest, LeaveBalance } = getModels(req);
 
+        const filter = {};
+        if (req.query.employeeId) {
+            filter.employee = req.query.employeeId;
+        }
+
         // Extract pagination params
         const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10;
+        const limitStr = req.query.limit;
+        const limit = limitStr === 'all' || limitStr === '0' ? 0 : (parseInt(limitStr) || 10);
         const skip = (page - 1) * limit;
 
-        const total = await LeaveRequest.countDocuments({});
+        const total = await LeaveRequest.countDocuments(filter);
 
-        const leaves = await LeaveRequest.find({})
+        let query = LeaveRequest.find(filter)
             .populate('employee')
             .populate('actionBy', 'firstName lastName profilePic')
-            .sort({ createdAt: -1 })
-            .skip(skip)
-            .limit(limit);
+            .sort({ createdAt: -1 });
+
+        if (limit > 0) {
+            query = query.skip(skip).limit(limit);
+        }
+
+        const leaves = await query;
 
         const year = new Date().getFullYear();
         // Map to include a single actionDateTime field and employee balances for the frontend table
@@ -1518,8 +1539,8 @@ exports.getAllLeaves = async (req, res) => {
             meta: {
                 total,
                 page,
-                limit,
-                totalPages: Math.ceil(total / limit)
+                limit: limit || total,
+                totalPages: limit > 0 ? Math.ceil(total / limit) : 1
             }
         });
     } catch (error) {

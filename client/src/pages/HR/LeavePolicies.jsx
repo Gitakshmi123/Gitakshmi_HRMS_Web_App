@@ -13,6 +13,7 @@ import { Can } from '../../components/rbac/PermissionGate';
 import LeaveAnalyticsPanel from './components/LeaveAnalyticsPanel';
 import OpeningBalanceImportModal from './components/OpeningBalanceImportModal';
 import FormulaBuilder from './components/FormulaBuilder';
+import HolidayCalendarWorkspace from './HolidayCalendarWorkspace';
 import * as XLSX from '@sheetjs/xlsx';
 
 // ─── Shared Excel Export Utility ─────────────────────────────────────────────
@@ -4735,7 +4736,6 @@ export default function LeavePolicies({ initialView, mode = 'master' }) {
                             </button>
                         )}
                         
-
                         {view === 'policies' && mode === 'config' && (
                             <Can module="leave.policies" action="create">
                                 <button
@@ -4760,7 +4760,7 @@ export default function LeavePolicies({ initialView, mode = 'master' }) {
                         { id: 'leavegroups', label: '3. Group Assignment' },
                         { id: 'policies', label: 'Leave Policies', count: totalPolicies },
                         { id: 'custom', label: 'Policy Mapping', count: mappings.length },
-                        { id: 'holiday', label: 'Holiday Master' },
+                        { id: 'holiday', label: 'Holiday Calendar' },
                         { id: 'opening', label: 'Opening Balance' },
                         { id: 'requests', label: 'Leave Requests' },
                         { id: 'ledger', label: 'Leave Ledger' },
@@ -4842,7 +4842,7 @@ export default function LeavePolicies({ initialView, mode = 'master' }) {
 
                 {view === 'holiday' && (
                     <div className="animate-in slide-in-from-bottom-4 duration-500">
-                        <HolidayMasterPanel />
+                        <HolidayCalendarWorkspace />
                     </div>
                 )}
 

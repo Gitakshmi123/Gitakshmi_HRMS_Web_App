@@ -12,7 +12,8 @@ const getModels = async (req) => {
         TrackerCandidate: req.tenantDB.models.TrackerCandidate || req.tenantDB.model("TrackerCandidate", require('../models/TrackerCandidate')),
         CandidateStatusLog: req.tenantDB.models.CandidateStatusLog || req.tenantDB.model("CandidateStatusLog", require('../models/CandidateStatusLog')),
         Applicant: req.tenantDB.models.Applicant || req.tenantDB.model("Applicant", require('../models/Applicant')),
-        Offer: req.tenantDB.models.Offer || req.tenantDB.model("Offer", require('../models/Offer'))
+        Offer: req.tenantDB.models.Offer || req.tenantDB.model("Offer", require('../models/Offer')),
+        AuditLog: req.tenantDB.models.AuditLog || req.tenantDB.model("AuditLog", require('../models/AuditLog'))
     };
 };
 
@@ -246,7 +247,7 @@ exports.getTimeline = async (req, res) => {
 exports.updateStatus = async (req, res) => {
     const { status, stage, actionBy, remarks } = req.body;
     try {
-        const { TrackerCandidate, CandidateStatusLog, Applicant } = await getModels(req);
+        const { TrackerCandidate, CandidateStatusLog, Applicant, AuditLog } = await getModels(req);
         const { id } = req.params;
 
         // Try finding in TrackerCandidate first
@@ -331,6 +332,26 @@ exports.updateStatus = async (req, res) => {
             actionDate: new Date()
         });
         await log.save();
+
+        try {
+            await AuditLog.create({
+                tenant: req.tenantId,
+                entity: 'HiringPipeline',
+                entityId: candidate._id,
+                action: status || 'Pipeline Status Updated',
+                performedBy: req.user?._id || null,
+                changes: { before: null, after: { status, stage } },
+                meta: {
+                    module: 'Hiring',
+                    performedBy: actionBy || req.user?.name || req.user?.email || 'HR',
+                    ipAddress: req.ip,
+                    date: new Date(),
+                    remarks
+                }
+            });
+        } catch (auditErr) {
+            console.warn('[TRACKER_AUDIT] failed:', auditErr.message);
+        }
 
         res.json({ candidate, log });
     } catch (error) {

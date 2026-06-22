@@ -2163,6 +2163,7 @@ exports.markAttendance = async (req, res) => {
         attendance.checkInTime = now;
         attendance.checkInLocation = displayLocation;
       }
+      attendance.checkInImage = submittedImage;
       attendance.gpsLocation = { lat: displayLocation.lat, lng: displayLocation.lng };
       attendance.checkOut = null;
       attendance.checkOutTime = null;
@@ -2174,6 +2175,7 @@ exports.markAttendance = async (req, res) => {
       attendance.checkOut = now;
       attendance.checkOutTime = now;
       attendance.checkOutLocation = displayLocation;
+      attendance.checkOutImage = submittedImage;
       attendance.tracking.stoppedAt = now;
       attendance.tracking.status = 'STOPPED';
     }
