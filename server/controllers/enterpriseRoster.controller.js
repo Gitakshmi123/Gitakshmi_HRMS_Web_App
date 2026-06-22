@@ -402,3 +402,73 @@ exports.validateRosterConflicts = async (req, res) => {
         res.status(500).json({ success: false, message: 'Server Error' });
     }
 };
+
+// 10. Auto-assign new employee to Company Default Roster
+exports.assignCompanyDefaultToEmployee = async (req, tenantId, employeeId) => {
+    try {
+        const { Roster, RosterAssignment, RosterRotation } = getModels(req);
+        const currentDate = new Date();
+        const rosters = await Roster.find({
+            tenant: tenantId,
+            isCompanyDefault: true,
+            endDate: { $gte: currentDate }
+        });
+
+        for (const roster of rosters) {
+            if (!roster.employees.includes(employeeId)) {
+                roster.employees.push(employeeId);
+                await roster.save();
+            }
+
+            const weeks = calculateWeeks(roster.startDate, roster.endDate);
+            let assignments = [];
+
+            if (roster.rosterType === 'Fixed Shift' && roster.fixedShiftId) {
+                for (const week of weeks) {
+                    assignments.push({
+                        tenant: tenantId,
+                        rosterId: roster._id,
+                        employeeId: employeeId,
+                        shiftId: roster.fixedShiftId,
+                        weekNo: week.weekNo,
+                        startDate: week.startDate,
+                        endDate: week.endDate,
+                        assignedBy: req.user?._id || null,
+                        status: roster.status === 'Published' ? 'Published' : 'Draft'
+                    });
+                }
+            } else if (roster.rotationId && roster.rosterType !== 'Manual' && roster.rosterType !== 'Fixed Shift') {
+                const rotation = await RosterRotation.findById(roster.rotationId).lean();
+                if (rotation && rotation.sequence && rotation.sequence.length > 0) {
+                    const sequence = rotation.sequence;
+                    let sequenceIndex = 0;
+                    for (const week of weeks) {
+                        const shiftId = sequence[sequenceIndex % sequence.length];
+                        assignments.push({
+                            tenant: tenantId,
+                            rosterId: roster._id,
+                            employeeId: employeeId,
+                            shiftId: shiftId,
+                            weekNo: week.weekNo,
+                            startDate: week.startDate,
+                            endDate: week.endDate,
+                            assignedBy: req.user?._id || null,
+                            status: roster.status === 'Published' ? 'Published' : 'Draft'
+                        });
+                        sequenceIndex++;
+                    }
+                }
+            }
+
+            if (assignments.length > 0) {
+                await RosterAssignment.deleteMany({
+                    rosterId: roster._id,
+                    employeeId: employeeId
+                });
+                await RosterAssignment.insertMany(assignments);
+            }
+        }
+    } catch (error) {
+        console.error('[ASSIGN_COMPANY_DEFAULT_ERROR]', error);
+    }
+};

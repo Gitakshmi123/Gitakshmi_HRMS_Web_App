@@ -172,7 +172,7 @@ export default function RosterManagementTab() {
         }).map(e => e._id);
       }
 
-      if (selectedEmployees.length === 0) {
+      if (selectedEmployees.length === 0 && values.entityType !== 'Company') {
          message.error("No employees found for the selected assignment level.");
          setLoading(false);
          return;
@@ -189,7 +189,8 @@ export default function RosterManagementTab() {
         rosterType: values.rosterType,
         rotationId: values.rotationId,
         fixedShiftId: values.fixedShiftId,
-        employees: selectedEmployees
+        employees: selectedEmployees,
+        isCompanyDefault: values.entityType === 'Company'
       };
 
       const res = await api.post('/enterprise-roster', payload);
