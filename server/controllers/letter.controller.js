@@ -3528,6 +3528,28 @@ exports.generateOfferLetter = async (req, res) => {
             console.error('❌ [OFFER LETTER] Applicant not found:', applicantId);
             return res.status(404).json({ message: "Applicant not found" });
         }
+
+        if (!preview) {
+            const ExternalEmployeeRecord = req.tenantDB.models.ExternalEmployeeRecord
+                || req.tenantDB.model('ExternalEmployeeRecord', require('../models/ExternalEmployeeRecord'));
+            const approvedExternalRecord = await ExternalEmployeeRecord.findOne({
+                applicantId: applicant._id,
+                tenant: req.tenantId || req.user.tenantId,
+                status: 'Approved',
+                draftEmployeeId: { $ne: null }
+            }).lean();
+            const draftEmployeeId = approvedExternalRecord?.draftEmployeeId || applicant.employeeId;
+            const draftEmployee = draftEmployeeId
+                ? await Employee.findOne({ _id: draftEmployeeId, status: 'Draft' }).lean().catch(() => null)
+                : null;
+            if (!approvedExternalRecord || !draftEmployee) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Candidate Profile Not Approved',
+                    code: 'CANDIDATE_PROFILE_NOT_APPROVED'
+                });
+            }
+        }
         const candidateDoc = applicant.candidateId ? await Candidate.findById(applicant.candidateId).lean().catch(() => null) : null;
         const employeeDoc = applicant.employeeId ? await Employee.findById(applicant.employeeId).lean().catch(() => null) : null;
         const applicantGrade = {

@@ -69,6 +69,8 @@ export default function EmployeeForm({
   onClose,
   viewOnly = false,
   onDraftSaved,
+  externalToken = '',
+  externalMode = false,
 }) {
   const [step, setStep] = useState(() => {
     const last = (employee?.status === 'Draft' ? employee?.lastStep : 1) || 1;
@@ -178,6 +180,7 @@ export default function EmployeeForm({
   const [managers, setManagers] = useState([]);
   const [_departmentHead, _setDepartmentHead] = useState(employee?.departmentHead || false);
   const [saving, setSaving] = useState(false);
+  const externalAutoSaveRef = useRef(null);
   const [errors, setErrors] = useState({});
   const [showPassword, setShowPassword] = useState(false);
   const [pincodeLoading, setPincodeLoading] = useState(false);
@@ -722,6 +725,9 @@ export default function EmployeeForm({
 
   const ensureDepartmentForSave = useCallback(async () => {
     const typedName = normalizeDepartmentName(department);
+    if (externalMode) {
+      return { department: typedName || undefined, departmentId: undefined };
+    }
     const existingById = departments.find((dept) => String(dept?._id || dept || '') === String(departmentId || ''));
     const existingByName = departments.find((dept) => {
       const deptName = normalizeDepartmentName(typeof dept === 'string' ? dept : dept?.name);
@@ -780,7 +786,7 @@ export default function EmployeeForm({
     setDepartmentId('');
     setDepartment(typedName);
     return { department: typedName, departmentId: undefined };
-  }, [department, departmentId, departments, makeDepartmentCode, normalizeDepartmentName]);
+  }, [department, departmentId, departments, externalMode, makeDepartmentCode, normalizeDepartmentName]);
 
   // Fetch employees for manager dropdown
   const loadManagers = useCallback(async () => {
@@ -1512,14 +1518,17 @@ export default function EmployeeForm({
       };
 
       let empResult;
-      if (employee) {
+      if (externalMode && externalToken) {
+        empResult = await api.post(`/candidate/document-upload/${externalToken}/submit`, payload);
+        showToast('success', 'Profile Submitted', 'Your employment profile has been submitted for HR approval.');
+      } else if (employee) {
         empResult = await api.put(`/hr/employees/${employee._id}`, payload);
       } else {
         empResult = await api.post('/hr/employees', payload);
       }
 
       // If employee is marked as "Dep Head", update the department's head field
-      if (role === 'Dep Head' && departmentId) {
+      if (!externalMode && role === 'Dep Head' && departmentId) {
         const empId = empResult?.data?.data?._id || empResult?.data?._id || employee?._id;
         if (empId) {
           await api.put(`/hr/departments/${departmentId}`, { head: empId })
@@ -1527,7 +1536,7 @@ export default function EmployeeForm({
         }
       }
 
-      onClose();
+      if (onClose) onClose(empResult?.data?.data || empResult?.data || null);
     } catch (err) {
       console.error('Employee save error:', err);
       const code = err?.response?.data?.error;
@@ -1544,7 +1553,7 @@ export default function EmployeeForm({
     }
   }
 
-  async function saveDraft(e) {
+  async function saveDraft(e, options = {}) {
     if (e) e.preventDefault();
     setSaving(true);
     try {
@@ -1724,13 +1733,17 @@ export default function EmployeeForm({
       };
 
       let draftResponse;
-      if (employee?._id) {
+      if (externalMode && externalToken) {
+        draftResponse = await api.put(`/candidate/document-upload/${externalToken}/draft`, payload);
+      } else if (employee?._id) {
         draftResponse = await api.put(`/hr/employees/${employee._id}`, payload);
       } else {
         draftResponse = await api.post('/hr/employees', payload);
       }
       const savedDraft = draftResponse?.data?.data || draftResponse?.data || null;
-      showToast('success', 'Success', 'Draft saved successfully!');
+      if (!options.silent) {
+        showToast('success', 'Success', 'Draft saved successfully!');
+      }
       if (savedDraft && onDraftSaved) {
         onDraftSaved(savedDraft);
       }
@@ -1739,6 +1752,18 @@ export default function EmployeeForm({
       showToast('error', 'Error', "Failed to save draft: " + (err.response?.data?.message || err.message));
     } finally { setSaving(false); }
   }
+
+  externalAutoSaveRef.current = () => saveDraft(null, { silent: true });
+
+  useEffect(() => {
+    if (!externalMode || !externalToken) return undefined;
+    const intervalId = window.setInterval(() => {
+      if (!saving && externalAutoSaveRef.current) {
+        externalAutoSaveRef.current();
+      }
+    }, 30000);
+    return () => window.clearInterval(intervalId);
+  }, [externalMode, externalToken, saving]);
 
   const stepTitles = ['General Details', 'Job Information', 'Academic Qualifications', 'Identity Documents', 'Employment History', 'Bank Details', 'Language Proficiency', 'References & Related', 'Additional Benefits', 'Employment Setup'];
 

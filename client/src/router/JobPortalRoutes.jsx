@@ -14,6 +14,7 @@ import CandidateDashboard from '../pages/Candidate/CandidateDashboard';
 import CandidateOpenPositions from '../pages/Candidate/CandidateOpenPositions';
 import CandidateApplications from '../pages/Candidate/CandidateApplications';
 import CandidateProfile from '../pages/Candidate/CandidateProfile';
+import CandidateDocumentUpload from '../pages/Candidate/CandidateDocumentUpload';
 import ApplicationTrack from '../pages/ApplicationTrack';
 import JobApplication from '../pages/JobApplication/JobApplication';
 import Jobs from '../pages/JobApplication/JobsList';
@@ -89,6 +90,7 @@ function CandidatePortalRoutesContent() {
       {/* Public */}
       <Route path="login" element={<CandidateLogin />} />
       <Route path="signup" element={<CandidateSignup />} />
+      <Route path="document-upload/:token" element={<CandidateDocumentUpload />} />
 
       {/* Protected Candidate Routes (Dashboard Shell) */}
       <Route
@@ -104,6 +106,7 @@ function CandidatePortalRoutesContent() {
         <Route path="open-positions" element={<CandidateOpenPositions />} />
         <Route path="applications" element={<CandidateApplications />} />
         <Route path="profile" element={<CandidateProfile />} />
+        <Route path="upload-documents" element={<CandidateApplications />} />
       </Route>
 
       <Route
