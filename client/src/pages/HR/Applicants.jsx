@@ -11,7 +11,7 @@ import InitialCompensationModal from '../../components/Compensation/InitialCompe
 import { DatePicker, Pagination, Select, Modal, TimePicker, Dropdown, Menu } from 'antd';
 import { showToast, showConfirmToast } from '../../utils/uiNotifications'; // Imports fixed
 import dayjs from 'dayjs';
-import { List, Eye, Download, Edit2, RefreshCw, IndianRupee, Upload, FileText, CheckCircle, Settings, Plus, Trash2, X, GripVertical, Star, XCircle, Clock, ShieldCheck, Lock, ChevronRight, ChevronDown, RotateCcw, UserCheck, UserX, PlusCircle, UserPlus, Info, Search, Calendar, Shield, Layout, Briefcase, Mail, Zap, Link, MessageSquare, Users, Phone, MapPin, Building2, Activity } from 'lucide-react';
+import { List, Eye, Download, Edit2, RefreshCw, IndianRupee, Upload, FileText, CheckCircle, Settings, Plus, Trash2, X, GripVertical, Star, XCircle, Clock, ShieldCheck, Lock, ChevronRight, ChevronDown, RotateCcw, UserCheck, UserX, PlusCircle, UserPlus, Info, Search, Calendar, Shield, Layout, Briefcase, Mail, Zap, Link, MessageSquare, Users, Phone, MapPin, Building2, Activity, AlertCircle } from 'lucide-react';
 import JobBasedBGVModal from './modals/JobBasedBGVModal';
 import StageFeedbackModal from './modals/StageFeedbackModal';
 import PipelineManagerModal from './modals/PipelineManagerModal';
@@ -19,6 +19,7 @@ import InterviewScheduleModal from './modals/InterviewScheduleModal';
 import { notification } from '../../utils/antdGlobal';
 import usePagePermissions from '../../hooks/usePagePermissions';
 import { Can } from '../../components/rbac/PermissionGate';
+import OfferLetterPreview from '../../components/OfferLetterPreview';
 
 /**
  * Internal vs external HR pipeline. Uses applicant.source when set; also detects legacy internal applies
@@ -501,6 +502,8 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
         if (!isInterviewStage(app)) return false;
         // Block if offer already active/pending/accepted/signed
         if (isOfferPendingStage(app) || isOfferAcceptedStage(app) || isOfferSignedStage(app)) return false;
+        // Block if documents not approved
+        if (app.documentRequestStatus !== 'Approved') return false;
         return true;
     };
 
@@ -2396,6 +2399,18 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
         setPreviewPdfUrl(null);
     };
 
+    const handleSendDocumentRequest = async (applicant) => {
+        try {
+            const res = await api.post(`/recruitment/candidate-documents/request/${applicant._id || applicant.applicationId}`);
+            if (res.data.success) {
+                notification.success({ message: 'Success', description: 'Document upload link sent to candidate', placement: 'topRight' });
+                loadApplicants(); // Refresh list to get updated status
+            }
+        } catch (err) {
+            notification.error({ message: 'Error', description: err.response?.data?.message || 'Failed to send request', placement: 'topRight' });
+        }
+    };
+
     const openOfferModal = async (applicant) => {
         resetJoiningLetterUi();
         setSelectedApplicant(applicant);
@@ -2721,11 +2736,12 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
             return;
         }
 
-        // Validation for Full Time candidates: Salary must be locked
-        if (offerData.jobCategory === 'Full Time' && !selectedApplicant.salaryLocked) {
+        // Validation: Only block if job category explicitly requires salary (Salary Mandatory)
+        const isSalaryMandatoryCategory = String(offerData.jobCategory || '').toLowerCase().includes('salary mandatory');
+        if (isSalaryMandatoryCategory && !selectedApplicant.salaryLocked) {
             notification.error({ 
                 message: 'Salary Missing', 
-                description: 'For Full Time offers, you must first assign and lock the candidate salary breakdown.', 
+                description: 'This offer template requires a salary breakdown. Please assign and lock the candidate salary first.', 
                 placement: 'topRight' 
             });
             return;
@@ -2951,11 +2967,12 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
             return;
         }
 
-        // Validation for Full Time candidates: Salary must be locked
-        if (offerData.jobCategory === 'Full Time' && !selectedApplicant.salaryLocked) {
+        // Validation: Only block if job category explicitly requires salary (Salary Mandatory)
+        const isSalaryMandatoryForGenerate = String(offerData.jobCategory || '').toLowerCase().includes('salary mandatory');
+        if (isSalaryMandatoryForGenerate && !selectedApplicant.salaryLocked) {
             notification.error({ 
                 message: 'Salary Required', 
-                description: 'For Full Time offers, you must assign and lock the candidate salary before generating the final offer.', 
+                description: 'This offer template requires a salary breakdown. Please assign and lock the candidate salary before generating the final offer.', 
                 placement: 'topRight' 
             });
             return;
@@ -4339,13 +4356,29 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
                                                                     </div>
                                                                 </div>
                                                             ) : (
+                                                              <div className="flex flex-col gap-2 w-full lg:w-auto">
+                                                                {app.documentRequestStatus !== 'Approved' && (
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleSendDocumentRequest(app);
+                                                                        }}
+                                                                        className={`w-full lg:w-auto px-6 py-2.5 text-[10px] font-black rounded-2xl transition-all shadow-lg uppercase tracking-widest ${
+                                                                            app.documentRequestStatus 
+                                                                                ? 'bg-amber-500 text-white hover:bg-amber-600' 
+                                                                                : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
+                                                                        }`}
+                                                                    >
+                                                                        {app.documentRequestStatus ? `Docs: ${app.documentRequestStatus}` : 'Request Docs'}
+                                                                    </button>
+                                                                )}
                                                                 <button
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
                                                                         if (!canGenerateOffer(app)) {
                                                                             notification.error({
                                                                                 message: 'Action blocked',
-                                                                                description: 'Offer can only be issued from Interview stage (no bypass allowed).',
+                                                                                description: app.documentRequestStatus !== 'Approved' ? 'Candidate documents must be approved before generating an offer.' : 'Offer can only be issued from Interview stage (no bypass allowed).',
                                                                                 placement: 'topRight'
                                                                             });
                                                                             return;
@@ -4358,8 +4391,9 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
                                                                         : 'bg-slate-100 text-slate-300 cursor-not-allowed shadow-none'
                                                                         }`}
                                                                 >
-                                                                    Generate
+                                                                    Generate Offer
                                                                 </button>
+                                                              </div>
                                                             )}
                                                         </div>
                                                     </div>
@@ -4975,7 +5009,8 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
                                                 onChange={handleOfferChange}
                                                 className="mt-1 block w-full border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 p-2 h-[42px]"
                                             >
-                                                <option value="Full Time">Full Time (Salary Mandatory)</option>
+                                                <option value="Full Time">Full Time</option>
+                                                <option value="Full Time (Salary Mandatory)">Full Time (Salary Mandatory)</option>
                                                 <option value="Intern">Intern (Salary Optional)</option>
                                             </select>
                                         </div>

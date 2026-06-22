@@ -69,11 +69,29 @@ export default function EmployeeForm({
   onClose,
   viewOnly = false,
   onDraftSaved,
+  isExternal = false,
+  token = null,
 }) {
   const [step, setStep] = useState(() => {
     const last = (employee?.status === 'Draft' ? employee?.lastStep : 1) || 1;
-    return Math.min(Math.max(1, last), 10); // 10 steps (References = page 7, submit on step 10)
+    return Math.min(Math.max(1, last), isExternal ? 8 : 10);
   });
+
+  const getActualStep = (s) => {
+    if (!isExternal) return s;
+    const mapping = {
+      1: 1,
+      2: 3,
+      3: 4,
+      4: 5,
+      5: 6,
+      6: 7,
+      7: 8,
+      8: 9
+    };
+    return mapping[s] || s;
+  };
+  const actualStep = getActualStep(step);
 
 
   const [firstName, setFirstName] = useState(employee?.firstName || '');
@@ -185,7 +203,7 @@ export default function EmployeeForm({
   const [passwordLock, setPasswordLock] = useState(!!employee?._id);
   const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
   const [passwordEdited, setPasswordEdited] = useState(false);
-  const [bypassValidation, setBypassValidation] = useState(false); // Developer bypass mode
+  const [bypassValidation, setBypassValidation] = useState(isExternal); // Developer bypass mode
 
   // Reset password input whenever switching to an existing employee record
   // (we must not attempt to show hashed password).
@@ -333,7 +351,7 @@ export default function EmployeeForm({
 
   // Fetch salary templates safely ONLY when on the relevant step
   useEffect(() => {
-    if (step === 10) {
+    if (actualStep === 10) {
       async function loadTemplates() {
         try {
           const res = await api.get('/payroll/salary-templates').catch(() => ({ data: { data: [] } }));
@@ -830,7 +848,7 @@ export default function EmployeeForm({
     loadShifts(); // Shift Management
     loadGrades(); // Grade Management
     fetchMappings();
-    if (step === 9 && !employee) loadEmployeeCodePreview();
+    if (actualStep === 9 && !employee) loadEmployeeCodePreview();
   }, [loadDepartments, loadManagers, loadEmployeeCodePreview, step, employee, loadPolicies, loadShifts, loadGrades, fetchMappings]);
 
   const [employeeCode, setEmployeeCode] = useState('');
@@ -1111,8 +1129,9 @@ export default function EmployeeForm({
       setErrors({});
       return true;
     }
+    const actualStepNum = getActualStep(stepNum);
     const e = {};
-    if (stepNum === 1) {
+    if (actualStepNum === 1) {
       if (!firstName || firstName.length < 3 || !/^[A-Za-z\s.]+$/.test(firstName)) e.firstName = 'First name required (min 3 chars, letters, spaces, dots allowed)';
       if (middleName && middleName.length < 3) e.middleName = 'Middle name must be at least 3 chars';
       if (!lastName || lastName.length < 3) e.lastName = 'Last name is required (min 3 chars)';
@@ -1127,14 +1146,14 @@ export default function EmployeeForm({
       if (!maritalStatus) e.maritalStatus = 'Marital Status is required';
       const validBloodGroups = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
       if (!bloodGroup) e.bloodGroup = 'Blood Group is required';
-      else if (!validBloodGroups.includes(bloodGroup.toUpperCase())) e.bloodGroup = 'Invalid Blood Group (Allowed: A+, A-, B+, B-, O+, O-, AB+, AB-)';
+      else if (!validBloodGroups.includes(bloodGroup.toUpperCase())) e.bloodGroup = 'Invalid Blood Group (Allowed: A+, A-, B+, B-, O+, O-)';
       if (!nationality) e.nationality = 'Nationality is required';
       if (!emergencyContactName || emergencyContactName.length < 3) e.emergencyContactName = 'Emergency contact name required (min 3 chars)';
       const cleanEmergency = String(emergencyContactNumber ?? '').replace(/\D/g, '');
       if (cleanEmergency.length < 10 || cleanEmergency.length > 15 || !phoneRe.test(cleanEmergency)) e.emergencyContactNumber = 'Emergency phone must be 10-15 digits';
     }
 
-    if (stepNum === 2) {
+    if (actualStepNum === 2) {
       if (generationMode === 'MANUAL' && (!employeeId || employeeId.trim().length < 2)) e.employeeId = 'Employee ID is required (min 2 chars)';
       const customDepartmentName = normalizeDepartmentName(department);
       if (!departmentId && !customDepartmentName) e.department = 'Department is required';
@@ -1144,7 +1163,7 @@ export default function EmployeeForm({
       if (!jobType) e.jobType = 'Employee Type is required';
     }
 
-    if (stepNum === 3) {
+    if (actualStepNum === 3) {
       if (!eduType) e.eduType = 'Education Type is required';
       if (!class10Marksheet && !employee?.education?.class10Marksheet) e.class10 = '10th Marksheet is required';
       const hasDegree = !!diplomaCertificate || !!bachelorDegree || !!employee?.education?.diplomaCertificate || !!employee?.education?.bachelorDegree;
@@ -1157,7 +1176,7 @@ export default function EmployeeForm({
       }
     }
 
-    if (stepNum === 4) {
+    if (actualStepNum === 4) {
       if (!aadharNumber || aadharNumber.length !== 12) e.aadharNumber = 'Aadhar Number must be exactly 12 digits';
       if (!panNumber || panNumber.length !== 10) e.panNumber = 'PAN Number must be exactly 10 characters';
       if (!aadharFront && !employee?.documents?.aadharFront) e.aadharFront = 'Aadhar Front is required';
@@ -1165,7 +1184,7 @@ export default function EmployeeForm({
       if (!panCard && !employee?.documents?.panCard) e.panCard = 'PAN Card is required';
     }
 
-    if (stepNum === 5) {
+    if (actualStepNum === 5) {
       experience.forEach((exp, idx) => {
         if (exp.from && exp.to) {
           const f = new Date(exp.from); const t = new Date(exp.to);
@@ -1177,7 +1196,7 @@ export default function EmployeeForm({
       });
     }
 
-    if (stepNum === 6) {
+    if (actualStepNum === 6) {
       if (!employee) {
         if (!bankName) e.bankName = 'Bank name required';
         if (!accountNumber || accountNumber.length < 9 || accountNumber.length > 18) e.accountNumber = 'Account Number must be between 9 and 18 digits';
@@ -1187,7 +1206,7 @@ export default function EmployeeForm({
       }
     }
 
-    if (stepNum === 8) {
+    if (actualStepNum === 8) {
       if (relatedEmployee.hasRelated === 'yes') {
         if (!relatedEmployee.name) e.relatedName = 'Name is required';
         if (!relatedEmployee.relationship) e.relatedRelationship = 'Relationship is required';
@@ -1200,7 +1219,7 @@ export default function EmployeeForm({
       });
     }
 
-    if (stepNum === 10) {
+    if (actualStepNum === 10) {
       if (!email || !/\S+@\S+\.\S+/.test(email)) e.email = 'Valid Email is required';
       if (!employee?._id || !passwordLock) {
         if (password && password.length < 6) e.password = 'Password min 6 chars';
@@ -1274,6 +1293,7 @@ export default function EmployeeForm({
       showToast('error', 'Cannot submit', firstMsg);
       return;
     }
+    const uploadEndpoint = isExternal ? `/public/candidate-documents/upload/${token}` : '/uploads/doc';
     setSaving(true);
     try {
       // Upload Current Bank Proof if changed
@@ -1282,7 +1302,7 @@ export default function EmployeeForm({
         try {
           const fd = new FormData();
           fd.append('file', currentBankProof);
-          const up = await api.post('/uploads/doc', fd);
+          const up = await api.post(uploadEndpoint, fd);
           if (up?.data?.success) currentBankProofUrl = up.data.url;
         } catch (e) { console.warn('Bank proof upload failed', e) }
       } else if (typeof currentBankProof === 'string') {
@@ -1313,7 +1333,7 @@ export default function EmployeeForm({
                 const fd = new FormData();
                 fd.append('file', item);
                 try {
-                  const up = await api.post('/uploads/doc', fd);
+                  const up = await api.post(uploadEndpoint, fd);
                   if (up?.data?.success) pSlips.push(up.data.url);
                 } catch (e) { console.warn('Payslip upload failed', e); }
               } else if (typeof item === 'string') { pSlips.push(item); }
@@ -1324,7 +1344,7 @@ export default function EmployeeForm({
             const fd = new FormData();
             fd.append('file', certUrl);
             try {
-              const up = await api.post('/uploads/doc', fd);
+              const up = await api.post(uploadEndpoint, fd);
               if (up?.data?.success) certUrl = up.data.url;
             } catch (e) { console.warn('Experience cert upload failed', e); certUrl = null; }
           }
@@ -1347,7 +1367,7 @@ export default function EmployeeForm({
         const fd = new FormData();
         fd.append('file', file);
         try {
-          const res = await api.post('/uploads/doc', fd);
+          const res = await api.post(uploadEndpoint, fd);
           return res?.data?.success ? res.data.url : null;
         } catch (e) {
           console.warn('File upload failed', e);
@@ -1512,11 +1532,109 @@ export default function EmployeeForm({
       };
 
       let empResult;
-      if (employee) {
+      if (isExternal) {
+        // Wrap flat payload into structured sections expected by submitCandidateProfile
+        const externalPayload = {
+          personalDetails: {
+            firstName: payload.firstName,
+            middleName: payload.middleName,
+            lastName: payload.lastName,
+            gender: payload.gender,
+            dob: payload.dob,
+            bloodGroup: payload.bloodGroup,
+            nationality: payload.nationality,
+            maritalStatus: payload.maritalStatus,
+            contactNo: payload.contactNo,
+            alternateContactNo: payload.alternateContactNo,
+            personalEmail: payload.personalEmail,
+            emergencyContactName: payload.emergencyContactName,
+            emergencyContactNumber: payload.emergencyContactNumber,
+            emergencyRelationship: payload.emergencyRelationship,
+            profilePic: payload.profilePic,
+            placeOfBirth: payload.placeOfBirth,
+            hobbies: payload.hobbies,
+            cast: payload.cast,
+            height: payload.height,
+            weight: payload.weight,
+            physicalDisabilityOrSickness: payload.physicalDisabilityOrSickness,
+            physicalDisabilityDetails: payload.physicalDisabilityDetails,
+          },
+          familyDetails: {
+            fatherName: payload.fatherName,
+            fatherFirstName: payload.fatherFirstName,
+            fatherLastName: payload.fatherLastName,
+            fatherBloodGroup: payload.fatherBloodGroup,
+            fatherAadhaar: payload.fatherAadhaar,
+            motherName: payload.motherName,
+            motherFirstName: payload.motherFirstName,
+            motherLastName: payload.motherLastName,
+            motherBloodGroup: payload.motherBloodGroup,
+            motherAadhaar: payload.motherAadhaar,
+            spouseDetails: payload.spouseDetails,
+            children: payload.children,
+            brothers: payload.brothers,
+            sisters: payload.sisters,
+            familyMembers: payload.familyMembers || [],
+          },
+          communicationDetails: {
+            tempAddress: payload.tempAddress,
+            permAddress: payload.permAddress,
+            commAddress: payload.commAddress,
+          },
+          educationDetails: {
+            eduType: payload.education?.type,
+            class10Marksheet: payload.education?.class10Marksheet,
+            class12Marksheet: payload.education?.class12Marksheet,
+            diplomaCertificate: payload.education?.diplomaCertificate,
+            bachelorDegree: payload.education?.bachelorDegree,
+            masterDegree: payload.education?.masterDegree,
+            lastSem1Marksheet: payload.education?.lastSem1Marksheet,
+            lastSem2Marksheet: payload.education?.lastSem2Marksheet,
+            lastSem3Marksheet: payload.education?.lastSem3Marksheet,
+            academicQualifications: payload.academicQualifications || [],
+            highestQualification: payload.highestQualification,
+          },
+          experienceDetails: {
+            experience: payload.experience || [],
+            jobHistoryAnnexure: payload.jobHistoryAnnexure || [],
+          },
+          documentDetails: {
+            aadhaarNo: payload.documents?.aadharNumber,
+            aadhaarFront: payload.documents?.aadharFront,
+            aadhaarBack: payload.documents?.aadharBack,
+            panNo: payload.documents?.panNumber,
+            panCard: payload.documents?.panCard,
+            passportNo: payload.passportNo,
+            passportExpiry: payload.passportExpiry,
+            passportDoc: payload.passportDoc,
+            drivingLicenceNo: payload.drivingLicenceNo,
+            drivingLicenceDoc: payload.drivingLicenceDoc,
+          },
+          bankDetails: {
+            accountHolderName: payload.bankDetails?.accountHolderName || `${payload.firstName || ''} ${payload.lastName || ''}`.trim(),
+            accountNumber: payload.bankDetails?.accountNumber,
+            bankName: payload.bankDetails?.bankName,
+            branchName: payload.bankDetails?.branchName,
+            ifscCode: payload.bankDetails?.ifsc,
+            accountType: payload.bankDetails?.accountType,
+            bankProofUrl: payload.bankDetails?.bankProofUrl,
+          },
+          statutoryDetails: {
+            pfNumber: payload.pfNumber,
+            uanNumber: payload.uanNumber,
+            esiNumber: payload.esiNumber,
+            nomineeName: payload.nomineeName,
+            nomineeRelation: payload.nomineeRelation,
+          },
+          completionPercentage: payload.completionPercentage || 100,
+        };
+        empResult = await api.post(`/public/candidate-documents/submit/${token}`, externalPayload);
+      } else if (employee) {
         empResult = await api.put(`/hr/employees/${employee._id}`, payload);
       } else {
         empResult = await api.post('/hr/employees', payload);
       }
+
 
       // If employee is marked as "Dep Head", update the department's head field
       if (role === 'Dep Head' && departmentId) {
@@ -1527,7 +1645,14 @@ export default function EmployeeForm({
         }
       }
 
-      onClose();
+        if (onClose) {
+          onClose();
+        } else if (isExternal) {
+          showToast('success', 'Submitted Successfully', 'Your profile and documents have been submitted.');
+          setTimeout(() => {
+            window.location.reload();
+          }, 2000);
+        }
     } catch (err) {
       console.error('Employee save error:', err);
       const code = err?.response?.data?.error;
@@ -1546,6 +1671,7 @@ export default function EmployeeForm({
 
   async function saveDraft(e) {
     if (e) e.preventDefault();
+    const uploadEndpoint = isExternal ? `/public/candidate-documents/upload/${token}` : '/uploads/doc';
     setSaving(true);
     try {
       const uploadFile = async (file) => {
@@ -1553,7 +1679,7 @@ export default function EmployeeForm({
         const fd = new FormData();
         fd.append('file', file);
         try {
-          const res = await api.post('/uploads/doc', fd);
+          const res = await api.post(uploadEndpoint, fd);
           return res?.data?.success ? res.data.url : null;
         } catch (e) { console.warn('File upload failed', e); return null; }
       };
@@ -1724,7 +1850,9 @@ export default function EmployeeForm({
       };
 
       let draftResponse;
-      if (employee?._id) {
+      if (isExternal) {
+        draftResponse = await api.post(`/public/candidate-documents/save-draft/${token}`, payload);
+      } else if (employee?._id) {
         draftResponse = await api.put(`/hr/employees/${employee._id}`, payload);
       } else {
         draftResponse = await api.post('/hr/employees', payload);
@@ -1740,7 +1868,9 @@ export default function EmployeeForm({
     } finally { setSaving(false); }
   }
 
-  const stepTitles = ['General Details', 'Job Information', 'Academic Qualifications', 'Identity Documents', 'Employment History', 'Bank Details', 'Language Proficiency', 'References & Related', 'Additional Benefits', 'Employment Setup'];
+  const stepTitles = isExternal
+    ? ['General Details', 'Academic Qualifications', 'Identity Documents', 'Employment History', 'Bank Details', 'Language Proficiency', 'References & Related', 'Additional Benefits']
+    : ['General Details', 'Job Information', 'Academic Qualifications', 'Identity Documents', 'Employment History', 'Bank Details', 'Language Proficiency', 'References & Related', 'Additional Benefits', 'Employment Setup'];
 
   return (
     <div className="w-full h-full overflow-hidden flex flex-col bg-white">
@@ -1774,7 +1904,7 @@ export default function EmployeeForm({
           {/* Content area gets bottom padding so bar never overlaps */}
           <div className="flex-1 overflow-y-auto overflow-x-hidden pr-2 custom-scrollbar pb-10">
             {/* Step 1: Consolidated layout (Identity, Family, Communication, Official) */}
-            {step === 1 && (
+            {actualStep === 1 && (
               <div className="space-y-3 animate-in fade-in duration-300">
                 <div className="space-y-3">
                   {/* Identity Details Section */}
@@ -1930,7 +2060,7 @@ export default function EmployeeForm({
               )}
 
             {/* Step 2: Job Information (moved from last page) */}
-            {step === 2 && (
+            {actualStep === 2 && (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="bg-white dark:bg-slate-950 p-4 rounded-xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm relative overflow-hidden">
                   <div className="pt-2 sticky top-[-1px] bg-white z-20 pb-2">
@@ -2003,7 +2133,7 @@ export default function EmployeeForm({
             )}
 
             {/* Step 5: Experience / Training */}
-            {step === 5 && (
+            {actualStep === 5 && (
               <EmploymentHistoryTab
                 experience={experience}
                 setExperience={setExperience}
@@ -2012,7 +2142,7 @@ export default function EmployeeForm({
             )}
 
             {/* Step 3: Education (Academic Timeline) */}
-            {step === 3 && (
+            {actualStep === 3 && (
               <AcademicQualificationsTab
                 academicQualifications={academicQualifications}
                 setAcademicQualifications={setAcademicQualifications}
@@ -2023,7 +2153,7 @@ export default function EmployeeForm({
             )}
 
             {/* Step 6: Bank Details */}
-            {step === 6 && (
+            {actualStep === 6 && (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <TabularContainer>
                   <div className="bg-slate-100 dark:bg-slate-800/80 p-3 text-xs font-bold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 uppercase">
@@ -2107,7 +2237,7 @@ export default function EmployeeForm({
 
 
             {/* Step 4: Identity Documents */}
-            {step === 4 && (
+            {actualStep === 4 && (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <TabularContainer>
                   <div className="bg-slate-100 dark:bg-slate-800/80 p-3 text-xs font-bold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 uppercase flex items-center gap-2">
@@ -2189,7 +2319,7 @@ export default function EmployeeForm({
             )}
 
             {/* Step 7: Language Proficiency */}
-            {step === 7 && (
+            {actualStep === 7 && (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <TabularContainer>
                   <div className="bg-slate-100 dark:bg-slate-800/80 p-3 text-xs font-bold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 uppercase flex items-center gap-2">
@@ -2286,7 +2416,7 @@ export default function EmployeeForm({
             )}
 
             {/* Step 8: References & Related */}
-            {step === 8 && (
+            {actualStep === 8 && (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <TabularContainer>
                   <div className="bg-slate-100 dark:bg-slate-800/80 p-3 text-xs font-bold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 uppercase">
@@ -2380,7 +2510,7 @@ export default function EmployeeForm({
             )}
 
             {/* Step 9: Additional Benefits */}
-            {step === 9 && (
+            {actualStep === 9 && (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <TabularContainer>
                   <div className="bg-slate-100 dark:bg-slate-800/80 p-3 text-xs font-bold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 uppercase">
@@ -2596,7 +2726,7 @@ export default function EmployeeForm({
             )}
 
             {/* Step 10: Employment Setup */}
-            {step === 10 && (
+            {actualStep === 10 && (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 {/* Account Credentials */}
                 <TabularContainer>
@@ -2732,7 +2862,7 @@ export default function EmployeeForm({
           <div className="sticky bottom-0 bg-white/95 backdrop-blur -mx-4 md:-mx-6 px-4 md:px-6 pt-3 pb-3 border-t border-gray-200 flex items-center justify-end gap-2.5 z-20 shrink-0 shadow-[0_-10px_24px_-18px_rgba(0,0,0,0.35)]">
             <button
               type="button"
-              onClick={() => step > 1 ? handlePrev() : onClose()}
+              onClick={() => step > 1 ? handlePrev() : (onClose ? onClose() : window.location.reload())}
               className="px-4 py-2 rounded-lg text-[13px] font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 hover:text-gray-900 transition-all focus:ring-2 focus:ring-gray-200"
             >
               {step > 1 ? 'Go Back' : (viewOnly ? 'Finish' : 'Cancel')}

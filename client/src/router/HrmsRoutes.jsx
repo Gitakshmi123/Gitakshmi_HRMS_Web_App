@@ -39,6 +39,7 @@ const HRDashboard = lazy(() => import('../pages/HR/HRDashboard'));
 const Employees = lazy(() => import('../pages/HR/Employees'));
 const EmployeeProfile = lazy(() => import('../pages/HR/EmployeeProfile'));
 const EmployeeFormPage = lazy(() => import('../pages/HR/EmployeeFormPage'));
+const ExternalRecords = lazy(() => import('../pages/HR/ExternalRecords'));
 const Departments = lazy(() => import('../pages/HR/Departments'));
 const LeavePolicies = lazy(() => import('../pages/HR/LeavePolicies'));
 const LeaveApprovals = lazy(() => import('../pages/HR/LeaveApprovals'));
@@ -440,6 +441,7 @@ export default function HrmsRoutes() {
         {/* --- HR MODULE --- */}
         <Route element={<ProtectedModule module="hr"><Outlet /></ProtectedModule>}>
           <Route path="employees" element={<Employees />} />
+          <Route path="external-records" element={<ExternalRecords />} />
           <Route path="employees/new" element={<EmployeeFormPage />} />
           <Route path="employees/:employeeId/profile" element={<EmployeeProfile />} />
           <Route path="employees/:employeeId/edit" element={<EmployeeFormPage />} />
@@ -672,8 +674,9 @@ export default function HrmsRoutes() {
           }
         />
         <Route element={<ProtectedModule module="hr"><Outlet /></ProtectedModule>}>
-          <Route path="employees" element={<EmployeePermissionRoute module="hr" permissionKey="people.employees"><Employees /></EmployeePermissionRoute>} />
-          <Route path="employees/new" element={<EmployeePermissionRoute module="hr" permissionKey="people.employees" action="create"><EmployeeFormPage /></EmployeePermissionRoute>} />
+          <Route path="employees" element={<EmployeePermissionRoute module="hr" permissionKey={['people.employees', 'people.directory']}><Employees /></EmployeePermissionRoute>} />
+          <Route path="external-records" element={<EmployeePermissionRoute module="hr" permissionKey={['people.employees', 'people.directory']}><ExternalRecords /></EmployeePermissionRoute>} />
+          <Route path="employees/new" element={<EmployeePermissionRoute module="hr" permissionKey={['people.employees']}><EmployeeFormPage /></EmployeePermissionRoute>} />
           <Route path="employees/:employeeId/profile" element={<EmployeePermissionRoute module="hr" permissionKey="people.employees"><EmployeeProfile /></EmployeePermissionRoute>} />
           <Route path="employees/:employeeId/edit" element={<EmployeePermissionRoute module="hr" permissionKey="people.employees" action="edit"><EmployeeFormPage /></EmployeePermissionRoute>} />
           <Route path="departments" element={<EmployeePermissionRoute module="hr" permissionKey="people.departments"><Departments /></EmployeePermissionRoute>} />

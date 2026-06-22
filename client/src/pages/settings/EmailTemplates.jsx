@@ -19,6 +19,7 @@ export default function EmailTemplates() {
   const [editingId, setEditingId] = useState(null);
   
   const [htmlContent, setHtmlContent] = useState('');
+  const [isHtmlMode, setIsHtmlMode] = useState(false);
   const reactQuillRef = useRef(null);
 
   const [isPreviewVisible, setIsPreviewVisible] = useState(false);
@@ -130,12 +131,16 @@ export default function EmailTemplates() {
   const placeholders = [
     { name: 'Candidate Name', tag: '{{candidateName}}', desc: 'Full name of the candidate' },
     { name: 'Candidate Email', tag: '{{candidateEmail}}', desc: 'Email address of the candidate' },
-    { name: 'CTC Yearly', tag: '{{ctcYearly}}', desc: 'Total Annual CTC (e.g. ₹4,13,085)' },
+    { name: 'Current CTC', tag: '{{currentCTC}}', desc: 'Current Annual CTC of the candidate' },
+    { name: 'Offered CTC Yearly', tag: '{{ctcYearly}}', desc: 'Total Offered Annual CTC' },
+    { name: '% Hike', tag: '{{hikePercentage}}', desc: 'Percentage increase from current CTC' },
     { name: 'CTC Breakdown Table', tag: '{{ctcBreakdown}}', desc: 'Full dynamic HTML table breakdown of CTC' },
-    { name: 'Designation / Job Title', tag: '{{designation}}', desc: 'Offered designation or role' },
+    { name: 'Current Designation', tag: '{{currentDesignation}}', desc: 'Current role of the candidate' },
+    { name: 'Offered Designation', tag: '{{designation}}', desc: 'Offered designation or role' },
     { name: 'Department', tag: '{{department}}', desc: 'Offered department' },
     { name: 'Joining Date', tag: '{{joiningDate}}', desc: 'Date of joining the company' },
     { name: 'Offer Expiry', tag: '{{offerExpiry}}', desc: 'Expiry date of the offer' },
+    { name: 'Approval Link', tag: '{{approvalUrl}}', desc: 'URL for CEO to approve the offer' },
     { name: 'Company Name', tag: '{{companyName}}', desc: 'Name of your organization' },
   ];
 
@@ -357,25 +362,43 @@ export default function EmailTemplates() {
                   <Input placeholder="e.g. Offer Letter - {{candidateName}}" />
                 </Form.Item>
                 
-                <div className="mb-4">
-                  <label className="block mb-2 font-medium">Email Content</label>
+                 <div className="mb-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="font-medium">Email Content</label>
+                    <Button 
+                      size="small" 
+                      onClick={() => setIsHtmlMode(!isHtmlMode)}
+                      type={isHtmlMode ? "primary" : "default"}
+                    >
+                      {isHtmlMode ? "Switch to Visual Editor" : "Switch to HTML Editor"}
+                    </Button>
+                  </div>
                   <div className="bg-white" style={{ minHeight: '400px' }}>
-                    <ReactQuill
-                      ref={reactQuillRef}
-                      theme="snow"
-                      value={htmlContent}
-                      onChange={setHtmlContent}
-                      style={{ height: '350px' }}
-                      modules={{
-                        toolbar: [
-                          [{ 'header': [1, 2, 3, false] }],
-                          ['bold', 'italic', 'underline', 'strike'],
-                          [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                          ['link', 'image'],
-                          ['clean']
-                        ],
-                      }}
-                    />
+                    {isHtmlMode ? (
+                      <Input.TextArea
+                        value={htmlContent}
+                        onChange={(e) => setHtmlContent(e.target.value)}
+                        style={{ height: '350px', fontFamily: 'monospace', fontSize: '13px' }}
+                        placeholder="Paste your HTML code here..."
+                      />
+                    ) : (
+                      <ReactQuill
+                        ref={reactQuillRef}
+                        theme="snow"
+                        value={htmlContent}
+                        onChange={setHtmlContent}
+                        style={{ height: '350px' }}
+                        modules={{
+                          toolbar: [
+                            [{ 'header': [1, 2, 3, false] }],
+                            ['bold', 'italic', 'underline', 'strike'],
+                            [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                            ['link', 'image'],
+                            ['clean']
+                          ],
+                        }}
+                      />
+                    )}
                   </div>
                 </div>
               </Form>

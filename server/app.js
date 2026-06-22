@@ -588,6 +588,7 @@ app.use('/api/public', publicRoutes);
 app.use('/api/public', require('./routes/publicCandidate.routes'));
 app.use('/api/public/careers', require('./routes/publicCareer.routes'));
 app.use('/api/public/offer', require('./routes/public.offer.routes'));
+app.use('/api/public/candidate-documents', require('./routes/publicCandidateDocument.routes'));
 
 // 1. Auth & System (Foundation)
 app.use('/api/auth', authRoutes);
@@ -669,6 +670,7 @@ app.use('/api', auth, hrRoutes); // Mount general HR routes last within /api
 app.use('/api/admin', auth, recruitmentCheck, require('./routes/admin.hiring.routes'));
 app.use('/api/applications', auth, recruitmentCheck, require('./routes/applications.routes'));
 app.use('/api/recruitment', auth, recruitmentCheck, require('./routes/recruitment.workflow.routes'));
+app.use('/api/recruitment/candidate-documents', auth, recruitmentCheck, require('./routes/hr.candidateDocuments.routes'));
 app.use('/api/offer-templates', auth, recruitmentCheck, offerTemplateRoutes);
 app.use('/api/interviews', auth, recruitmentCheck, require('./routes/interview.routes'));
 app.use('/api/tracker', auth, recruitmentCheck, require('./routes/tracker.routes'));
