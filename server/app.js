@@ -253,6 +253,7 @@ try {
     mongoose.model('Department', require('./models/Department'));
     mongoose.model('LeaveBalance', require('./models/LeaveBalance'));
     mongoose.model('LeavePolicy', require('./models/LeavePolicy'));
+    mongoose.model('HolidayGroup', require('./models/HolidayGroup'));
     mongoose.model('LeaveType', require('./models/LeaveType'));
     mongoose.model('AuditLog', require('./models/AuditLog'));
     mongoose.model('BGVCase', require('./models/BGVCase'));
@@ -309,6 +310,7 @@ const notificationRoutes = require('./routes/notification.routes');
 const commentRoutes = require('./routes/comment.routes');
 const entityRoutes = require('./routes/entity.routes');
 const holidayRoutes = require('./routes/holiday.routes');
+const holidayGroupRoutes = require('./routes/holidayGroup.routes');
 const attendanceRoutes = require('./routes/attendance.routes');
 const faceAttendanceRoutes = require('./routes/faceAttendance.routes');
 const locationRoutes = require('./routes/location.routes');
@@ -639,6 +641,7 @@ app.use('/api/shift-analytics', auth, require('./routes/shiftAnalytics.routes'))
 app.use('/api/attendance-policy', auth, attendanceCheck, attendancePolicyRoutes);
 app.use('/api/location', auth, attendanceCheck, locationRoutes);
 app.use('/api/holidays', auth, attendanceCheck, holidayRoutes);
+app.use('/api/holiday-groups', auth, attendanceCheck, holidayGroupRoutes);
 app.use('/api/face-attendance', auth, attendanceCheck, activeEmployeeCheck, faceAttendanceRoutes);
 app.use('/api/attendance', auth, attendanceCheck, activeEmployeeCheck, attendanceRoutes);
 

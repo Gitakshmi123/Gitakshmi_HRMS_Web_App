@@ -1236,14 +1236,25 @@ exports.getCalendar = async (req, res) => {
         }
 
         // Get holidays for the month (including past and future for full visibility)
-        const holidays = await Holiday.find({
-            tenant: tenantId,
-            $or: [
-                { date: { $gte: startDate, $lte: endDate } },
-                { endDate: { $gte: startDate, $lte: endDate } },
-                { date: { $lte: startDate }, endDate: { $gte: endDate } }
-            ]
-        }).sort({ date: 1 });
+        let holidays = [];
+        if (employeeId) {
+            const { getHolidaysForEmployee } = require('../utils/holidayHelper');
+            holidays = await getHolidaysForEmployee({
+                employeeId,
+                year: targetYear,
+                tenantDB: req.tenantDB,
+                tenantId
+            });
+        } else {
+            holidays = await Holiday.find({
+                tenant: tenantId,
+                $or: [
+                    { date: { $gte: startDate, $lte: endDate } },
+                    { endDate: { $gte: startDate, $lte: endDate } },
+                    { date: { $lte: startDate }, endDate: { $gte: endDate } }
+                ]
+            }).sort({ date: 1 });
+        }
 
         // Create holiday map for quick lookup
         const holidayMap = {};

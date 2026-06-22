@@ -27,10 +27,18 @@ exports.validateConflicts = async (tenantDb, assignments) => {
 
         // 2. Holiday Conflict Check (Optional depending on business rule)
         // Usually shifts on holidays are marked as OT or Holiday Shift
-        const holidays = await Holiday.find({
-            tenant: assignment.tenant,
-            date: { $gte: assignment.startDate, $lte: assignment.endDate }
-        }).lean();
+        const { getHolidaysForEmployee } = require('../utils/holidayHelper');
+        const empHolidays = await getHolidaysForEmployee({
+            employeeId: assignment.employeeId,
+            year: dayjs(assignment.startDate).year(),
+            tenantDB: tenantDb,
+            tenantId: assignment.tenant
+        });
+        const holidays = empHolidays.filter(h => {
+            const d = dayjs(h.date);
+            return d.isAfter(dayjs(assignment.startDate).subtract(1, 'day')) && 
+                   d.isBefore(dayjs(assignment.endDate).add(1, 'day'));
+        });
 
         if (holidays.length > 0) {
             conflicts.push({
