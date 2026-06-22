@@ -21,6 +21,12 @@ import AttendanceExcelUploadModal from '../../components/HR/AttendanceExcelUploa
 import usePagePermissions from '../../hooks/usePagePermissions';
 import AttendanceLiveMap from '../../components/attendance/AttendanceLiveMap';
 
+const ensureBase64DataUrl = (imgStr) => {
+    if (!imgStr) return '';
+    if (imgStr.startsWith('data:')) return imgStr;
+    return `data:image/jpeg;base64,${imgStr}`;
+};
+
 // --- Sub-components ---
 
 function StatItem({ label, value, icon, colorClass, bgColorClass }) {
@@ -104,6 +110,7 @@ export default function AttendanceAdmin({ forceView }) {
     const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
     const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
     const [holidays, setHolidays] = useState([]);
+    const [employeeLeaves, setEmployeeLeaves] = useState([]);
     const [settings, setSettings] = useState({});
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
@@ -118,6 +125,7 @@ export default function AttendanceAdmin({ forceView }) {
     });
     const [uploadingPopup, setUploadingPopup] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [previewImage, setPreviewImage] = useState({ show: false, title: '', src: '', time: null, employee: null });
     const [breakModal, setBreakModal] = useState(null); // { logs: [], employee: {} }
 
     const fetchStats = useCallback(async () => {
@@ -147,14 +155,16 @@ export default function AttendanceAdmin({ forceView }) {
     const fetchEmployeeRegister = useCallback(async () => {
         if (!viewingEmployee) return;
         try {
-            const [attRes, holidayRes, settingsRes] = await Promise.all([
+            const [attRes, holidayRes, settingsRes, leavesRes] = await Promise.all([
                 api.get(`/attendance/my?employeeId=${viewingEmployee._id}&month=${currentMonth + 1}&year=${currentYear}`),
                 api.get('/holidays'),
-                api.get(`/attendance/settings?employeeId=${viewingEmployee._id}`)
+                api.get(`/attendance/settings?employeeId=${viewingEmployee._id}`),
+                api.get(`/hr/leaves/requests?employeeId=${viewingEmployee._id}&limit=all`)
             ]);
             setEmployeeAttendance(attRes.data);
             setHolidays(holidayRes.data || []);
             setSettings(settingsRes.data || {});
+            setEmployeeLeaves(leavesRes.data?.data || []);
         } catch (err) {
             console.error(err);
         }
@@ -387,11 +397,27 @@ export default function AttendanceAdmin({ forceView }) {
                                             <div className="flex flex-col mt-1 md:mt-0 gap-0.5">
                                                 <div className="flex items-center gap-1.5">
                                                     <span className="text-slate-400 font-bold text-[10px] uppercase w-7 inline-block">In</span>
-                                                    <span className="font-bold text-slate-900 text-[10px]">{item.checkIn ? new Date(item.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}</span>
+                                                    <span className="font-bold text-slate-900 text-[10px]">{item.checkIn ? `${formatDateDDMMYYYY(item.checkIn)} ${new Date(item.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : '--:--'}</span>
+                                                    {item.checkInImage && (
+                                                        <img 
+                                                            src={ensureBase64DataUrl(item.checkInImage)} 
+                                                            alt="Check-In" 
+                                                            className="w-5 h-5 rounded-md object-cover cursor-pointer hover:scale-110 transition-transform border border-slate-200" 
+                                                            onClick={() => setPreviewImage({ show: true, title: 'Check In Photo', src: ensureBase64DataUrl(item.checkInImage), time: item.checkIn, employee: item.employee })}
+                                                        />
+                                                    )}
                                                 </div>
                                                 <div className="flex items-center gap-1.5">
                                                     <span className="text-slate-400 font-bold text-[10px] uppercase w-7 inline-block">Out</span>
-                                                    <span className="font-bold text-slate-900 text-[10px]">{item.checkOut ? new Date(item.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}</span>
+                                                    <span className="font-bold text-slate-900 text-[10px]">{item.checkOut ? `${formatDateDDMMYYYY(item.checkOut)} ${new Date(item.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : '--:--'}</span>
+                                                    {item.checkOutImage && (
+                                                        <img 
+                                                            src={ensureBase64DataUrl(item.checkOutImage)} 
+                                                            alt="Check-Out" 
+                                                            className="w-5 h-5 rounded-md object-cover cursor-pointer hover:scale-110 transition-transform border border-slate-200" 
+                                                            onClick={() => setPreviewImage({ show: true, title: 'Check Out Photo', src: ensureBase64DataUrl(item.checkOutImage), time: item.checkOut, employee: item.employee })}
+                                                        />
+                                                    )}
                                                 </div>
                                             </div>
 
@@ -404,22 +430,32 @@ export default function AttendanceAdmin({ forceView }) {
 
                                             {/* Note Column */}
                                             <div className="mt-2 md:mt-0">
-                                                {item.flagged ? (
-                                                    <div className="space-y-1" title={item.flagReasons?.join(' | ') || item.flagReason || 'Flagged attendance'}>
-                                                        <div className="inline-flex items-center gap-1.5 text-rose-600">
-                                                            <ShieldAlert size={14} />
-                                                            <span className="text-[12px] font-bold">Flagged</span>
+                                                <div className="flex flex-col gap-1.5">
+                                                    {item.faceVerified && (
+                                                        <div className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-200/50 w-fit">
+                                                            <CheckCircle size={12} className="text-emerald-500" />
+                                                            <span>Face Verified</span>
                                                         </div>
-                                                        <p className="text-[11px] font-medium text-rose-700 line-clamp-2">
-                                                            {item.flagReason || item.flagReasons?.[0] || 'Requires admin review'}
-                                                        </p>
-                                                    </div>
-                                                ) : item.isManualOverride ? (
-                                                    <div className="inline-flex items-center gap-1.5 text-amber-600" title="Manually Modified">
-                                                        <ShieldAlert size={14} />
-                                                        <span className="text-[12px] font-bold">Modified</span>
-                                                    </div>
-                                                ) : <span className="text-gray-400">-</span>}
+                                                    )}
+                                                    {item.flagged ? (
+                                                        <div className="space-y-1" title={item.flagReasons?.join(' | ') || item.flagReason || 'Flagged attendance'}>
+                                                            <div className="inline-flex items-center gap-1 text-rose-600">
+                                                                <ShieldAlert size={14} />
+                                                                <span className="text-[12px] font-bold">Flagged</span>
+                                                            </div>
+                                                            <p className="text-[11px] font-medium text-rose-700 line-clamp-2">
+                                                                {item.flagReason || item.flagReasons?.[0] || 'Requires admin review'}
+                                                            </p>
+                                                        </div>
+                                                    ) : item.isManualOverride ? (
+                                                        <div className="inline-flex items-center gap-1.5 text-amber-600" title="Manually Modified">
+                                                            <ShieldAlert size={14} />
+                                                            <span className="text-[12px] font-bold">Modified</span>
+                                                        </div>
+                                                    ) : (
+                                                        !item.faceVerified && <span className="text-gray-400">-</span>
+                                                    )}
+                                                </div>
                                             </div>
 
                                             {/* Actions Column */}
@@ -531,6 +567,7 @@ export default function AttendanceAdmin({ forceView }) {
                                         <AttendanceCalendar
                                             data={employeeAttendance}
                                             holidays={holidays}
+                                            leaves={employeeLeaves}
                                             settings={settings}
                                             currentMonth={currentMonth}
                                             currentYear={currentYear}
@@ -813,6 +850,35 @@ export default function AttendanceAdmin({ forceView }) {
                     document.body
                 )}
             </div>
+            
+            {/* Photo Preview Modal */}
+            {previewImage.show && (
+                <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl p-6 shadow-2xl border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 duration-200">
+                        <div className="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-tight">{previewImage.title}</h3>
+                                <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-0.5">
+                                    {previewImage.employee ? `${previewImage.employee.firstName || ''} ${previewImage.employee.lastName || ''}`.trim() : ''}
+                                </p>
+                            </div>
+                            <button 
+                                onClick={() => setPreviewImage({ show: false, title: '', src: '', time: null, employee: null })}
+                                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                            >
+                                <XCircle size={20} />
+                            </button>
+                        </div>
+                        <div className="aspect-[4/3] rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex items-center justify-center">
+                            <img src={previewImage.src} alt={previewImage.title} className="w-full h-full object-cover" />
+                        </div>
+                        <div className="mt-4 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider">
+                            <span>Captured Time:</span>
+                            <span>{previewImage.time ? new Date(previewImage.time).toLocaleTimeString() : ''}</span>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <AttendanceExcelUploadModal
                 isOpen={uploadingPopup}

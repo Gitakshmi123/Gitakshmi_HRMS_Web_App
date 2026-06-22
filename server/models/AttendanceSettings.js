@@ -51,8 +51,17 @@ const AttendanceSettingsSchema = new mongoose.Schema({
     officeLatitude: { type: Number }, // Office location latitude
     officeLongitude: { type: Number }, // Office location longitude
     allowedRadiusMeters: { type: Number, default: 100 }, // Allowed radius in meters
-
-
+    geofenceMode: { type: String, enum: ['polygon', 'radius'], default: 'polygon' },
+    officeGeofence: {
+        enabled: { type: Boolean, default: false },
+        name: { type: String, default: 'Main Office' },
+        points: [
+            {
+                lat: Number,
+                lng: Number
+            }
+        ]
+    },
     geofance: [
         {
             lat: Number,

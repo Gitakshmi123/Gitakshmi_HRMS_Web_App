@@ -360,6 +360,10 @@ const FaceDataSchema = new mongoose.Schema(
     },
     encryptionKey: {
       type: String
+    },
+    registeredFaceImage: {
+      type: String,
+      default: ''
     }
   },
   {

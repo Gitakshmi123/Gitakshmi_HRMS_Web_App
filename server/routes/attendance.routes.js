@@ -45,6 +45,8 @@ router.delete('/face/delete', auth.authenticate, checkPermission('employee.atten
 router.post('/face/request-update', auth.authenticate, requireActiveEmployee, attendCtrl.requestFaceUpdate);
 router.get('/face/requests', auth.authenticate, checkPermission('attendance.face', 'view'), auth.requireHr, attendCtrl.getFaceUpdateRequests);
 router.post('/face/action-request', auth.authenticate, checkPermission('attendance.face', 'edit'), auth.requireHr, attendCtrl.actionFaceUpdate);
+router.get('/face/registered-users', auth.authenticate, checkPermission('attendance.face', 'view'), auth.requireHr, attendCtrl.getRegisteredFaces);
+router.delete('/face/delete-user/:employeeId', auth.authenticate, checkPermission('attendance.face', 'edit'), auth.requireHr, attendCtrl.deleteEmployeeFaceHR);
 
 // --- Manager Routes ---
 router.get('/team', auth.authenticate, checkPermission('attendance.dashboard', 'view'), attendCtrl.getTeamAttendance);

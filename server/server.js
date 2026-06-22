@@ -146,6 +146,7 @@ async function connectToDatabase() {
         emitStatus(`✅ [DB CONNECTED] source=primary db=${mongoose.connection.name} host=${mongoose.connection.host}`);
         return true;
     } catch (err) {
+<<<<<<< HEAD
         console.error('❌ MongoDB initial connection failed:', err.message);
         emitStatus(`❌ [DB NOT CONNECTED] reason=${err.message}`);
 
@@ -171,6 +172,30 @@ async function connectToDatabase() {
                 }
             } else {
                 console.warn('⚠️ DNS SRV lookup failed. Possible ISP or network restriction.');
+=======
+        const isDnsError = err && (err.syscall === 'querySrv' || err.code === 'ENOTFOUND');
+        if (isDnsError) {
+            console.warn('⚠️ MongoDB initial DNS lookup failed. Retrying with DNS override...');
+        } else {
+            console.error('❌ MongoDB initial connection failed:', err.message);
+            emitStatus(`❌ [DB NOT CONNECTED] reason=${err.message}`);
+        }
+
+        if (isDnsError) {
+            console.warn('⚠️ DNS SRV lookup failed. Possible ISP or network restriction.');
+            
+            // Try to set Google DNS servers and retry the primary connection
+            try {
+                console.log('🔄 Attempting DNS override with Google Public DNS (8.8.8.8)...');
+                const dns = require('dns');
+                dns.setServers(['8.8.8.8', '1.1.1.1']);
+                
+                await mongoose.connect(MONGO_URI, options);
+                emitStatus(`✅ [DB CONNECTED] source=primary-dns-fixed db=${mongoose.connection.name} host=${mongoose.connection.host}`);
+                return true;
+            } catch (retryErr) {
+                console.error('❌ Retry after DNS override also failed:', retryErr.message);
+>>>>>>> 570fc6c (Updated attendance and face recognition modules)
             }
 
             const fallback = process.env.MONGO_FALLBACK_URI;
@@ -202,6 +227,10 @@ function setupDbConnectionStatusHooks() {
         emitStatus('⚠️ [DB DISCONNECTED]');
     });
     mongoose.connection.on('error', (err) => {
+        // Suppress warning if it's a DNS lookup error during startup, since it is handled by fallback retry
+        if (err && (err.syscall === 'querySrv' || err.code === 'ENOTFOUND')) {
+            return;
+        }
         emitStatus(`❌ [DB ERROR] ${err?.message || 'Unknown DB error'}`);
     });
 }
