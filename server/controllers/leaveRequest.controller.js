@@ -137,15 +137,26 @@ const calculateNetDays = async (req, startDate, endDate, employeeId = null) => {
 
     // Fall through to the day-by-day loop below to ensure 100% timezone-safe calculation
 
-    const holidays = await Holiday.find({
-        tenant: req.tenantId,
-        date: { $lte: end },
-        $or: [
-            { endDate: { $exists: false } },
-            { endDate: null, date: { $gte: start } },
-            { endDate: { $gte: start } }
-        ]
-    }).lean();
+    let holidays = [];
+    if (employeeId) {
+        const { getHolidaysForEmployee } = require('../utils/holidayHelper');
+        holidays = await getHolidaysForEmployee({
+            employeeId,
+            year: start.getFullYear(),
+            tenantDB: req.tenantDB,
+            tenantId: req.tenantId
+        });
+    } else {
+        holidays = await Holiday.find({
+            tenant: req.tenantId,
+            date: { $lte: end },
+            $or: [
+                { endDate: { $exists: false } },
+                { endDate: null, date: { $gte: start } },
+                { endDate: { $gte: start } }
+            ]
+        }).lean();
+    }
     const holidaySet = new Set();
     holidays.forEach(h => {
         const s = new Date(h.date);

@@ -39,14 +39,26 @@ exports.getCalendar = async (req, res) => {
         if (!settings) settings = { weeklyOffDays: [0] };
 
         // Fetch holidays in range
-        const holidays = await Holiday.find({
-            tenant: tenantId,
-            $or: [
-                { date: { $gte: startDate, $lte: endDate } },
-                { endDate: { $gte: startDate, $lte: endDate } },
-                { date: { $lte: startDate }, endDate: { $gte: endDate } }
-            ]
-        }).lean();
+        let holidays = [];
+        const queryEmployeeId = req.query.employeeId || req.user?.id;
+        if (queryEmployeeId) {
+            const { getHolidaysForEmployee } = require('../utils/holidayHelper');
+            holidays = await getHolidaysForEmployee({
+                employeeId: queryEmployeeId,
+                year,
+                tenantDB: req.tenantDB,
+                tenantId
+            });
+        } else {
+            holidays = await Holiday.find({
+                tenant: tenantId,
+                $or: [
+                    { date: { $gte: startDate, $lte: endDate } },
+                    { endDate: { $gte: startDate, $lte: endDate } },
+                    { date: { $lte: startDate }, endDate: { $gte: endDate } }
+                ]
+            }).lean();
+        }
         const holidayMap = {};
         holidays.forEach(h => {
             const start = new Date(h.date);
@@ -193,14 +205,26 @@ exports.getAttendanceCalendar = async (req, res) => {
         if (!settings) settings = { weeklyOffDays: [0] };
 
         // Holidays map
-        const holidays = await Holiday.find({
-            tenant: queryTenant,
-            $or: [
-                { date: { $gte: startDate, $lte: endDate } },
-                { endDate: { $gte: startDate, $lte: endDate } },
-                { date: { $lte: startDate }, endDate: { $gte: endDate } }
-            ]
-        }).lean();
+        let holidays = [];
+        const queryEmployeeId = req.query.employeeId || req.user?.id;
+        if (queryEmployeeId) {
+            const { getHolidaysForEmployee } = require('../utils/holidayHelper');
+            holidays = await getHolidaysForEmployee({
+                employeeId: queryEmployeeId,
+                year,
+                tenantDB: req.tenantDB,
+                tenantId: queryTenant
+            });
+        } else {
+            holidays = await Holiday.find({
+                tenant: queryTenant,
+                $or: [
+                    { date: { $gte: startDate, $lte: endDate } },
+                    { endDate: { $gte: startDate, $lte: endDate } },
+                    { date: { $lte: startDate }, endDate: { $gte: endDate } }
+                ]
+            }).lean();
+        }
         const holidayMap = {};
         holidays.forEach(h => {
             const start = new Date(h.date);
