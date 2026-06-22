@@ -20,11 +20,43 @@ import {
 const FACE_MODEL_PATH =
   import.meta.env.VITE_FACE_MODEL_PATH || '/api/face-attendance/models';
 const ENABLE_BROWSER_FACE_MODELS =
-  String(import.meta.env.VITE_ENABLE_BROWSER_FACE_MODELS || 'false').toLowerCase() === 'true';
+  String(import.meta.env.VITE_ENABLE_BROWSER_FACE_MODELS || 'true').toLowerCase() === 'true';
 let faceModelsPromise = null;
 let ssdModelPromise = null;
 let nativeFaceDetectorPromise = null;
 const GUIDE_DETECTION_INTERVAL_MS = 900;
+
+const estimateYaw = (landmarks = []) => {
+  if (!landmarks.length) return 0;
+  const nose = landmarks[30];
+  const leftEye = landmarks[36];
+  const rightEye = landmarks[45];
+  if (!nose || !leftEye || !rightEye) return 0;
+  const eyeMidpoint = ((leftEye.x || 0) + (rightEye.x || 0)) / 2;
+  const eyeSpan = Math.max(1, Math.abs((rightEye.x || 0) - (leftEye.x || 0)));
+  return ((nose.x || 0) - eyeMidpoint) / eyeSpan;
+};
+
+const detectSmileRatio = (landmarks = []) => {
+  if (landmarks.length < 68) return 0;
+  const mouthLeft = landmarks[48];
+  const mouthRight = landmarks[54];
+  const leftEyeOuter = landmarks[36];
+  const rightEyeOuter = landmarks[45];
+  
+  if (!mouthLeft || !mouthRight || !leftEyeOuter || !rightEyeOuter) return 0;
+  
+  const mouthWidth = Math.hypot(mouthRight.x - mouthLeft.x, mouthRight.y - mouthLeft.y);
+  const eyeDistance = Math.hypot(rightEyeOuter.x - leftEyeOuter.x, rightEyeOuter.y - leftEyeOuter.y);
+  
+  return mouthWidth / (eyeDistance || 1);
+};
+
+const GUIDED_STEPS = [
+  { index: 0, label: 'Look Straight', instruction: 'Look straight at the camera and keep your face centered.' },
+  { index: 1, label: 'Turn Left', instruction: 'Slowly turn your head to the left.' },
+  { index: 2, label: 'Turn Right', instruction: 'Slowly turn your head to the right.' }
+];
 
 const FACE_CAPTURE_CONFIG = {
   alignmentInputSize: 320,
@@ -523,11 +555,18 @@ const FaceAttendance = ({ onSuccess, onClose, actionType, profile }) => {
   const [previewAspectRatio, setPreviewAspectRatio] = useState(16 / 9);
   const [canUpdate, setCanUpdate] = useState(false);
   const [showRequestModal, setShowRequestModal] = useState(false);
+  const [showUnregisteredModal, setShowUnregisteredModal] = useState(false);
   const [requestReason, setRequestReason] = useState('');
   const [submittingRequest, setSubmittingRequest] = useState(false);
   const [pendingUpdateRequest, setPendingUpdateRequest] = useState(null);
   const [violationModal, setViolationModal] = useState({ show: false, violations: [] });
+  const [guidedStep, setGuidedStep] = useState(-1);
+  const [guidedProgress, setGuidedProgress] = useState(0);
   const browserModelsReadyRef = useRef(false);
+  const cameraActiveRef = useRef(cameraActive);
+  useEffect(() => {
+    cameraActiveRef.current = cameraActive;
+  }, [cameraActive]);
   const autoCameraStartedRef = useRef(false);
   const lastAlignedAtRef = useRef(0);
   const lastStableLocationRef = useRef(null);
@@ -715,6 +754,215 @@ const FaceAttendance = ({ onSuccess, onClose, actionType, profile }) => {
     return averageEmbeddings(capturedEmbeddings);
   };
 
+  const runGuidedRegistrationLoop = async (videoEl) => {
+    if (!browserModelsReadyRef.current) {
+      throw new Error('Guided registration requires browser face models to be loaded.');
+    }
+
+    setGuidedStep(0);
+    setGuidedProgress(0);
+
+    let currentStep = 0;
+    let stepProgress = 0;
+    let savedEmbedding = null;
+    let savedImage = null;
+
+    const canvas = overlayCanvasRef.current;
+    const ctx = canvas?.getContext('2d');
+
+    const drawGuideHUD = (detection, step, progress, satisfied) => {
+      if (!canvas || !videoEl || !ctx) return;
+      const w = videoEl.videoWidth;
+      const h = videoEl.videoHeight;
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+      }
+      ctx.clearRect(0, 0, w, h);
+
+      // 1. Dark overlay outside the center oval
+      const cx = w / 2;
+      const cy = h / 2;
+      const rx = Math.min(w * 0.33, h * 0.38);
+      const ry = Math.min(w * 0.33, h * 0.38) * 1.25;
+
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.7)';
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.save();
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, rx, ry, 0, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.restore();
+
+      // 2. Oval outline (red by default, green if step is satisfied/correct)
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, rx, ry, 0, 0, 2 * Math.PI);
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = satisfied ? '#10B981' : '#EF4444';
+      if (!detection) {
+        ctx.setLineDash([8, 6]);
+      } else {
+        ctx.setLineDash([]);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // 3. Progress ring around oval
+      if (progress > 0) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, rx + 14, -Math.PI / 2, -Math.PI / 2 + (2 * Math.PI * progress) / 100);
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = '#10B981';
+        ctx.stroke();
+      }
+
+      // 4. Fill oval lightly on completion
+      if (detection && progress >= 100) {
+        ctx.fillStyle = 'rgba(16, 185, 129, 0.15)';
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, rx, ry, 0, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+    };
+
+    while (cameraActiveRef.current && currentStep < GUIDED_STEPS.length) {
+      let detection = null;
+      try {
+        let detections = await runTinyFaceDetectionPasses({
+          input: videoEl,
+          passes: CAPTURE_TINY_DETECTION_PASSES,
+          withLandmarks: true,
+          withDescriptors: currentStep === 0
+        });
+
+        if (!detections.length) {
+          const ssdDetection = await runSsdFaceDetectionPasses({
+            input: videoEl,
+            passes: SSD_DETECTION_PASSES,
+            withLandmarks: true,
+            withDescriptor: currentStep === 0
+          });
+          detections = ssdDetection ? [ssdDetection] : [];
+        }
+
+        detection = detections[0] || null;
+      } catch (err) {
+        console.error('Guided detection step error:', err);
+      }
+
+      if (!detection) {
+        stepProgress = Math.max(0, stepProgress - 15);
+        setGuidedProgress(stepProgress);
+        drawGuideHUD(null, currentStep, stepProgress, false);
+        setMessage('Face lost! Please align your face inside the circle.');
+        await wait(150);
+        continue;
+      }
+
+      // Check face placement (center & size constraints)
+      const box = detection.detection.box || {};
+      const fcx = box.x + box.width / 2;
+      const fcy = box.y + box.height / 2;
+      const targetCx = videoEl.videoWidth / 2;
+      const targetCy = videoEl.videoHeight / 2;
+      const distFromCenter = Math.hypot(fcx - targetCx, fcy - targetCy);
+      const faceRatio = box.width / videoEl.videoWidth;
+
+      if (distFromCenter > videoEl.videoWidth * 0.25) {
+        stepProgress = Math.max(0, stepProgress - 10);
+        setGuidedProgress(stepProgress);
+        drawGuideHUD(detection, currentStep, stepProgress, false);
+        setMessage('Please center your face inside the circle.');
+        await wait(150);
+        continue;
+      }
+
+      if (faceRatio < 0.22) {
+        stepProgress = Math.max(0, stepProgress - 10);
+        setGuidedProgress(stepProgress);
+        drawGuideHUD(detection, currentStep, stepProgress, false);
+        setMessage('Please move closer to the camera.');
+        await wait(150);
+        continue;
+      }
+
+      if (faceRatio > 0.65) {
+        stepProgress = Math.max(0, stepProgress - 10);
+        setGuidedProgress(stepProgress);
+        drawGuideHUD(detection, currentStep, stepProgress, false);
+        setMessage('Please move slightly backward.');
+        await wait(150);
+        continue;
+      }
+
+      const landmarks = detection.landmarks.positions || [];
+      let stepSatisfied = false;
+
+      if (currentStep === 0) {
+        // Look Straight
+        const yaw = estimateYaw(landmarks);
+        if (Math.abs(yaw) < 0.08) {
+          stepSatisfied = true;
+          if (detection.descriptor && !savedEmbedding) {
+            savedEmbedding = Array.from(detection.descriptor);
+            savedImage = captureVideoFrame(videoEl, FACE_REGISTRATION_IMAGE_CAPTURE);
+          }
+        } else {
+          setMessage('Look straight at the camera.');
+        }
+      } else if (currentStep === 1) {
+        // Turn Left
+        const yaw = estimateYaw(landmarks);
+        if (yaw < -0.12) {
+          stepSatisfied = true;
+        } else {
+          setMessage('Slowly turn your head to the left.');
+        }
+      } else if (currentStep === 2) {
+        // Turn Right
+        const yaw = estimateYaw(landmarks);
+        if (yaw > 0.12) {
+          stepSatisfied = true;
+        } else {
+          setMessage('Slowly turn your head to the right.');
+        }
+      }
+
+      if (stepSatisfied) {
+        stepProgress += 25; // accumulate progress
+        if (stepProgress >= 100) {
+          stepProgress = 100;
+          setGuidedProgress(100);
+          drawGuideHUD(detection, currentStep, 100, true);
+          setMessage(`Step ${currentStep + 1} completed!`);
+          await wait(600); // feedback delay
+
+          currentStep += 1;
+          setGuidedStep(currentStep);
+          stepProgress = 0;
+          setGuidedProgress(0);
+        } else {
+          setGuidedProgress(stepProgress);
+          drawGuideHUD(detection, currentStep, stepProgress, true);
+        }
+      } else {
+        stepProgress = Math.max(0, stepProgress - 5);
+        setGuidedProgress(stepProgress);
+        drawGuideHUD(detection, currentStep, stepProgress, false);
+      }
+
+      await wait(80);
+    }
+
+    if (canvas && ctx) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    return { faceEmbedding: savedEmbedding, faceImageData: savedImage };
+  };
+
   const captureLivenessFrames = async () => {
     if (!browserModelsReadyRef.current) {
       throw new Error('Browser face models are unavailable. Server verification will be used.');
@@ -811,6 +1059,39 @@ const FaceAttendance = ({ onSuccess, onClose, actionType, profile }) => {
       }
     };
   };
+
+  useEffect(() => {
+    const syncOfflineRegistration = async () => {
+      const offlineData = localStorage.getItem('pending_face_registration');
+      if (offlineData) {
+        try {
+          const payload = JSON.parse(offlineData);
+          console.log('🔄 Internet restored. Syncing offline face profile for:', payload.employeeName);
+          const res = await api.post('/attendance/face/register', payload);
+          if (res.data.success) {
+            localStorage.removeItem('pending_face_registration');
+            showToast('success', 'Biometrics Sync', 'Offline face profile synced successfully with server.');
+            setFaceRegistered(true);
+          }
+        } catch (err) {
+          console.error('Failed to sync offline face profile:', err);
+        }
+      }
+    };
+
+    if (navigator.onLine) {
+      syncOfflineRegistration();
+    }
+
+    const handleOnline = () => {
+      syncOfflineRegistration();
+    };
+
+    window.addEventListener('online', handleOnline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -1105,6 +1386,12 @@ const FaceAttendance = ({ onSuccess, onClose, actionType, profile }) => {
     lastStableLocationRef.current = null;
     recentLocationSamplesRef.current = [];
     setPreviewAspectRatio(16 / 9);
+    if (overlayCanvasRef.current) {
+      const ctx = overlayCanvasRef.current.getContext('2d');
+      ctx.clearRect(0, 0, overlayCanvasRef.current.width, overlayCanvasRef.current.height);
+    }
+    setGuidedStep(-1);
+    setGuidedProgress(0);
   };
 
   const getLocation = useCallback(async () => {
@@ -1243,6 +1530,10 @@ const FaceAttendance = ({ onSuccess, onClose, actionType, profile }) => {
   }, [cameraActive, mode, capturing, gpsLoading, refreshLocation]);
 
   const handleAttendance = async () => {
+    if (!faceRegistered) {
+      setShowUnregisteredModal(true);
+      return;
+    }
     if (!modelsLoaded) return;
     let trackingStartLocation = null;
     let trackingDevice = null;
@@ -1300,15 +1591,14 @@ const FaceAttendance = ({ onSuccess, onClose, actionType, profile }) => {
           faceVerificationToken = matchRes.data?.data?.faceVerificationToken || '';
         } catch (matchErr) {
           const matchErrorCode = matchErr?.response?.data?.error;
-          if (!['no_registered_face', 'face_mismatch'].includes(matchErrorCode)) {
-            throw matchErr;
+          if (matchErrorCode === 'face_mismatch') {
+            throw new Error(matchErr?.response?.data?.message || 'Registered face did not match. Attendance was not marked.');
           }
           if (matchErrorCode === 'no_registered_face') {
             setFaceRegistered(false);
-            setMessage('No face profile found. Marking with camera and GPS for HR review...');
-          } else {
-            setMessage('Face match needs review. Marking with camera and GPS for HR review...');
+            throw new Error('No registered face profile found. Please register first.');
           }
+          throw matchErr;
         }
       }
 
@@ -1424,37 +1714,69 @@ const FaceAttendance = ({ onSuccess, onClose, actionType, profile }) => {
     if (!registrationName.trim() || !registrationId.trim() || !consentGiven) {
       showToast('warning', 'Missing Details', 'Fill all fields and accept consent.'); return;
     }
-    setCapturing(true); setStatus(null); setMessage('Registering Face...');
+    setCapturing(true); setStatus(null); setMessage('Initializing guided registration...');
+    let result = null;
     try {
       const videoEl = await ensureVideoReady();
-      const image = captureVideoFrame(videoEl, FACE_REGISTRATION_IMAGE_CAPTURE);
-      let faceEmbedding;
+      result = await runGuidedRegistrationLoop(videoEl);
 
-      try {
-        faceEmbedding = await detectFaceDescriptor();
-      } catch {
-        faceEmbedding = null;
+      if (!result || !result.faceEmbedding || !result.faceImageData) {
+        throw new Error('Guided registration was cancelled or incomplete.');
       }
+
+      setGuidedStep(-1);
       
-      const res = await api.post('/attendance/face/register', {
+      const payload = {
         employeeName: registrationName,
         employeeId: registrationId,
-        faceEmbedding,
-        faceImageData: image,
+        faceEmbedding: result.faceEmbedding,
+        faceImageData: result.faceImageData,
         registrationNotes: `Self register: ${registrationName} (${registrationId})`,
         consentGiven: true
-      });
+      };
 
-      if (res.data.success) {
+      if (!navigator.onLine) {
+        localStorage.setItem('pending_face_registration', JSON.stringify(payload));
         setStatus('success');
-        setMessage('Registration Successful');
+        setMessage('Offline: Face saved locally. Will sync when online.');
         setFaceRegistered(true);
-        setTimeout(() => { stopCamera(); setCapturing(false); setMode('attendance'); }, 2000);
+        showToast('info', 'Offline Mode', 'No internet connection. Saved face profile locally. Will auto-sync when online.');
+        setTimeout(() => { stopCamera(); setCapturing(false); setMode('attendance'); }, 3000);
+        return;
+      }
+
+      setMessage('Saving biometric profile to server...');
+      
+      try {
+        const res = await api.post('/attendance/face/register', payload);
+        if (res.data.success) {
+          setStatus('success');
+          setMessage('Registration Successful');
+          setFaceRegistered(true);
+          setTimeout(() => { stopCamera(); setCapturing(false); setMode('attendance'); }, 2000);
+        }
+      } catch (postErr) {
+        const isNetworkErr = !navigator.onLine || postErr.message === 'Network Error' || !postErr.response;
+        if (isNetworkErr) {
+          localStorage.setItem('pending_face_registration', JSON.stringify(payload));
+          setStatus('success');
+          setMessage('Offline Fallback: Face saved locally. Will sync when online.');
+          setFaceRegistered(true);
+          showToast('info', 'Offline Fallback', 'Network issue. Saved face profile locally. Will auto-sync when connection is restored.');
+          setTimeout(() => { stopCamera(); setCapturing(false); setMode('attendance'); }, 3000);
+        } else {
+          throw postErr;
+        }
       }
     } catch (err) {
+      setGuidedStep(-1);
       setStatus('error');
       setMessage(getErrorMessage(err, 'Registration failed'));
       setCapturing(false);
+      if (overlayCanvasRef.current) {
+        const ctx = overlayCanvasRef.current.getContext('2d');
+        ctx.clearRect(0, 0, overlayCanvasRef.current.width, overlayCanvasRef.current.height);
+      }
     }
   };
 
@@ -1527,6 +1849,27 @@ const FaceAttendance = ({ onSuccess, onClose, actionType, profile }) => {
       </div>
 
       <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+         {mode === 'attendance' && !faceRegistered && (
+            <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm animate-in fade-in duration-300">
+               <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0 mt-0.5 border border-amber-200">
+                     <AlertCircle size={20} className="text-amber-600" />
+                  </div>
+                  <div>
+                     <h4 className="text-sm font-bold text-amber-800">Biometric Registration Required</h4>
+                     <p className="text-[12px] text-amber-700 mt-0.5 leading-relaxed font-medium">
+                        Your face profile is not registered. You cannot mark attendance without face verification. Please register first.
+                     </p>
+                  </div>
+               </div>
+               <button
+                  onClick={() => setMode('register')}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold uppercase tracking-wider text-[10px] rounded-lg transition-all shadow-md shadow-amber-500/10 shrink-0"
+               >
+                  Register Now
+               </button>
+            </div>
+         )}
          <div className="grid md:grid-cols-2 gap-8 items-start">
             
             {/* Left: Camera Feed */}
@@ -1583,15 +1926,42 @@ const FaceAttendance = ({ onSuccess, onClose, actionType, profile }) => {
                     <>
                        <video ref={videoRef} autoPlay muted playsInline className="absolute inset-0 w-full h-full object-cover scale-x-[-1]" />
                        <canvas ref={overlayCanvasRef} className="absolute inset-0 w-full h-full object-cover pointer-events-none z-10 scale-x-[-1]" />
-                       {capturing && (
-                         <div className="absolute inset-0 bg-white/60 backdrop-blur-sm flex flex-col items-center justify-center z-20 animate-in fade-in duration-300">
-                            <Loader2 size={32} className="text-[#2563EB] animate-spin mb-2" />
-                            <span className="text-[10px] font-bold text-[#334155] uppercase tracking-widest animate-pulse">Analyzing Biometrics</span>
-                         </div>
-                       )}
+                        {capturing && guidedStep === -1 && (
+                          <div className="absolute inset-0 bg-white/60 backdrop-blur-sm flex flex-col items-center justify-center z-20 animate-in fade-in duration-300">
+                             <Loader2 size={32} className="text-[#2563EB] animate-spin mb-2" />
+                             <span className="text-[10px] font-bold text-[#334155] uppercase tracking-widest animate-pulse">{message || 'Analyzing Biometrics'}</span>
+                          </div>
+                        )}
                     </>
                   )}
                </div>
+
+               {guidedStep >= 0 && guidedStep < GUIDED_STEPS.length && (
+                 <div className="bg-slate-900 border border-slate-700/50 p-4 rounded-xl flex items-center justify-between shadow-xl animate-in slide-in-from-bottom-5 duration-300">
+                    <div className="flex-1">
+                       <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-0.5">
+                         Verification Step {guidedStep + 1} of {GUIDED_STEPS.length}
+                       </p>
+                       <h4 className="text-white text-sm font-bold leading-tight">
+                         {GUIDED_STEPS[guidedStep].label}
+                       </h4>
+                       <p className="text-slate-300 text-[11px] mt-0.5 font-medium leading-relaxed">
+                         {message || GUIDED_STEPS[guidedStep].instruction}
+                       </p>
+                    </div>
+                    <div className="relative w-12 h-12 flex items-center justify-center shrink-0 ml-3">
+                       <svg className="w-full h-full transform -rotate-90">
+                         <circle cx="24" cy="24" r="20" stroke="rgba(255,255,255,0.1)" strokeWidth="4" fill="none" />
+                         <circle cx="24" cy="24" r="20" stroke="#10B981" strokeWidth="4" fill="none"
+                                 strokeDasharray={2 * Math.PI * 20}
+                                 strokeDashoffset={2 * Math.PI * 20 * (1 - guidedProgress / 100)}
+                                 strokeLinecap="round"
+                                 className="transition-all duration-100 ease-out" />
+                       </svg>
+                       <span className="absolute text-[10px] font-bold text-white uppercase">{guidedProgress}%</span>
+                    </div>
+                 </div>
+               )}
 
                <div className="space-y-3">
                   {!cameraActive ? (
@@ -1790,6 +2160,42 @@ const FaceAttendance = ({ onSuccess, onClose, actionType, profile }) => {
               >
                 Acknowledge Alert
               </button>
+            </div>
+         </div>
+      )}
+
+      {/* UNREGISTERED MODAL */}
+      {showUnregisteredModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+           <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-8 border border-slate-200 animate-in zoom-in-95 duration-300">
+              <div className="flex flex-col items-center text-center mb-6">
+                 <div className="w-16 h-16 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mb-4 border border-amber-100">
+                    <AlertCircle size={32} />
+                 </div>
+                 <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight">Registration Required</h2>
+              </div>
+              <div className="space-y-4 mb-8 text-center">
+                 <p className="text-[13px] text-slate-600 leading-relaxed font-medium">
+                    You cannot mark your attendance because your face profile is not registered in the system. Please register your face first to enable attendance punches.
+                 </p>
+              </div>
+              <div className="flex gap-4">
+                 <button 
+                   onClick={() => setShowUnregisteredModal(false)} 
+                   className="flex-1 h-[48px] border border-slate-200 text-slate-500 hover:bg-slate-50 rounded-xl text-xs font-bold uppercase tracking-widest transition-all"
+                 >
+                    Dismiss
+                 </button>
+                 <button 
+                   onClick={() => {
+                     setShowUnregisteredModal(false);
+                     setMode('register');
+                   }} 
+                   className="flex-1 h-[48px] bg-blue-600 text-white hover:bg-blue-700 rounded-xl text-xs font-bold uppercase tracking-widest transition-all shadow-lg shadow-blue-500/20 active:scale-95"
+                 >
+                    Register Now
+                 </button>
+              </div>
            </div>
         </div>
       )}

@@ -187,8 +187,18 @@ exports.registerFace = async (req, res) => {
     faceData.detection = {
       bbox: metadata.detection || { x: 0, y: 0, width: 200, height: 200 }
     };
-    faceData.status = 'ACTIVE';
-    faceData.isVerified = true;
+    if (faceImageData) {
+      faceData.registeredFaceImage = faceImageData;
+    }
+    
+    if (!existingFace) {
+      faceData.status = 'PENDING_REVIEW';
+      faceData.isVerified = false;
+    } else {
+      faceData.status = 'ACTIVE';
+      faceData.isVerified = true;
+    }
+    
     faceData.registration = {
       registeredAt: new Date(),
       registeredBy: internalEmployeeId,
@@ -198,6 +208,16 @@ exports.registerFace = async (req, res) => {
 
     debugFaceLog(`[DEBUG_FACE_REGISTER] Saving face data for employee: ${internalEmployeeId}`);
     await faceData.save();
+
+    if (!existingFace) {
+      const initialRequest = new FaceUpdateRequest({
+        tenant: tenantId,
+        employee: internalEmployeeId,
+        status: 'pending',
+        reason: 'Initial face registration approval request'
+      });
+      await initialRequest.save();
+    }
 
     if (approvedUpdateRequest) {
       approvedUpdateRequest.status = 'used';

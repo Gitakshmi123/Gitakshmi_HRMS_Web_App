@@ -15,6 +15,12 @@ const getProfilePicUrl = (profilePic) => {
     return value.startsWith('http') ? value : `${API_ROOT}${value.startsWith('/') ? '' : '/'}${value}`;
 };
 
+const ensureBase64DataUrl = (imgStr) => {
+    if (!imgStr) return '';
+    if (imgStr.startsWith('data:')) return imgStr;
+    return `data:image/jpeg;base64,${imgStr}`;
+};
+
 const getEmployeeDisplayName = (request) => {
     const firstName = String(request?.employee?.firstName || '').trim();
     const lastName = String(request?.employee?.lastName || '').trim();
@@ -45,10 +51,18 @@ const FaceUpdateRequests = () => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [rejectionModal, setRejectionModal] = useState({ show: false, requestId: null, reason: '' });
+    const [activeTab, setActiveTab] = useState('requests'); // 'requests' | 'registered'
+    const [registeredFaces, setRegisteredFaces] = useState([]);
+    const [loadingRegistered, setLoadingRegistered] = useState(false);
+    const [previewImage, setPreviewImage] = useState({ show: false, src: '', title: '', name: '', code: '' });
 
     useEffect(() => {
-        fetchRequests();
-    }, []);
+        if (activeTab === 'requests') {
+            fetchRequests();
+        } else {
+            fetchRegisteredFaces();
+        }
+    }, [activeTab]);
 
     const fetchRequests = async () => {
         try {
@@ -59,6 +73,18 @@ const FaceUpdateRequests = () => {
             console.error('Error fetching requests:', err);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchRegisteredFaces = async () => {
+        try {
+            setLoadingRegistered(true);
+            const res = await api.get('/attendance/face/registered-users');
+            setRegisteredFaces(Array.isArray(res?.data?.data) ? res.data.data : []);
+        } catch (err) {
+            console.error('Error fetching registered faces:', err);
+        } finally {
+            setLoadingRegistered(false);
         }
     };
 
@@ -88,6 +114,12 @@ const FaceUpdateRequests = () => {
         getEmployeeDisplayCode(req).toLowerCase().includes(searchTerm.toLowerCase())
     );
 
+    const filteredRegistered = registeredFaces.filter(item =>
+        (item.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (item.employeeCode || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (item.email || '').toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
     const getStatusStyle = (status) => {
         switch (normalizeRequestStatus(status)) {
             case 'pending': return 'bg-amber-50 text-amber-700 border-amber-200/50 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20';
@@ -98,7 +130,9 @@ const FaceUpdateRequests = () => {
         }
     };
 
-    if (loading && requests.length === 0) {
+    const isScreenLoading = (activeTab === 'requests' && loading && requests.length === 0) || (activeTab === 'registered' && loadingRegistered && registeredFaces.length === 0);
+
+    if (isScreenLoading) {
         return (
             <div className="p-4 sm:p-6 w-full mx-auto space-y-4">
                 <div className="flex items-center justify-center min-h-[400px]">
@@ -110,6 +144,22 @@ const FaceUpdateRequests = () => {
 
     return (
         <div className="p-[10px] w-full mx-auto space-y-4">
+            {/* Tab Selector */}
+            <div className="flex border-b border-slate-200 dark:border-slate-800 mb-4 gap-6 px-1">
+                <button
+                    onClick={() => { setActiveTab('requests'); setSearchTerm(''); }}
+                    className={`pb-2.5 text-[11px] font-black uppercase tracking-wider transition-all border-b-2 ${activeTab === 'requests' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+                >
+                    Pending Approvals
+                </button>
+                <button
+                    onClick={() => { setActiveTab('registered'); setSearchTerm(''); }}
+                    className={`pb-2.5 text-[11px] font-black uppercase tracking-wider transition-all border-b-2 ${activeTab === 'registered' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+                >
+                    Registered Faces
+                </button>
+            </div>
+
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex-1 max-w-md">
                     <div className="relative">
@@ -124,7 +174,7 @@ const FaceUpdateRequests = () => {
                     </div>
                 </div>
                 <button
-                    onClick={fetchRequests}
+                    onClick={activeTab === 'requests' ? fetchRequests : fetchRegisteredFaces}
                     className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl transition font-black text-[10px] tracking-widest uppercase shadow-sm"
                 >
                     <RefreshCcw size={14} />
@@ -132,94 +182,184 @@ const FaceUpdateRequests = () => {
                 </button>
             </div>
 
-            <div className="flex flex-col">
-                <div className="hidden lg:grid grid-cols-[1.5fr_1fr_2fr_1fr_0.5fr] items-center px-4 py-2 mb-2">
-                    <div className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Employee</div>
-                    <div className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">Request Date</div>
-                    <div className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-4">Reason</div>
-                    <div className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">Status</div>
-                    <div className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-right">Actions</div>
-                </div>
+            {activeTab === 'requests' ? (
+                <div className="flex flex-col">
+                    <div className="hidden lg:grid grid-cols-[1.5fr_1fr_2fr_1fr_0.5fr] items-center px-4 py-2 mb-2">
+                        <div className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Employee</div>
+                        <div className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">Request Date</div>
+                        <div className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-4">Reason</div>
+                        <div className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">Status</div>
+                        <div className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-right">Actions</div>
+                    </div>
 
-                <div className="space-y-2">
-                    {filteredRequests.map((req) => (
-                        <div key={req._id} className="bg-white dark:bg-slate-900 lg:grid lg:grid-cols-[1.5fr_1fr_2fr_1fr_0.5fr] flex flex-col items-center px-4 py-3 rounded-xl border border-slate-100 dark:border-slate-800/60 shadow-sm hover:shadow-md hover:border-blue-500/20 transition-all group gap-2 lg:gap-0">
-                            {/* Employee */}
-                            <div className="w-full flex items-center gap-3">
-                                {getProfilePicUrl(req.employee?.profilePic) ? (
-                                    <img
-                                        src={getProfilePicUrl(req.employee?.profilePic)}
-                                        alt={getEmployeeDisplayName(req)}
-                                        className="w-9 h-9 rounded-full object-cover ring-2 ring-white dark:ring-slate-900 shadow-sm"
-                                    />
-                                ) : (
-                                    <div className="w-9 h-9 bg-blue-50 dark:bg-blue-900/30 rounded-full flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-xs ring-2 ring-white dark:ring-slate-900 shadow-sm">
-                                        {getEmployeeInitials(req)}
+                    <div className="space-y-2">
+                        {filteredRequests.map((req) => (
+                            <div key={req._id} className="bg-white dark:bg-slate-900 lg:grid lg:grid-cols-[1.5fr_1fr_2fr_1fr_0.5fr] flex flex-col items-center px-4 py-3 rounded-xl border border-slate-100 dark:border-slate-800/60 shadow-sm hover:shadow-md hover:border-blue-500/20 transition-all group gap-2 lg:gap-0">
+                                {/* Employee */}
+                                <div className="w-full flex items-center gap-3">
+                                    {req.registeredFaceImage ? (
+                                        <img
+                                            src={ensureBase64DataUrl(req.registeredFaceImage)}
+                                            alt={getEmployeeDisplayName(req)}
+                                            className="w-9 h-9 rounded-full object-cover ring-2 ring-[#2563EB]/40 dark:ring-[#2563EB]/60 shadow-sm cursor-pointer hover:scale-110 transition-transform"
+                                            onClick={() => setPreviewImage({ show: true, title: 'Captured Face for Approval', src: ensureBase64DataUrl(req.registeredFaceImage), name: getEmployeeDisplayName(req), code: getEmployeeDisplayCode(req) })}
+                                        />
+                                    ) : getProfilePicUrl(req.employee?.profilePic) ? (
+                                        <img
+                                            src={getProfilePicUrl(req.employee?.profilePic)}
+                                            alt={getEmployeeDisplayName(req)}
+                                            className="w-9 h-9 rounded-full object-cover ring-2 ring-white dark:ring-slate-900 shadow-sm"
+                                        />
+                                    ) : (
+                                        <div className="w-9 h-9 bg-blue-50 dark:bg-blue-900/30 rounded-full flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-xs ring-2 ring-white dark:ring-slate-900 shadow-sm">
+                                            {getEmployeeInitials(req)}
+                                        </div>
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                        <div className="font-bold text-xs text-slate-800 dark:text-white truncate">{getEmployeeDisplayName(req)}</div>
+                                        <div className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest truncate">{getEmployeeDisplayCode(req)}</div>
                                     </div>
-                                )}
-                                <div className="flex-1 min-w-0">
-                                    <div className="font-bold text-xs text-slate-800 dark:text-white truncate">{getEmployeeDisplayName(req)}</div>
-                                    <div className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest truncate">{getEmployeeDisplayCode(req)}</div>
+                                </div>
+                                {/* Date */}
+                                <div className="w-full flex lg:flex-col items-center lg:justify-center justify-between lg:text-center px-1 lg:px-0">
+                                    <div className="text-[11px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-tight">{new Date(req.requestedAt).toLocaleDateString()}</div>
+                                    <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{new Date(req.requestedAt).toLocaleTimeString()}</div>
+                                </div>
+                                {/* Reason */}
+                                <div className="w-full lg:pl-4 bg-slate-50/50 dark:bg-slate-800/20 lg:bg-transparent rounded-lg p-2 lg:p-0">
+                                    <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 line-clamp-2 uppercase tracking-tight relative pl-2 border-l-2 border-blue-200 dark:border-blue-800 lg:border-none lg:pl-0">
+                                        {req.reason || '--'}
+                                    </div>
+                                </div>
+                                {/* Status */}
+                                <div className="w-full flex lg:justify-center items-center justify-between px-1 lg:px-0 mt-2 lg:mt-0">
+                                    <span className="lg:hidden text-[9px] font-black text-slate-400 uppercase tracking-widest">Status</span>
+                                    <span className={`inline-flex px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-widest border ${getStatusStyle(req.status)}`}>
+                                        {normalizeRequestStatus(req.status)}
+                                    </span>
+                                </div>
+                                {/* Actions */}
+                                <div className="w-full flex lg:justify-end items-center justify-end gap-1.5 pt-2 lg:pt-0 border-t border-slate-100 dark:border-slate-800 lg:border-none mt-2 lg:mt-0">
+                                    {normalizeRequestStatus(req.status) === 'pending' ? (
+                                        <div className="flex gap-1.5">
+                                            <Can module="attendance.face" action="edit">
+                                                <button
+                                                    onClick={() => handleAction(req._id, 'approved')}
+                                                    className="p-1.5 text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 rounded-lg transition shadow-sm"
+                                                    title="Approve"
+                                                >
+                                                    <CheckCircle size={16} />
+                                                </button>
+                                            </Can>
+                                            <Can module="attendance.face" action="edit">
+                                                <button
+                                                    onClick={() => setRejectionModal({ show: true, requestId: req._id, reason: '' })}
+                                                    className="p-1.5 text-rose-600 bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 rounded-lg transition shadow-sm"
+                                                    title="Reject"
+                                                >
+                                                    <XCircle size={16} />
+                                                </button>
+                                            </Can>
+                                        </div>
+                                    ) : (
+                                        <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded-md">Done</span>
+                                    )}
                                 </div>
                             </div>
-                            {/* Date */}
-                            <div className="w-full flex lg:flex-col items-center lg:justify-center justify-between lg:text-center px-1 lg:px-0">
-                                <div className="text-[11px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-tight">{new Date(req.requestedAt).toLocaleDateString()}</div>
-                                <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{new Date(req.requestedAt).toLocaleTimeString()}</div>
+                        ))}
+                        {filteredRequests.length === 0 && (
+                            <div className="bg-white dark:bg-slate-900 p-8 rounded-xl border border-slate-100 dark:border-slate-800 flex flex-col items-center justify-center">
+                                <div className="w-12 h-12 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mb-3">
+                                    <AlertCircle className="text-slate-300 dark:text-slate-600" size={24} />
+                                </div>
+                                <span className="font-bold text-slate-400 dark:text-slate-500 uppercase text-[10px] tracking-widest">No matching requests found</span>
                             </div>
-                            {/* Reason */}
-                            <div className="w-full lg:pl-4 bg-slate-50/50 dark:bg-slate-800/20 lg:bg-transparent rounded-lg p-2 lg:p-0">
-                                <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 line-clamp-2 uppercase tracking-tight relative pl-2 border-l-2 border-blue-200 dark:border-blue-800 lg:border-none lg:pl-0">
-                                    {req.reason || '--'}
+                        )}
+                    </div>
+                </div>
+            ) : (
+                <div className="flex flex-col">
+                    <div className="hidden lg:grid grid-cols-[1.5fr_1fr_1fr_1.2fr_0.8fr] items-center px-4 py-2 mb-2">
+                        <div className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Employee</div>
+                        <div className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-4">Email</div>
+                        <div className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">Registration Status</div>
+                        <div className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">Registration Date</div>
+                        <div className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-right">Confidence Score</div>
+                    </div>
+
+                    <div className="space-y-2">
+                        {filteredRegistered.map((item) => (
+                            <div key={item.employeeId} className="bg-white dark:bg-slate-900 lg:grid lg:grid-cols-[1.5fr_1fr_1fr_1.2fr_0.8fr] flex flex-col items-center px-4 py-3 rounded-xl border border-slate-100 dark:border-slate-800/60 shadow-sm hover:shadow-md hover:border-blue-500/20 transition-all group gap-2 lg:gap-0">
+                                {/* Employee */}
+                                <div className="w-full flex items-center gap-3">
+                                    {item.registeredFaceImage ? (
+                                        <img
+                                            src={ensureBase64DataUrl(item.registeredFaceImage)}
+                                            alt={item.name}
+                                            className="w-9 h-9 rounded-full object-cover ring-2 ring-[#10B981]/40 dark:ring-[#10B981]/60 shadow-sm cursor-pointer hover:scale-110 transition-transform"
+                                            onClick={() => setPreviewImage({ show: true, title: 'Registered Face Profile', src: ensureBase64DataUrl(item.registeredFaceImage), name: item.name, code: item.employeeCode })}
+                                        />
+                                    ) : (
+                                        <div className="w-9 h-9 bg-blue-50 dark:bg-blue-900/30 rounded-full flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-xs ring-2 ring-white dark:ring-slate-900 shadow-sm">
+                                            {item.name ? item.name.split(' ').filter(Boolean).map(p => p[0]).join('').slice(0, 2).toUpperCase() : 'EE'}
+                                        </div>
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                        <div className="font-bold text-xs text-slate-800 dark:text-white truncate">{item.name || 'Unknown Employee'}</div>
+                                        <div className="text-[9px] font-black text-[#64748B] uppercase tracking-widest truncate">{item.employeeCode || 'Employee record not linked'}</div>
+                                    </div>
+                                </div>
+                                {/* Email */}
+                                <div className="w-full text-[11px] font-bold text-slate-600 dark:text-slate-400 truncate pl-4 lg:bg-transparent rounded-lg">
+                                    {item.email || '--'}
+                                </div>
+                                {/* Status */}
+                                <div className="w-full flex lg:justify-center items-center justify-between px-1 lg:px-0">
+                                    <span className="lg:hidden text-[9px] font-black text-slate-400 uppercase tracking-widest">Status</span>
+                                    <span className={`inline-flex px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-widest border ${
+                                        item.faceStatus === 'ACTIVE'
+                                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200/50 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20'
+                                            : item.faceStatus === 'PENDING_REVIEW'
+                                            ? 'bg-amber-50 text-amber-700 border-amber-200/50 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20'
+                                            : 'bg-slate-50 text-slate-500 border-slate-200/50 dark:bg-slate-500/10 dark:text-slate-400 dark:border-slate-500/20'
+                                    }`}>
+                                        {item.faceStatus === 'ACTIVE' ? 'Active' : item.faceStatus === 'PENDING_REVIEW' ? 'Pending Review' : 'Not Registered'}
+                                    </span>
+                                </div>
+                                {/* Registered At */}
+                                <div className="w-full flex lg:flex-col items-center lg:justify-center justify-between lg:text-center px-1 lg:px-0">
+                                    <span className="lg:hidden text-[9px] font-black text-slate-400 uppercase tracking-widest">Registered Date</span>
+                                    {item.registeredAt ? (
+                                        <>
+                                            <div className="text-[11px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-tight">{new Date(item.registeredAt).toLocaleDateString()}</div>
+                                            <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{new Date(item.registeredAt).toLocaleTimeString()}</div>
+                                        </>
+                                    ) : (
+                                        <span className="text-slate-400">-</span>
+                                    )}
+                                </div>
+                                {/* Confidence Score */}
+                                <div className="w-full flex lg:justify-end items-center justify-between px-1 lg:px-0 text-right">
+                                    <span className="lg:hidden text-[9px] font-black text-slate-400 uppercase tracking-widest">Biometric Score</span>
+                                    {item.qualityScore ? (
+                                        <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">{item.qualityScore}%</span>
+                                    ) : (
+                                        <span className="text-slate-400">-</span>
+                                    )}
                                 </div>
                             </div>
-                            {/* Status */}
-                            <div className="w-full flex lg:justify-center items-center justify-between px-1 lg:px-0 mt-2 lg:mt-0">
-                                <span className="lg:hidden text-[9px] font-black text-slate-400 uppercase tracking-widest">Status</span>
-                                <span className={`inline-flex px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-widest border ${getStatusStyle(req.status)}`}>
-                                    {normalizeRequestStatus(req.status)}
-                                </span>
+                        ))}
+                        {filteredRegistered.length === 0 && (
+                            <div className="bg-white dark:bg-slate-900 p-8 rounded-xl border border-slate-100 dark:border-slate-800 flex flex-col items-center justify-center">
+                                <div className="w-12 h-12 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mb-3">
+                                    <AlertCircle className="text-slate-300 dark:text-slate-600" size={24} />
+                                </div>
+                                <span className="font-bold text-slate-400 dark:text-slate-500 uppercase text-[10px] tracking-widest">No matching records found</span>
                             </div>
-                            {/* Actions */}
-                            <div className="w-full flex lg:justify-end items-center justify-end gap-1.5 pt-2 lg:pt-0 border-t border-slate-100 dark:border-slate-800 lg:border-none mt-2 lg:mt-0">
-                                {normalizeRequestStatus(req.status) === 'pending' ? (
-                                    <div className="flex gap-1.5">
-                                        <Can module="attendance.face" action="edit">
-                                            <button
-                                                onClick={() => handleAction(req._id, 'approved')}
-                                                className="p-1.5 text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 rounded-lg transition shadow-sm"
-                                                title="Approve"
-                                            >
-                                                <CheckCircle size={16} />
-                                            </button>
-                                        </Can>
-                                        <Can module="attendance.face" action="edit">
-                                            <button
-                                                onClick={() => setRejectionModal({ show: true, requestId: req._id, reason: '' })}
-                                                className="p-1.5 text-rose-600 bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 rounded-lg transition shadow-sm"
-                                                title="Reject"
-                                            >
-                                                <XCircle size={16} />
-                                            </button>
-                                        </Can>
-                                    </div>
-                                ) : (
-
-                                    <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded-md">Done</span>
-                                )}
-                            </div>
-                        </div>
-                    ))}
-                    {filteredRequests.length === 0 && (
-                        <div className="bg-white dark:bg-slate-900 p-8 rounded-xl border border-slate-100 dark:border-slate-800 flex flex-col items-center justify-center">
-                            <div className="w-12 h-12 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mb-3">
-                                <AlertCircle className="text-slate-300 dark:text-slate-600" size={24} />
-                            </div>
-                            <span className="font-bold text-slate-400 dark:text-slate-500 uppercase text-[10px] tracking-widest">No matching requests found</span>
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </div>
-            </div>
+            )}
 
             {/* Rejection Modal */}
             {rejectionModal.show && (
@@ -259,6 +399,32 @@ const FaceUpdateRequests = () => {
                                     Reject
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Photo Preview Modal */}
+            {previewImage.show && (
+                <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setPreviewImage({ show: false, src: '', title: '', name: '', code: '' })}></div>
+                    <div className="relative bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl p-6 shadow-2xl border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 duration-200">
+                        <div className="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-tight">{previewImage.title}</h3>
+                                <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-0.5">
+                                    {previewImage.name} ({previewImage.code})
+                                </p>
+                            </div>
+                            <button 
+                                onClick={() => setPreviewImage({ show: false, src: '', title: '', name: '', code: '' })}
+                                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                            >
+                                <XCircle size={20} />
+                            </button>
+                        </div>
+                        <div className="aspect-[4/3] rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex items-center justify-center">
+                            <img src={previewImage.src} alt={previewImage.title} className="w-full h-full object-cover" />
                         </div>
                     </div>
                 </div>
