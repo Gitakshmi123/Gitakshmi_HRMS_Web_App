@@ -28,6 +28,7 @@ const rosterSchema = new mongoose.Schema({
     employees: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Employee' }],
     
     status: { type: String, enum: ['Draft', 'Pending Manager', 'Pending HR', 'Published'], default: 'Draft' },
+    isCompanyDefault: { type: Boolean, default: false },
     
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
