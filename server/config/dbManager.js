@@ -35,7 +35,7 @@ function registerModels(db, tenantId, forceRefresh = false) {
     "BGVTimeline", "BGVEvidenceConfig", "BGVConsent", "BGVRiskScore", "BGVTaskAssignment",
     "DocumentAudit", "DocumentAccess", "LetterRevocation", "DocumentViewConfig", "SignedLetter",
     "OnboardingTemplate", "OnboardingDocument", "OnboardingSubmission", "TicketTemplate", "RequirementTemplate",
-    "PayslipTemplate", "Shift", "ShiftAssignment", "ShiftMaster", "ShiftPolicy"
+    "PayslipTemplate", "Shift", "ShiftAssignment", "ShiftMaster", "ShiftPolicy", "EmailTemplate"
   ];
 
   // MONKEYPATCH: Transparently redirect shared models to global connection (CRITICAL for 500 limit)
@@ -177,6 +177,8 @@ function registerModels(db, tenantId, forceRefresh = false) {
     const OnboardingInstanceSchema = require("../models/OnboardingInstance");
     const OnboardingTaskSchema = require("../models/OnboardingTask");
     const OnboardingDocumentSchema = require("../models/OnboardingDocument");
+    const CandidateDocumentRequestSchema = require("../models/CandidateDocumentRequest");
+    const ExternalEmployeeRecordSchema = require("../models/ExternalEmployeeRecord");
 
     // Enterprise Social Media (avoids conflict with legacy models)
     const SocialAccountSchema = require("../models/social/SocialAccount");
@@ -302,6 +304,8 @@ function registerModels(db, tenantId, forceRefresh = false) {
     register("OnboardingInstance", OnboardingInstanceSchema);
     register("OnboardingTask", OnboardingTaskSchema);
     register("OnboardingDocument", OnboardingDocumentSchema);
+    register("CandidateDocumentRequest", CandidateDocumentRequestSchema);
+    register("ExternalEmployeeRecord", ExternalEmployeeRecordSchema);
     register("SocialAccountEnterprise", SocialAccountSchema);
     register("SocialCampaign", SocialCampaignSchema);
     register("SocialPostEnterprise", SocialPostSchema);

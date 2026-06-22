@@ -48,8 +48,8 @@ export default function JobPortalLayout() {
     { path: '/candidate/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/candidate/open-positions', icon: Briefcase, label: 'Open Positions' },
     { path: '/candidate/applications', icon: FileText, label: 'My Applications' },
-    { path: '/candidate/profile', icon: User, label: 'My Profile' },
-    { path: '/candidate/upload-documents', icon: UploadCloud, label: 'Upload Documents' }
+    { path: '/candidate/upload-documents', icon: UploadCloud, label: 'Upload Documents' },
+    { path: '/candidate/profile', icon: User, label: 'My Profile' }
   ];
 
   return (

@@ -2732,12 +2732,13 @@ exports.generateJoiningLetter = async (req, res) => {
         const applicantData = target;
         // // console.log('🔥 [JOINING LETTER] Target Ready:', applicantData?.name || "N/A");
 
-        // 1. MUST BE LOCKED for Full Time candidates
-        if (!target.salaryLocked && target.jobCategory !== 'Intern') {
-            console.error('🔥 [JOINING LETTER] BLOCKED: Salary not locked for Full Time', targetType, target._id);
+        // Only block if job category explicitly requires salary (e.g. "Full Time (Salary Mandatory)")
+        const isSalaryMandatory = String(target.jobCategory || '').toLowerCase().includes('salary mandatory');
+        if (isSalaryMandatory && !target.salaryLocked) {
+            console.error('🔥 [JOINING LETTER] BLOCKED: Salary not locked for Salary Mandatory candidate', targetType, target._id);
             return res.status(400).json({ 
                 success: false, 
-                message: "Salary must be finalized and locked for Full Time candidates before issuing a Joining Letter.",
+                message: "Salary must be finalized and locked before issuing a Joining Letter for this job category.",
                 code: 'SALARY_NOT_LOCKED'
             });
         }

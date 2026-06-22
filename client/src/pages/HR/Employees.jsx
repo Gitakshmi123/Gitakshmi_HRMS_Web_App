@@ -579,12 +579,16 @@ export default function Employees() {
                 key={f}
                 type="button"
                 className={clsx(
-                  "h-10 shrink-0 rounded-xl px-5 text-xs font-semibold uppercase tracking-widest transition-all",
+                  "h-10 shrink-0 rounded-xl px-5 text-xs font-semibold uppercase tracking-widest transition-all whitespace-nowrap",
                   employeeViewMode === f
                     ? "bg-slate-900 text-white shadow-lg shadow-slate-200"
                     : "border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
                 )}
                 onClick={() => {
+                  if (f === "External Records") {
+                      navigate('/hr/external-records');
+                      return;
+                  }
                   setEmployeeViewMode(f);
                   setCurrentPage(1);
                 }}

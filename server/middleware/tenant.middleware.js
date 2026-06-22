@@ -58,6 +58,13 @@ module.exports = async function tenantResolver(req, res, next) {
         }
       }
 
+      if (!tenantId) {
+        const candidateDocMatch = req.path.match(/\/candidate-documents\/(?:token|save-draft|submit|upload)\/([a-f0-9]{24})_/i);
+        if (candidateDocMatch) {
+          tenantId = candidateDocMatch[1];
+        }
+      }
+
       if (tenantId && mongoose.Types.ObjectId.isValid(String(tenantId))) {
         req.tenantId = tenantId;
         req.tenantDB = await getTenantDB(tenantId);

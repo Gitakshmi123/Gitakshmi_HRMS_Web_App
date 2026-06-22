@@ -856,6 +856,23 @@ exports.getCandidateDashboard = async (req, res) => {
             });
         }
 
+        // 4. Attach CandidateDocumentRequest details
+        try {
+            const CandidateDocumentRequest = tenantDB.models?.CandidateDocumentRequest || tenantDB.model("CandidateDocumentRequest", require('../models/CandidateDocumentRequest'));
+            for (let app of finalApplications) {
+                const reqId = app.requirementId?._id || app.requirementId;
+                if (reqId) {
+                    const docReq = await CandidateDocumentRequest.findOne({ candidateId: id, jobId: reqId, status: { $in: ['Pending', 'Revision_Requested'] } });
+                    if (docReq) {
+                        app.documentRequestToken = docReq.token;
+                        app.documentRequestStatus = docReq.status;
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn("[DASHBOARD] CandidateDocumentRequest lookup failed:", e.message);
+        }
+
         res.json({ profile, applications: finalApplications });
     } catch (err) { res.status(500).json({ error: "Failed to load dashboard" }); }
 };

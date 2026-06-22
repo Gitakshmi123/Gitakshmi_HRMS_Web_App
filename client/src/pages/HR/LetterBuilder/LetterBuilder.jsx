@@ -15,6 +15,7 @@ import BuilderLayerPanel from './BuilderLayerPanel';
 import BuilderPreview from './BuilderPreview';
 import BuilderEditorPanel from './BuilderEditorPanel';
 import ErrorBoundary from './ErrorBoundary';
+import { DragDropContext } from '@hello-pangea/dnd';
 
 export default function LetterBuilder() {
     const { id } = useParams();
@@ -341,6 +342,24 @@ export default function LetterBuilder() {
         saveToHistory(newConfig);
     };
 
+    const handleDragEnd = (result) => {
+        if (!result.destination) return;
+
+        const { source, destination } = result;
+
+        if (source.droppableId === 'layers' && destination.droppableId === 'layers') {
+            if (source.index === destination.index) return;
+
+            const items = Array.from(config.sections);
+            const [reorderedItem] = items.splice(source.index, 1);
+            items.splice(destination.index, 0, reorderedItem);
+
+            const newConfig = { ...config, sections: items };
+            setConfig(newConfig);
+            saveToHistory(newConfig);
+        }
+    };
+
     const getDefaultContent = (type) => {
         switch (type) {
             case 'text': return { text: 'Enter your text here...', align: 'left', size: '14px', weight: 'normal' };
@@ -386,7 +405,8 @@ export default function LetterBuilder() {
 
     return (
         <ErrorBoundary>
-            <div className="h-screen flex flex-col bg-slate-50 overflow-hidden font-sans select-none print:bg-white">
+            <DragDropContext onDragEnd={handleDragEnd}>
+                <div className="h-screen flex flex-col bg-slate-50 overflow-hidden font-sans select-none print:bg-white">
                 {/* Top Navbar */}
                 <div className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between z-40 print:hidden shrink-0">
                     <div className="flex items-center gap-6">
@@ -505,6 +525,7 @@ export default function LetterBuilder() {
                     </div>
                 </Modal>
             </div>
+            </DragDropContext>
         </ErrorBoundary>
     );
 }

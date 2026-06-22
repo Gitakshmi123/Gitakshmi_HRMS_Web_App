@@ -918,12 +918,38 @@ class RecruitmentService {
             console.warn('[RecruitmentService.getTenantApplications] BGV lookup skipped:', e.message);
         }
 
+        // Attach Document Request status to each applicant
+        let docRequestByCandidateId = new Map();
+        try {
+            if (!db.models.CandidateDocumentRequest) {
+                db.model('CandidateDocumentRequest', require('../models/CandidateDocumentRequest'));
+            }
+            const CandidateDocumentRequest = db.model('CandidateDocumentRequest');
+            const docReqs = await CandidateDocumentRequest.find({
+                tenant: tenantId
+            }).select('_id candidateId status token').lean();
+            
+            docRequestByCandidateId = new Map(
+                docReqs
+                    .filter(r => r && r.candidateId)
+                    .map(r => [String(r.candidateId), r])
+            );
+        } catch (e) {
+            console.warn('[RecruitmentService.getTenantApplications] Doc request lookup skipped:', e.message);
+        }
+
         const applicantsWithBGV = applicants.map((app) => {
             const bgv = bgvByApplicationId.get(String(app._id));
+            const candidateIdStr = app.candidateId ? String(app.candidateId._id || app.candidateId) : null;
+            const docReq = candidateIdStr ? docRequestByCandidateId.get(candidateIdStr) : null;
+
             return {
                 ...app,
                 bgvStatus: bgv ? bgv.overallStatus : 'NOT_INITIATED',
-                bgvId: bgv ? bgv._id : null
+                bgvId: bgv ? bgv._id : null,
+                documentRequestStatus: docReq ? docReq.status : 'NOT_SENT',
+                documentRequestToken: docReq ? docReq.token : null,
+                documentRequestId: docReq ? docReq._id : null
             };
         });
 
