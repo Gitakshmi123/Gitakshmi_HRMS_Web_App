@@ -307,6 +307,7 @@ class RecruitmentService {
                 visibility: s2.visibility || 'External',
                 workMode: s1.workMode || 'On-site',
                 jobType: s1.jobType || 'Full-Time',
+                grade: s1.grade || undefined,
                 hiringManager: sanitizedHiringManager || orgAssignment.managerId || undefined,
                 reportingTo: orgAssignment.managerId || linkedPosition?.reportingTo || undefined,
                 interviewPanel: sanitizedInterviewPanel

@@ -74,22 +74,11 @@ export default function EmployeeForm({
 }) {
   const [step, setStep] = useState(() => {
     const last = (employee?.status === 'Draft' ? employee?.lastStep : 1) || 1;
-    return Math.min(Math.max(1, last), isExternal ? 8 : 10);
+    return Math.min(Math.max(1, last), 10);
   });
 
   const getActualStep = (s) => {
-    if (!isExternal) return s;
-    const mapping = {
-      1: 1,
-      2: 3,
-      3: 4,
-      4: 5,
-      5: 6,
-      6: 7,
-      7: 8,
-      8: 9
-    };
-    return mapping[s] || s;
+    return s;
   };
   const actualStep = getActualStep(step);
 
@@ -352,7 +341,7 @@ export default function EmployeeForm({
 
   // Fetch salary templates safely ONLY when on the relevant step
   useEffect(() => {
-    if (actualStep === 10) {
+    if (actualStep === 10 && !isExternal) {
       async function loadTemplates() {
         try {
           const res = await api.get('/payroll/salary-templates').catch(() => ({ data: { data: [] } }));
@@ -363,7 +352,7 @@ export default function EmployeeForm({
       }
       loadTemplates();
     }
-  }, [step]);
+  }, [step, actualStep, isExternal]);
 
 
   const saveSalaryAssignment = async () => {
@@ -741,7 +730,7 @@ export default function EmployeeForm({
 
   const ensureDepartmentForSave = useCallback(async () => {
     const typedName = normalizeDepartmentName(department);
-    if (externalMode) {
+    if (isExternal) {
       return { department: typedName || undefined, departmentId: undefined };
     }
     const existingById = departments.find((dept) => String(dept?._id || dept || '') === String(departmentId || ''));
@@ -802,7 +791,7 @@ export default function EmployeeForm({
     setDepartmentId('');
     setDepartment(typedName);
     return { department: typedName, departmentId: undefined };
-  }, [department, departmentId, departments, externalMode, makeDepartmentCode, normalizeDepartmentName]);
+  }, [department, departmentId, departments, isExternal, makeDepartmentCode, normalizeDepartmentName]);
 
   // Fetch employees for manager dropdown
   const loadManagers = useCallback(async () => {
@@ -845,15 +834,36 @@ export default function EmployeeForm({
     }
   }, [step, firstName, lastName, department, firstNameCapital, jobType]);
 
+  const loadReferenceData = useCallback(async () => {
+    try {
+      const res = await api.get(`/candidate/document-upload/${token}/reference-data`);
+      if (res.data?.success) {
+        const { departments, managers, salaryTemplates, policies, shifts, grades, roles } = res.data.data;
+        setDepartments(departments || []);
+        setManagers(managers || []);
+        setSalaryTemplates(salaryTemplates || []);
+        setPolicies(policies || []);
+        setShifts(shifts || []);
+        setGrades(grades || []);
+      }
+    } catch (err) {
+      console.error('Failed to load candidate reference data', err);
+    }
+  }, [token]);
+
   useEffect(() => {
-    loadDepartments();
-    loadManagers();
-    loadPolicies();
-    loadShifts(); // Shift Management
-    loadGrades(); // Grade Management
-    fetchMappings();
-    if (actualStep === 9 && !employee) loadEmployeeCodePreview();
-  }, [loadDepartments, loadManagers, loadEmployeeCodePreview, step, employee, loadPolicies, loadShifts, loadGrades, fetchMappings]);
+    if (isExternal) {
+      loadReferenceData();
+    } else {
+      loadDepartments();
+      loadManagers();
+      loadPolicies();
+      loadShifts(); // Shift Management
+      loadGrades(); // Grade Management
+      fetchMappings();
+      if (actualStep === 9 && !employee) loadEmployeeCodePreview();
+    }
+  }, [isExternal, loadReferenceData, loadDepartments, loadManagers, loadEmployeeCodePreview, step, employee, loadPolicies, loadShifts, loadGrades, fetchMappings]);
 
   const [employeeCode, setEmployeeCode] = useState('');
 
@@ -1537,102 +1547,10 @@ export default function EmployeeForm({
 
       let empResult;
       if (isExternal) {
-        // Wrap flat payload into structured sections expected by submitCandidateProfile
-        const externalPayload = {
-          personalDetails: {
-            firstName: payload.firstName,
-            middleName: payload.middleName,
-            lastName: payload.lastName,
-            gender: payload.gender,
-            dob: payload.dob,
-            bloodGroup: payload.bloodGroup,
-            nationality: payload.nationality,
-            maritalStatus: payload.maritalStatus,
-            contactNo: payload.contactNo,
-            alternateContactNo: payload.alternateContactNo,
-            personalEmail: payload.personalEmail,
-            emergencyContactName: payload.emergencyContactName,
-            emergencyContactNumber: payload.emergencyContactNumber,
-            emergencyRelationship: payload.emergencyRelationship,
-            profilePic: payload.profilePic,
-            placeOfBirth: payload.placeOfBirth,
-            hobbies: payload.hobbies,
-            cast: payload.cast,
-            height: payload.height,
-            weight: payload.weight,
-            physicalDisabilityOrSickness: payload.physicalDisabilityOrSickness,
-            physicalDisabilityDetails: payload.physicalDisabilityDetails,
-          },
-          familyDetails: {
-            fatherName: payload.fatherName,
-            fatherFirstName: payload.fatherFirstName,
-            fatherLastName: payload.fatherLastName,
-            fatherBloodGroup: payload.fatherBloodGroup,
-            fatherAadhaar: payload.fatherAadhaar,
-            motherName: payload.motherName,
-            motherFirstName: payload.motherFirstName,
-            motherLastName: payload.motherLastName,
-            motherBloodGroup: payload.motherBloodGroup,
-            motherAadhaar: payload.motherAadhaar,
-            spouseDetails: payload.spouseDetails,
-            children: payload.children,
-            brothers: payload.brothers,
-            sisters: payload.sisters,
-            familyMembers: payload.familyMembers || [],
-          },
-          communicationDetails: {
-            tempAddress: payload.tempAddress,
-            permAddress: payload.permAddress,
-            commAddress: payload.commAddress,
-          },
-          educationDetails: {
-            eduType: payload.education?.type,
-            class10Marksheet: payload.education?.class10Marksheet,
-            class12Marksheet: payload.education?.class12Marksheet,
-            diplomaCertificate: payload.education?.diplomaCertificate,
-            bachelorDegree: payload.education?.bachelorDegree,
-            masterDegree: payload.education?.masterDegree,
-            lastSem1Marksheet: payload.education?.lastSem1Marksheet,
-            lastSem2Marksheet: payload.education?.lastSem2Marksheet,
-            lastSem3Marksheet: payload.education?.lastSem3Marksheet,
-            academicQualifications: payload.academicQualifications || [],
-            highestQualification: payload.highestQualification,
-          },
-          experienceDetails: {
-            experience: payload.experience || [],
-            jobHistoryAnnexure: payload.jobHistoryAnnexure || [],
-          },
-          documentDetails: {
-            aadhaarNo: payload.documents?.aadharNumber,
-            aadhaarFront: payload.documents?.aadharFront,
-            aadhaarBack: payload.documents?.aadharBack,
-            panNo: payload.documents?.panNumber,
-            panCard: payload.documents?.panCard,
-            passportNo: payload.passportNo,
-            passportExpiry: payload.passportExpiry,
-            passportDoc: payload.passportDoc,
-            drivingLicenceNo: payload.drivingLicenceNo,
-            drivingLicenceDoc: payload.drivingLicenceDoc,
-          },
-          bankDetails: {
-            accountHolderName: payload.bankDetails?.accountHolderName || `${payload.firstName || ''} ${payload.lastName || ''}`.trim(),
-            accountNumber: payload.bankDetails?.accountNumber,
-            bankName: payload.bankDetails?.bankName,
-            branchName: payload.bankDetails?.branchName,
-            ifscCode: payload.bankDetails?.ifsc,
-            accountType: payload.bankDetails?.accountType,
-            bankProofUrl: payload.bankDetails?.bankProofUrl,
-          },
-          statutoryDetails: {
-            pfNumber: payload.pfNumber,
-            uanNumber: payload.uanNumber,
-            esiNumber: payload.esiNumber,
-            nomineeName: payload.nomineeName,
-            nomineeRelation: payload.nomineeRelation,
-          },
-          completionPercentage: payload.completionPercentage || 100,
-        };
-        empResult = await api.post(`/public/candidate-documents/submit/${token}`, externalPayload);
+        // Since candidates now fill all steps including Job Info and Employment Setup,
+        // we send the full flat payload exactly like HR does. The backend will store it
+        // in rawEmployeePayload and map it via splitRecordPayload.
+        empResult = await api.post(`/candidate/document-upload/${token}/submit`, payload);
       } else if (employee) {
         empResult = await api.put(`/hr/employees/${employee._id}`, payload);
       } else {
@@ -1641,7 +1559,7 @@ export default function EmployeeForm({
 
 
       // If employee is marked as "Dep Head", update the department's head field
-      if (!externalMode && role === 'Dep Head' && departmentId) {
+      if (!isExternal && role === 'Dep Head' && departmentId) {
         const empId = empResult?.data?.data?._id || empResult?.data?._id || employee?._id;
         if (empId) {
           await api.put(`/hr/departments/${departmentId}`, { head: empId })
@@ -1855,7 +1773,7 @@ export default function EmployeeForm({
 
       let draftResponse;
       if (isExternal) {
-        draftResponse = await api.post(`/public/candidate-documents/save-draft/${token}`, payload);
+        draftResponse = await api.put(`/candidate/document-upload/${token}/draft`, payload);
       } else if (employee?._id) {
         draftResponse = await api.put(`/hr/employees/${employee._id}`, payload);
       } else {
@@ -1874,9 +1792,7 @@ export default function EmployeeForm({
     } finally { setSaving(false); }
   }
 
-  const stepTitles = isExternal
-    ? ['General Details', 'Academic Qualifications', 'Identity Documents', 'Employment History', 'Bank Details', 'Language Proficiency', 'References & Related', 'Additional Benefits']
-    : ['General Details', 'Job Information', 'Academic Qualifications', 'Identity Documents', 'Employment History', 'Bank Details', 'Language Proficiency', 'References & Related', 'Additional Benefits', 'Employment Setup'];
+  const stepTitles = ['General Details', 'Job Information', 'Academic Qualifications', 'Identity Documents', 'Employment History', 'Bank Details', 'Language Proficiency', 'References & Related', 'Additional Benefits', 'Employment Setup'];
 
   return (
     <div className="w-full h-full overflow-hidden flex flex-col bg-white">

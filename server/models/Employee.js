@@ -42,6 +42,93 @@ const EmployeeSchema = new mongoose.Schema({
   employmentType: { type: String, enum: ['permanent', 'contract'], default: 'permanent' },
   password: { type: String, trim: true },
   profilePic: { type: String, trim: true },
+  
+  maritalStatus: { type: String, trim: true },
+  nationality: { type: String, trim: true },
+  placeOfBirth: { type: String, trim: true },
+  hobbies: { type: String, trim: true },
+  height: { type: String, trim: true },
+  weight: { type: String, trim: true },
+  cast: { type: String, trim: true },
+  physicalDisabilityOrSickness: { type: String, trim: true },
+  physicalDisabilityDetails: { type: String, trim: true },
+  
+  fatherName: { type: String, trim: true },
+  fatherFirstName: { type: String, trim: true },
+  fatherLastName: { type: String, trim: true },
+  fatherBloodGroup: { type: String, trim: true },
+  fatherAadhaar: { type: String, trim: true },
+  
+  motherName: { type: String, trim: true },
+  motherFirstName: { type: String, trim: true },
+  motherLastName: { type: String, trim: true },
+  motherBloodGroup: { type: String, trim: true },
+  motherAadhaar: { type: String, trim: true },
+  
+  fatherCustomFields: [{ label: String, value: String }],
+  motherCustomFields: [{ label: String, value: String }],
+  
+  spouseDetails: {
+    name: { type: String, trim: true },
+    gender: { type: String, trim: true },
+    dob: { type: Date },
+    bloodGroup: { type: String, trim: true },
+    additionalFields: [{ label: String, value: String }]
+  },
+  
+  children: [{
+    name: { type: String, trim: true },
+    gender: { type: String, trim: true },
+    dob: { type: Date },
+    bloodGroup: { type: String, trim: true },
+    additionalFields: [{ label: String, value: String }]
+  }],
+  
+  brothers: [{
+    name: { type: String, trim: true },
+    gender: { type: String, trim: true },
+    dob: { type: Date },
+    bloodGroup: { type: String, trim: true },
+    additionalFields: [{ label: String, value: String }]
+  }],
+  
+  sisters: [{
+    name: { type: String, trim: true },
+    gender: { type: String, trim: true },
+    dob: { type: Date },
+    bloodGroup: { type: String, trim: true },
+    additionalFields: [{ label: String, value: String }]
+  }],
+  
+  references: [{
+    name: { type: String, trim: true },
+    contactNo: { type: String, trim: true },
+    email: { type: String, trim: true },
+    relationship: { type: String, trim: true },
+    companyName: { type: String, trim: true },
+    designation: { type: String, trim: true }
+  }],
+  
+  emergencyContactName: { type: String, trim: true },
+  emergencyContactNumber: { type: String, trim: true },
+  
+  previousInterview: {
+    appeared: { type: Boolean, default: false },
+    details: { type: String, trim: true }
+  },
+  
+  relativeInGitakshmi: {
+    hasRelative: { type: Boolean, default: false },
+    details: { type: String, trim: true }
+  },
+  
+  expectedSalary: { type: Number },
+  
+  jobHistoryAnnexure: [{
+    companyName: { type: String, trim: true },
+    reasonForLeaving: { type: String, trim: true },
+    lastDrawnSalary: { type: Number }
+  }],
   bloodGroup: { type: String, trim: true },
   role: { type: String, trim: true }, // Legacy role string
   employeeCode: { type: String, trim: true, index: true },

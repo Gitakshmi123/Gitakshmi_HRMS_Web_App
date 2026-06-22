@@ -14,6 +14,7 @@ const ExternalEmployeeRecordSchema = new mongoose.Schema({
     bankDetails: { type: mongoose.Schema.Types.Mixed, default: {} },
     statutoryDetails: { type: mongoose.Schema.Types.Mixed, default: {} },
     salaryDetails: { type: mongoose.Schema.Types.Mixed, default: {} },
+    rawEmployeePayload: { type: mongoose.Schema.Types.Mixed, default: {} },
     
     completionPercentage: { type: Number, default: 0 },
     status: { type: String, enum: ['Pending', 'Submitted', 'Approved', 'Rejected'], default: 'Pending' },

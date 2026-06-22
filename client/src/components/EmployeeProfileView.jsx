@@ -216,6 +216,17 @@ export default function EmployeeProfileView({ employee, profile, leaveHistory = 
               <InfoField label="University" value={emp.education?.university} icon={GraduationCap} color="indigo" />
               <InfoField label="10th Marks" value={emp.education?.class10Marks} icon={Info} color="violet" />
               <InfoField label="12th Marks" value={emp.education?.class12Marks} icon={Info} color="violet" />
+              <div className="col-span-full mt-2">
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-2">Academic History</h4>
+                <div className="grid grid-cols-1 gap-2">
+                  {(emp.academicQualifications || []).map((aq, i) => (
+                    <div key={i} className="p-3 rounded-xl bg-slate-50 border border-transparent">
+                      <p className="text-xs font-bold text-slate-800">{aq.qualification}</p>
+                      <p className="text-[10px] text-slate-500">{aq.universityBoard} | {aq.yearOfPassing} | {aq.percentageCgpa}% | {aq.mode}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </SectionCard>
           </div>
 
@@ -255,10 +266,10 @@ export default function EmployeeProfileView({ employee, profile, leaveHistory = 
             </SectionCard>
 
             <SectionCard title="Spouse Details" icon={Heart}>
-               <InfoField label="Spouse Name" value={emp.spouseDetails?.spouseName} icon={User} color="indigo" />
-               <InfoField label="Relation" value={emp.spouseDetails?.relation} icon={Users} color="indigo" />
+               <InfoField label="Spouse Name" value={emp.spouseDetails?.name || emp.spouseDetails?.spouseName} icon={User} color="indigo" />
+               <InfoField label="Gender" value={emp.spouseDetails?.gender || emp.spouseDetails?.relation} icon={Users} color="indigo" />
                <InfoField label="DOB" value={formatDateDDMMYYYY(emp.spouseDetails?.dob)} icon={Calendar} color="amber" />
-               <InfoField label="Contact No" value={emp.spouseDetails?.contactNo} icon={Phone} color="blue" />
+               <InfoField label="Blood Group" value={emp.spouseDetails?.bloodGroup} icon={Heart} color="rose" />
             </SectionCard>
           </div>
 
@@ -279,13 +290,13 @@ export default function EmployeeProfileView({ employee, profile, leaveHistory = 
                    <div>
                       <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 px-2">Brothers</h4>
                       {(emp.brothers || []).map((b, i) => (
-                        <div key={i} className="p-2 text-xs font-medium text-slate-700">• {b.name} ({b.age} yrs) - {b.occupation}</div>
+                        <div key={i} className="p-2 text-xs font-medium text-slate-700">• {b.name} ({b.gender || b.age + ' yrs'}) - {formatDateDDMMYYYY(b.dob) || b.occupation}</div>
                       ))}
                    </div>
                    <div>
                       <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 px-2">Sisters</h4>
                       {(emp.sisters || []).map((s, i) => (
-                        <div key={i} className="p-2 text-xs font-medium text-slate-700">• {s.name} ({s.age} yrs) - {s.occupation}</div>
+                        <div key={i} className="p-2 text-xs font-medium text-slate-700">• {s.name} ({s.gender || s.age + ' yrs'}) - {formatDateDDMMYYYY(s.dob) || s.occupation}</div>
                       ))}
                    </div>
                 </div>
@@ -342,7 +353,7 @@ export default function EmployeeProfileView({ employee, profile, leaveHistory = 
                    <div className="space-y-2">
                       {(emp.references || []).map((ref, i) => (
                         <div key={i} className="text-[11px] font-medium text-slate-700 bg-slate-50 p-2 rounded-lg">
-                          <span className="font-bold text-indigo-600">{ref.name}</span> ({ref.designation} at {ref.company}) - {ref.phone}
+                          <span className="font-bold text-indigo-600">{ref.name}</span> ({ref.designation} at {ref.companyName || ref.company}) - {ref.contactNo || ref.phone}
                         </div>
                       ))}
                    </div>

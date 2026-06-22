@@ -48,9 +48,11 @@ import { DEPARTMENT_OPTIONS, getDesignationsForDepartment, ALL_DESIGNATION_OPTIO
 import { COUNTRY_OPTIONS, getCitiesForState, getStatesForCountry } from '../constants/locationMaster';
 
 const COMMON_SKILLS = [
-`;
+    'JavaScript', 'React', 'Node.js', 'Python', 'SQL', 'NoSQL', 'Project Management',
+    'Communication', 'Teamwork', 'Problem Solving', 'Leadership', 'Agile', 'Docker'
+];`;
 
-const replaceRegex = /import React.*?const COMMON_SKILLS = \[/s;
+const replaceRegex = /^import React[\s\S]*?\];/m;
 content = content.replace(replaceRegex, correctImports);
 fs.writeFileSync(file, content);
-console.log('Fixed');
+console.log('Fixed properly');
