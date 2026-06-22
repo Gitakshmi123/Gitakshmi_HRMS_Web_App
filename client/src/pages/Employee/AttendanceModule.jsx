@@ -25,6 +25,7 @@ import api from '../../utils/api';
 import AttendanceCalendar from '../../components/AttendanceCalendar';
 import ClientMeetingTracker from '../../components/attendance/ClientMeetingTracker';
 import ApplyLeaveForm from '../../components/ApplyLeaveForm';
+import EmployeeAttendanceCalendar from '../../components/EmployeeAttendanceCalendar';
 import { formatDateDDMMYYYY } from '../../utils/dateUtils';
 import { Pagination, Empty } from 'antd';
 import dayjs from 'dayjs';
@@ -154,6 +155,7 @@ export default function AttendanceModule({
 
   const availableTabs = useMemo(() => [
     canViewAttendance ? 'attendance' : null,
+    canViewAttendance ? 'mark-attendance' : null,
     (canApplyLeave || canSeeLeaveHistory) ? 'leaves' : null,
     (canCreateAttendance || canSeeRequestHistory) ? 'requests' : null,
   ].filter(Boolean), [canViewAttendance, canCreateAttendance, canApplyLeave, canSeeLeaveHistory, canSeeRequestHistory]);
@@ -289,9 +291,10 @@ export default function AttendanceModule({
   // Effects
   useEffect(() => {
     if (permissionLoading || !canOpenAttendance || onboardingPending) return;
-    if (activeTab === 'attendance') {
+    if (activeTab === 'attendance' || activeTab === 'mark-attendance') {
       fetchMonthlyData();
-    } else if (activeTab === 'requests') {
+    }
+    if (activeTab === 'attendance' || activeTab === 'requests') {
       fetchRequestHistory();
     }
   }, [activeTab, currentMonth, currentYear, canOpenAttendance, canViewAttendance, canSeeRequestHistory, permissionLoading, onboardingPending]);
@@ -361,6 +364,27 @@ export default function AttendanceModule({
     } finally {
       setSubmittingRequest(false);
     }
+  };
+
+  const handleApplyRegularization = (dateStr, checkIn = '', checkOut = '') => {
+    setRequestForm({
+      startDate: dateStr,
+      endDate: dateStr,
+      checkIn: checkIn ? dayjs(checkIn).format('HH:mm') : '',
+      checkOut: checkOut ? dayjs(checkOut).format('HH:mm') : '',
+      reason: ''
+    });
+    setActiveTab('requests');
+    navigate(`/employee/attendance?tab=requests`);
+  };
+
+  const handleOpenEarlyReturnCalendar = (leave) => {
+    setEarlyReturnModal({
+      isOpen: true,
+      leaveId: leave._id,
+      leaveData: leave,
+      newEndDate: dayjs().format('YYYY-MM-DD')
+    });
   };
 
   const getStatusBadge = (status) => {
@@ -438,6 +462,13 @@ export default function AttendanceModule({
                   onClick={() => navigate('/employee/attendance?tab=attendance')}
                 />
               )}
+              {canViewAttendance && (
+                <TabButton
+                  active={activeTab === 'mark-attendance'}
+                  label="Mark Attendance"
+                  onClick={() => navigate('/employee/attendance?tab=mark-attendance')}
+                />
+              )}
               {(canApplyLeave || canSeeLeaveHistory) && (
                 <TabButton
                   active={activeTab === 'leaves'}
@@ -461,6 +492,24 @@ export default function AttendanceModule({
 
           {/* --- ATTENDANCE TAB --- */}
           {activeTab === 'attendance' && (
+            <EmployeeAttendanceCalendar
+              data={monthlyAttendance}
+              holidays={holidays}
+              leaves={leaves}
+              settings={settings}
+              currentMonth={currentMonth}
+              currentYear={currentYear}
+              setCurrentMonth={setCurrentMonth}
+              setCurrentYear={setCurrentYear}
+              requests={requests}
+              onCancelLeave={handleCancelLeave}
+              onApplyRegularization={handleApplyRegularization}
+              onOpenEarlyReturn={handleOpenEarlyReturnCalendar}
+            />
+          )}
+
+          {/* --- MARK ATTENDANCE TAB --- */}
+          {activeTab === 'mark-attendance' && (
             <div className="space-y-4">
               {/* Metrics Row - Sticky */}
               <div className="sticky top-[-16px] z-20 -mx-4 px-4 pt-1 pb-4 bg-white/80 backdrop-blur-md border-b border-slate-100 shadow-sm mb-4">
@@ -503,38 +552,6 @@ export default function AttendanceModule({
                 todayRecord={todayRecord}
                 fetchDashboardData={fetchDashboardData}
               />
-
-              <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm overflow-hidden">
-                <div className="px-4 pt-3 pb-4">
-                  <AttendanceCalendar
-                    data={monthlyAttendance}
-                    holidays={holidays}
-                    leaves={leaves}
-                    settings={settings}
-                    currentMonth={currentMonth}
-                    currentYear={currentYear}
-                    headerControls={
-                      <div className="flex items-center gap-0.5 bg-slate-50 px-0.5 py-0.5 rounded-lg border border-[#E2E8F0]">
-                        <button onClick={() => setCurrentYear(y => y - 1)} className="flex h-6 w-6 items-center justify-center hover:bg-white hover:text-[#2563EB] rounded transition-all text-[#64748B] active:scale-90">
-                          <div className="flex items-center -space-x-2">
-                            <ChevronLeft size={12} />
-                            <ChevronLeft size={12} />
-                          </div>
-                        </button>
-                        <button onClick={() => { if (currentMonth === 0) { setCurrentMonth(11); setCurrentYear(y => y - 1); } else setCurrentMonth(m => m - 1); }} className="flex h-6 w-6 items-center justify-center hover:bg-white hover:text-[#2563EB] rounded transition-all text-[#64748B] active:scale-90"><ChevronLeft size={13} /></button>
-                        <span className="text-xs font-semibold text-[#334155] w-18 text-center uppercase tracking-wider">{dayjs(new Date(currentYear, currentMonth)).format('MMM YYYY')}</span>
-                        <button onClick={() => { if (currentMonth === 11) { setCurrentMonth(0); setCurrentYear(y => y + 1); } else setCurrentMonth(m => m + 1); }} className="flex h-6 w-6 items-center justify-center hover:bg-white hover:text-[#2563EB] rounded transition-all text-[#64748B] active:scale-90"><ChevronRight size={13} /></button>
-                        <button onClick={() => setCurrentYear(y => y + 1)} className="flex h-6 w-6 items-center justify-center hover:bg-white hover:text-[#2563EB] rounded transition-all text-[#64748B] active:scale-90">
-                          <div className="flex items-center -space-x-2">
-                            <ChevronRight size={12} />
-                            <ChevronRight size={12} />
-                          </div>
-                        </button>
-                      </div>
-                    }
-                  />
-                </div>
-              </div>
             </div>
           )}
 

@@ -1564,19 +1564,29 @@ exports.getAllLeaves = async (req, res) => {
 
         const { LeaveRequest, LeaveBalance } = getModels(req);
 
+        const filter = {};
+        if (req.query.employeeId) {
+            filter.employee = req.query.employeeId;
+        }
+
         // Extract pagination params
         const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10;
+        const limitStr = req.query.limit;
+        const limit = limitStr === 'all' || limitStr === '0' ? 0 : (parseInt(limitStr) || 10);
         const skip = (page - 1) * limit;
 
-        const total = await LeaveRequest.countDocuments({});
+        const total = await LeaveRequest.countDocuments(filter);
 
-        const leaves = await LeaveRequest.find({})
+        let query = LeaveRequest.find(filter)
             .populate('employee')
             .populate('actionBy', 'firstName lastName profilePic')
-            .sort({ createdAt: -1 })
-            .skip(skip)
-            .limit(limit);
+            .sort({ createdAt: -1 });
+
+        if (limit > 0) {
+            query = query.skip(skip).limit(limit);
+        }
+
+        const leaves = await query;
 
         const year = new Date().getFullYear();
         // Map to include a single actionDateTime field and employee balances for the frontend table
@@ -1601,8 +1611,8 @@ exports.getAllLeaves = async (req, res) => {
             meta: {
                 total,
                 page,
-                limit,
-                totalPages: Math.ceil(total / limit)
+                limit: limit || total,
+                totalPages: limit > 0 ? Math.ceil(total / limit) : 1
             }
         });
     } catch (error) {

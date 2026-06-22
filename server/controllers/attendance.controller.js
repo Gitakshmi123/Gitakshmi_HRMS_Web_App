@@ -3734,6 +3734,26 @@ exports.getRegisteredFaces = async (req, res) => {
     }
 };
 
+// 🔹 Delete Employee Face Registration (HR Admin)
+exports.deleteEmployeeFaceHR = async (req, res) => {
+    try {
+        const tenantId = req.tenantId;
+        const { employeeId } = req.params;
+        const { FaceData, FaceUpdateRequest } = getModels(req);
+
+        // Delete face template
+        await FaceData.deleteOne({ tenant: tenantId, employee: employeeId });
+
+        // Update or delete update requests to keep it clean
+        await FaceUpdateRequest.deleteMany({ tenant: tenantId, employee: employeeId });
+
+        res.json({ success: true, message: 'Face registration deleted successfully' });
+    } catch (err) {
+        console.error('deleteEmployeeFaceHR error:', err);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+};
+
 /**
  * GET /api/attendance/trend
  * Dashboard trend for last 30 days

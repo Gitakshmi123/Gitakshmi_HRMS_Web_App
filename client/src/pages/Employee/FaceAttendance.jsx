@@ -1071,7 +1071,7 @@ const FaceAttendance = ({ onSuccess, onClose, actionType, profile }) => {
           if (res.data.success) {
             localStorage.removeItem('pending_face_registration');
             showToast('success', 'Biometrics Sync', 'Offline face profile synced successfully with server.');
-            setFaceRegistered(true);
+            await checkFaceStatus();
           }
         } catch (err) {
           console.error('Failed to sync offline face profile:', err);
@@ -1229,8 +1229,21 @@ const FaceAttendance = ({ onSuccess, onClose, actionType, profile }) => {
   const startCamera = async () => {
     try {
       setStatus(null);
-      setMessage('');
+      setMessage('Checking location services...');
       setCapturing(false);
+
+      // Verify location is enabled and allowed before starting the camera
+      setGpsLoading(true);
+      setGpsError('');
+      try {
+        await getLocation();
+      } catch (gpsErr) {
+        const msg = gpsErr?.message || 'Please enable location services and allow access before starting the camera.';
+        setGpsError(msg);
+        throw new Error(msg);
+      } finally {
+        setGpsLoading(false);
+      }
 
       if (!navigator.mediaDevices?.getUserMedia) {
         throw new Error('Camera API is not available in this browser or insecure context.');
@@ -1752,7 +1765,7 @@ const FaceAttendance = ({ onSuccess, onClose, actionType, profile }) => {
         if (res.data.success) {
           setStatus('success');
           setMessage('Registration Successful');
-          setFaceRegistered(true);
+          await checkFaceStatus();
           setTimeout(() => { stopCamera(); setCapturing(false); setMode('attendance'); }, 2000);
         }
       } catch (postErr) {
@@ -1850,26 +1863,40 @@ const FaceAttendance = ({ onSuccess, onClose, actionType, profile }) => {
 
       <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
          {mode === 'attendance' && !faceRegistered && (
-            <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm animate-in fade-in duration-300">
-               <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0 mt-0.5 border border-amber-200">
-                     <AlertCircle size={20} className="text-amber-600" />
-                  </div>
-                  <div>
-                     <h4 className="text-sm font-bold text-amber-800">Biometric Registration Required</h4>
-                     <p className="text-[12px] text-amber-700 mt-0.5 leading-relaxed font-medium">
-                        Your face profile is not registered. You cannot mark attendance without face verification. Please register first.
-                     </p>
-                  </div>
-               </div>
-               <button
-                  onClick={() => setMode('register')}
-                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold uppercase tracking-wider text-[10px] rounded-lg transition-all shadow-md shadow-amber-500/10 shrink-0"
-               >
-                  Register Now
-               </button>
-            </div>
-         )}
+             pendingUpdateRequest ? (
+                <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl text-blue-900 flex items-start gap-3 shadow-sm animate-in fade-in duration-300 w-full">
+                   <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0 mt-0.5 border border-blue-200">
+                      <Clock size={20} className="text-blue-600" />
+                   </div>
+                   <div>
+                      <h4 className="text-sm font-bold text-blue-800">Biometric Registration Pending HR Approval</h4>
+                      <p className="text-[12px] text-blue-700 mt-0.5 leading-relaxed font-medium">
+                         Your biometric registration is waiting for HR approval. Once approved, you can mark attendance. / आपका बायोमेट्रिक पंजीकरण एचआर की मंजूरी के लिए लंबित है। स्वीकृत होने के बाद आप उपस्थिति दर्ज कर सकेंगे।
+                      </p>
+                   </div>
+                </div>
+             ) : (
+                <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm animate-in fade-in duration-300 w-full">
+                   <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0 mt-0.5 border border-amber-200">
+                         <AlertCircle size={20} className="text-amber-600" />
+                      </div>
+                      <div>
+                         <h4 className="text-sm font-bold text-amber-800">Biometric Registration Required</h4>
+                         <p className="text-[12px] text-amber-700 mt-0.5 leading-relaxed font-medium">
+                            Your face profile is not registered. You cannot mark attendance without face verification. Please register first.
+                         </p>
+                      </div>
+                   </div>
+                   <button
+                      onClick={() => setMode('register')}
+                      className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold uppercase tracking-wider text-[10px] rounded-lg transition-all shadow-md shadow-amber-500/10 shrink-0"
+                   >
+                      Register Now
+                   </button>
+                </div>
+             )
+          )}
          <div className="grid md:grid-cols-2 gap-8 items-start">
             
             {/* Left: Camera Feed */}
@@ -2169,14 +2196,19 @@ const FaceAttendance = ({ onSuccess, onClose, actionType, profile }) => {
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
            <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-8 border border-slate-200 animate-in zoom-in-95 duration-300">
               <div className="flex flex-col items-center text-center mb-6">
-                 <div className="w-16 h-16 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mb-4 border border-amber-100">
-                    <AlertCircle size={32} />
+                 <div className={clsx("w-16 h-16 rounded-full flex items-center justify-center mb-4 border", pendingUpdateRequest ? "bg-blue-50 text-blue-600 border-blue-100" : "bg-amber-50 text-amber-600 border-amber-100")}>
+                    {pendingUpdateRequest ? <Clock size={32} /> : <AlertCircle size={32} />}
                  </div>
-                 <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight">Registration Required</h2>
+                 <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight">
+                    {pendingUpdateRequest ? "Approval Pending" : "Registration Required"}
+                 </h2>
               </div>
               <div className="space-y-4 mb-8 text-center">
                  <p className="text-[13px] text-slate-600 leading-relaxed font-medium">
-                    You cannot mark your attendance because your face profile is not registered in the system. Please register your face first to enable attendance punches.
+                    {pendingUpdateRequest 
+                      ? "Your biometric face profile is registered but is currently pending HR review. You will be able to mark attendance once approved. / आपकी बायोमेट्रिक फेस प्रोफाइल पंजीकृत है लेकिन वर्तमान में एचआर समीक्षा के लिए लंबित है। स्वीकृत होने के बाद आप उपस्थिति दर्ज कर सकेंगे।"
+                      : "You cannot mark your attendance because your face profile is not registered in the system. Please register your face first to enable attendance punches."
+                    }
                  </p>
               </div>
               <div className="flex gap-4">
@@ -2186,15 +2218,17 @@ const FaceAttendance = ({ onSuccess, onClose, actionType, profile }) => {
                  >
                     Dismiss
                  </button>
-                 <button 
-                   onClick={() => {
-                     setShowUnregisteredModal(false);
-                     setMode('register');
-                   }} 
-                   className="flex-1 h-[48px] bg-blue-600 text-white hover:bg-blue-700 rounded-xl text-xs font-bold uppercase tracking-widest transition-all shadow-lg shadow-blue-500/20 active:scale-95"
-                 >
-                    Register Now
-                 </button>
+                 {!pendingUpdateRequest && (
+                    <button 
+                      onClick={() => {
+                        setShowUnregisteredModal(false);
+                        setMode('register');
+                      }} 
+                      className="flex-1 h-[48px] bg-blue-600 text-white hover:bg-blue-700 rounded-xl text-xs font-bold uppercase tracking-widest transition-all shadow-lg shadow-blue-500/20 active:scale-95"
+                    >
+                       Register Now
+                    </button>
+                 )}
               </div>
            </div>
         </div>

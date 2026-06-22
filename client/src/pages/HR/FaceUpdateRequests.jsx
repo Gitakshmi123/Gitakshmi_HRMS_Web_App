@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
     CheckCircle, XCircle, Clock, User, MessageSquare,
-    Search, Loader2, AlertCircle, RefreshCcw
+    Search, Loader2, AlertCircle, RefreshCcw, Trash2
 } from 'lucide-react';
 import api, { API_ROOT as HRMS_API_ROOT } from '../../utils/api';
 import { Can } from '../../components/rbac/PermissionGate';
@@ -106,6 +106,23 @@ const FaceUpdateRequests = () => {
         } catch (err) {
             console.error('Error actioning request:', err);
             alert(err.response?.data?.message || 'Failed to update request status.');
+        }
+    };
+
+    const handleDeleteFace = async (employeeId) => {
+        if (!window.confirm("Are you sure you want to delete this employee's face profile? They will need to register again to mark attendance.\nक्या आप वाकई इस कर्मचारी के फेस प्रोफाइल को हटाना चाहते हैं? उपस्थिति दर्ज करने के लिए उन्हें फिर से पंजीकरण करना होगा।")) {
+            return;
+        }
+
+        try {
+            const res = await api.delete(`/attendance/face/delete-user/${employeeId}`);
+            if (res.data.success) {
+                alert('Face profile deleted successfully / फेस प्रोफाइल सफलतापूर्वक हटा दिया गया है');
+                fetchRegisteredFaces();
+            }
+        } catch (err) {
+            console.error('Delete face error:', err);
+            alert(err.response?.data?.message || 'Failed to delete face profile.');
         }
     };
 
@@ -279,17 +296,18 @@ const FaceUpdateRequests = () => {
                 </div>
             ) : (
                 <div className="flex flex-col">
-                    <div className="hidden lg:grid grid-cols-[1.5fr_1fr_1fr_1.2fr_0.8fr] items-center px-4 py-2 mb-2">
+                    <div className="hidden lg:grid grid-cols-[1.5fr_1fr_1fr_1.2fr_0.8fr_0.5fr] items-center px-4 py-2 mb-2">
                         <div className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Employee</div>
                         <div className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest pl-4">Email</div>
                         <div className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">Registration Status</div>
                         <div className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center">Registration Date</div>
                         <div className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-right">Confidence Score</div>
+                        <div className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-right">Actions</div>
                     </div>
 
                     <div className="space-y-2">
                         {filteredRegistered.map((item) => (
-                            <div key={item.employeeId} className="bg-white dark:bg-slate-900 lg:grid lg:grid-cols-[1.5fr_1fr_1fr_1.2fr_0.8fr] flex flex-col items-center px-4 py-3 rounded-xl border border-slate-100 dark:border-slate-800/60 shadow-sm hover:shadow-md hover:border-blue-500/20 transition-all group gap-2 lg:gap-0">
+                            <div key={item.employeeId} className="bg-white dark:bg-slate-900 lg:grid lg:grid-cols-[1.5fr_1fr_1fr_1.2fr_0.8fr_0.5fr] flex flex-col items-center px-4 py-3 rounded-xl border border-slate-100 dark:border-slate-800/60 shadow-sm hover:shadow-md hover:border-blue-500/20 transition-all group gap-2 lg:gap-0">
                                 {/* Employee */}
                                 <div className="w-full flex items-center gap-3">
                                     {item.registeredFaceImage ? (
@@ -345,6 +363,22 @@ const FaceUpdateRequests = () => {
                                         <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">{item.qualityScore}%</span>
                                     ) : (
                                         <span className="text-slate-400">-</span>
+                                    )}
+                                </div>
+                                {/* Actions */}
+                                <div className="w-full flex lg:justify-end items-center justify-end gap-1.5 pt-2 lg:pt-0 border-t border-slate-100 dark:border-slate-800 lg:border-none mt-2 lg:mt-0">
+                                    {item.faceStatus === 'ACTIVE' || item.faceStatus === 'PENDING_REVIEW' ? (
+                                        <Can module="attendance.face" action="edit">
+                                            <button
+                                                onClick={() => handleDeleteFace(item.employeeId)}
+                                                className="p-1.5 text-rose-600 bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 dark:hover:bg-rose-500/20 rounded-lg transition shadow-sm"
+                                                title="Delete Face Profile"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </Can>
+                                    ) : (
+                                        <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded-md">-</span>
                                     )}
                                 </div>
                             </div>

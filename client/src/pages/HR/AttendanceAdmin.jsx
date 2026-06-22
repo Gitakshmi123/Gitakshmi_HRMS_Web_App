@@ -110,6 +110,7 @@ export default function AttendanceAdmin({ forceView }) {
     const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
     const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
     const [holidays, setHolidays] = useState([]);
+    const [employeeLeaves, setEmployeeLeaves] = useState([]);
     const [settings, setSettings] = useState({});
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
@@ -154,14 +155,16 @@ export default function AttendanceAdmin({ forceView }) {
     const fetchEmployeeRegister = useCallback(async () => {
         if (!viewingEmployee) return;
         try {
-            const [attRes, holidayRes, settingsRes] = await Promise.all([
+            const [attRes, holidayRes, settingsRes, leavesRes] = await Promise.all([
                 api.get(`/attendance/my?employeeId=${viewingEmployee._id}&month=${currentMonth + 1}&year=${currentYear}`),
                 api.get('/holidays'),
-                api.get(`/attendance/settings?employeeId=${viewingEmployee._id}`)
+                api.get(`/attendance/settings?employeeId=${viewingEmployee._id}`),
+                api.get(`/hr/leaves/requests?employeeId=${viewingEmployee._id}&limit=all`)
             ]);
             setEmployeeAttendance(attRes.data);
             setHolidays(holidayRes.data || []);
             setSettings(settingsRes.data || {});
+            setEmployeeLeaves(leavesRes.data?.data || []);
         } catch (err) {
             console.error(err);
         }
@@ -394,7 +397,7 @@ export default function AttendanceAdmin({ forceView }) {
                                             <div className="flex flex-col mt-1 md:mt-0 gap-0.5">
                                                 <div className="flex items-center gap-1.5">
                                                     <span className="text-slate-400 font-bold text-[10px] uppercase w-7 inline-block">In</span>
-                                                    <span className="font-bold text-slate-900 text-[10px]">{item.checkIn ? new Date(item.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}</span>
+                                                    <span className="font-bold text-slate-900 text-[10px]">{item.checkIn ? `${formatDateDDMMYYYY(item.checkIn)} ${new Date(item.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : '--:--'}</span>
                                                     {item.checkInImage && (
                                                         <img 
                                                             src={ensureBase64DataUrl(item.checkInImage)} 
@@ -406,7 +409,7 @@ export default function AttendanceAdmin({ forceView }) {
                                                 </div>
                                                 <div className="flex items-center gap-1.5">
                                                     <span className="text-slate-400 font-bold text-[10px] uppercase w-7 inline-block">Out</span>
-                                                    <span className="font-bold text-slate-900 text-[10px]">{item.checkOut ? new Date(item.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}</span>
+                                                    <span className="font-bold text-slate-900 text-[10px]">{item.checkOut ? `${formatDateDDMMYYYY(item.checkOut)} ${new Date(item.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : '--:--'}</span>
                                                     {item.checkOutImage && (
                                                         <img 
                                                             src={ensureBase64DataUrl(item.checkOutImage)} 
@@ -564,6 +567,7 @@ export default function AttendanceAdmin({ forceView }) {
                                         <AttendanceCalendar
                                             data={employeeAttendance}
                                             holidays={holidays}
+                                            leaves={employeeLeaves}
                                             settings={settings}
                                             currentMonth={currentMonth}
                                             currentYear={currentYear}
