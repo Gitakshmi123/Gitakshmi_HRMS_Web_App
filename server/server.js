@@ -146,7 +146,6 @@ async function connectToDatabase() {
         emitStatus(`✅ [DB CONNECTED] source=primary db=${mongoose.connection.name} host=${mongoose.connection.host}`);
         return true;
     } catch (err) {
-<<<<<<< HEAD
         console.error('❌ MongoDB initial connection failed:', err.message);
         emitStatus(`❌ [DB NOT CONNECTED] reason=${err.message}`);
 
@@ -158,44 +157,21 @@ async function connectToDatabase() {
         );
 
         if (isDnsError) {
+            console.warn('⚠️ DNS SRV lookup failed. Possible ISP or network restriction.');
+
             if (!dnsFallbackApplied && MONGO_URI.startsWith('mongodb+srv://')) {
-                console.warn('⚠️ DNS SRV lookup failed. Attempting to switch to public DNS (8.8.8.8, 1.1.1.1) and retry...');
+                console.log('🔄 Attempting DNS override with Google Public DNS (8.8.8.8)...');
                 try {
                     const dns = require('dns');
                     dns.setServers(['8.8.8.8', '1.1.1.1']);
                     dnsFallbackApplied = true;
-                    await mongoose.connect(MONGO_URI, options);
-                    emitStatus(`✅ [DB CONNECTED] source=dns-fallback-srv db=${mongoose.connection.name} host=${mongoose.connection.host}`);
-                    return true;
-                } catch (dnsErr) {
-                    console.error('❌ Retry after DNS fallback failed:', dnsErr.message);
-                }
-            } else {
-                console.warn('⚠️ DNS SRV lookup failed. Possible ISP or network restriction.');
-=======
-        const isDnsError = err && (err.syscall === 'querySrv' || err.code === 'ENOTFOUND');
-        if (isDnsError) {
-            console.warn('⚠️ MongoDB initial DNS lookup failed. Retrying with DNS override...');
-        } else {
-            console.error('❌ MongoDB initial connection failed:', err.message);
-            emitStatus(`❌ [DB NOT CONNECTED] reason=${err.message}`);
-        }
 
-        if (isDnsError) {
-            console.warn('⚠️ DNS SRV lookup failed. Possible ISP or network restriction.');
-            
-            // Try to set Google DNS servers and retry the primary connection
-            try {
-                console.log('🔄 Attempting DNS override with Google Public DNS (8.8.8.8)...');
-                const dns = require('dns');
-                dns.setServers(['8.8.8.8', '1.1.1.1']);
-                
-                await mongoose.connect(MONGO_URI, options);
-                emitStatus(`✅ [DB CONNECTED] source=primary-dns-fixed db=${mongoose.connection.name} host=${mongoose.connection.host}`);
-                return true;
-            } catch (retryErr) {
-                console.error('❌ Retry after DNS override also failed:', retryErr.message);
->>>>>>> 570fc6c (Updated attendance and face recognition modules)
+                    await mongoose.connect(MONGO_URI, options);
+                    emitStatus(`✅ [DB CONNECTED] source=primary-dns-fixed db=${mongoose.connection.name} host=${mongoose.connection.host}`);
+                    return true;
+                } catch (retryErr) {
+                    console.error('❌ Retry after DNS override also failed:', retryErr.message);
+                }
             }
 
             const fallback = process.env.MONGO_FALLBACK_URI;
