@@ -18,6 +18,7 @@ import {
     Building2,
     Calendar,
     ChevronRight,
+    ChevronDown,
     Search,
     Type,
     Layers,
@@ -177,6 +178,7 @@ const DEFAULT_STEP2_FIELD_CONFIG = {
     salaryMin: { visible: true, isPublic: false, required: false, label: 'Sal. Min', placeholder: 'Min' },
     salaryMax: { visible: true, isPublic: false, required: false, label: 'Sal. Max', placeholder: 'Max' },
     jobType: { visible: true, isPublic: true, required: false, label: 'Job Type', placeholder: '' },
+        grade: { visible: true, isPublic: true, required: false, label: 'Grade', placeholder: 'Select Grade' },
     workMode: { visible: true, isPublic: true, required: false, label: 'Work Mode', placeholder: '' },
     visibility: { visible: true, isPublic: true, required: false, label: 'Visibility', placeholder: '' },
     priority: { visible: true, isPublic: false, required: false, label: 'Priority', placeholder: '' },
@@ -231,6 +233,7 @@ export default function RequirementForm({ onClose, onSuccess, initialData, isEdi
     });
     const [showPositionFieldCustomizer, setShowPositionFieldCustomizer] = useState(false);
     const [employees, setEmployees] = useState([]);
+    const [grades, setGrades] = useState([]);
     const [selectedPosition, setSelectedPosition] = useState(null);
     const [isGeneratingAI, setIsGeneratingAI] = useState(false);
 
@@ -308,6 +311,7 @@ export default function RequirementForm({ onClose, onSuccess, initialData, isEdi
         jobTitle: '',
         department: '',
         jobType: 'Full-Time',
+        grade: '',
         workMode: 'On-site',
         country: '',
         state: '',
@@ -1357,6 +1361,7 @@ export default function RequirementForm({ onClose, onSuccess, initialData, isEdi
                         visibility: cleanData.visibility,
                         workMode: cleanData.workMode,
                         jobType: cleanData.jobType,
+                        grade: cleanData.grade,
                         hiringManager: cleanData.hiringManager,
                         interviewPanel: cleanData.interviewPanel
                     },
@@ -1916,6 +1921,23 @@ export default function RequirementForm({ onClose, onSuccess, initialData, isEdi
                         )}
 
                         {/* Job Type */}
+                        {renderFieldWithControls('grade', 'Grade',
+                                <div className="relative">
+                                    <select
+                                        value={formData.grade || ''}
+                                        onChange={(e) => updateField('grade', e.target.value)}
+                                        className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-4 pr-10 text-sm font-semibold text-slate-800 transition-all hover:bg-slate-50 focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-indigo-500/10"
+                                    >
+                                        <option value="">Select Grade</option>
+                                        {grades.map((g, i) => (
+                                            <option key={i} value={g.name || g._id}>{g.name}</option>
+                                        ))}
+                                    </select>
+                                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+                                        <ChevronDown size={16} className="text-slate-400" />
+                                    </div>
+                                </div>
+                            )}
                         {renderFieldWithControls('jobType', 'Job Type',
                             <CustomSelect
                                 value={formData.jobType || 'Full-Time'}
