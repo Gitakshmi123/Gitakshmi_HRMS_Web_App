@@ -133,6 +133,7 @@ const EmployeeSchema = new mongoose.Schema({
   role: { type: String, trim: true }, // Legacy role string
   employeeCode: { type: String, trim: true, index: true },
   leavePolicy: { type: mongoose.Schema.Types.ObjectId, ref: 'LeavePolicy', default: null },
+  zohoLeavePolicy: { type: mongoose.Schema.Types.ObjectId, ref: 'ZohoLeavePolicy', default: null },
   leaveBalance: {
     SL: { type: Number, default: 0 },
     PL: { type: Number, default: 0 },

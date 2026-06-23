@@ -678,6 +678,7 @@ app.use('/api/offer-templates', auth, recruitmentCheck, offerTemplateRoutes);
 app.use('/api/interviews', auth, recruitmentCheck, require('./routes/interview.routes'));
 app.use('/api/tracker', auth, recruitmentCheck, require('./routes/tracker.routes'));
 app.use('/api/requirements', auth, recruitmentCheck, requirementRoutes);
+app.use('/api/manpower-requisition', auth, require('./routes/manpowerRequisition.routes'));
 app.use('/api', auth, recruitmentCheck, require('./routes/feedback.routes'));
 app.use('/api/job-portal', require('./routes/jobPortal.routes'));
 app.use('/api/career', (req, res, next) => {
