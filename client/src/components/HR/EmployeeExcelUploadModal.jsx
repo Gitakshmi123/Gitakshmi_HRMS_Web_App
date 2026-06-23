@@ -113,10 +113,11 @@ export default function EmployeeExcelUploadModal({ isOpen, onClose, onSuccess })
 
   // Helper: get a cell value from a row by normalized key patterns
   const getFieldValue = (row, patterns) => {
-    for (const key of Object.keys(row)) {
-      const normKey = normalizeColumnName(key);
-      if (patterns.some(p => normKey === p)) {
-        const val = String(row[key] || '').trim();
+    const rowKeys = Object.keys(row).map(key => ({ key, normKey: normalizeColumnName(key) }));
+    for (const p of patterns) {
+      const match = rowKeys.find(rk => rk.normKey === p);
+      if (match) {
+        const val = String(row[match.key] || '').trim();
         if (val) return val;
       }
     }
@@ -142,7 +143,7 @@ export default function EmployeeExcelUploadModal({ isOpen, onClose, onSuccess })
        }
     }
     
-    const officialEmail= getFieldValue(row, ['officialemail','email','companymailid','mailid','emailaddress','emailid','loginemail','employeeemail','username','personalemail','personalemailid']);
+    const officialEmail= getFieldValue(row, ['officialemail', 'officialmail', 'officialemailid', 'officialmailid', 'companyemail', 'companymail', 'companyemailid', 'companymailid', 'workemail', 'workmail', 'loginemail', 'employeeemail', 'email', 'emailaddress', 'emailid', 'mailid', 'username']);
     const joiningDate  = getFieldValue(row, ['joiningdate','joining','doj','dateofjoining']);
     const gender       = getFieldValue(row, ['gender']);
     const dob          = getFieldValue(row, ['dateofbirth','dob','birthdate','birthyear','yearofbirth','birth']);
@@ -482,7 +483,7 @@ export default function EmployeeExcelUploadModal({ isOpen, onClose, onSuccess })
           }
 
           // 2. Email mapping / fallback
-          const officialEmail = getFieldValue(enrichedRow, ['officialemail', 'email', 'companymailid', 'mailid', 'emailaddress']);
+          const officialEmail = getFieldValue(enrichedRow, ['officialemail', 'officialmail', 'officialemailid', 'officialmailid', 'companyemail', 'companymail', 'companyemailid', 'companymailid', 'workemail', 'workmail', 'loginemail', 'employeeemail', 'email', 'emailaddress', 'emailid', 'mailid']);
           const personalEmail = getFieldValue(enrichedRow, ['personalemail', 'personalemailid', 'personalmailid']);
           if (!officialEmail && personalEmail) {
             enrichedRow['Official Email'] = personalEmail;

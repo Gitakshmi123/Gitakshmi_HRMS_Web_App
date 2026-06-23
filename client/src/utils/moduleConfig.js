@@ -109,15 +109,23 @@ export function normalizeEnabledModules(input = {}, legacyModules = []) {
     });
   }
 
-  // If we only had legacy modules (and no explicit input object), 
+  // If we only had legacy modules (and no explicit input object),
   // or if we have no input at all but legacy modules exist,
   // we should apply dependencies to match legacy behavior/expectations.
   if (!hasInput && Array.isArray(legacyModules) && legacyModules.length > 0) {
     return applyModuleDependencies(out);
   }
 
+  // If we have absolutely no input (empty enabledModules object AND empty legacy list),
+  // this is a legacy tenant with no module configuration — default ALL modules to true.
+  const hasLegacy = Array.isArray(legacyModules) && legacyModules.length > 0;
+  if (!hasInput && !hasLegacy) {
+    return createDefaultEnabledModules(true);
+  }
+
   return out;
 }
+
 
 export function applyModuleDependencies(enabledModules = {}) {
   const out = { ...createDefaultEnabledModules(false), ...enabledModules };

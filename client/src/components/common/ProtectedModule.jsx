@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useRBAC } from '../../context/RBACContext';
 import { isPrivilegedManagementRole } from '../../utils/employeeAccess';
@@ -32,6 +32,7 @@ const MODULE_PERMISSION_PROBES = {
 const ProtectedModule = ({ module, permissionKey = null, action = 'view', children }) => {
     const { user, enabledModules } = useAuth();
     const { hasPermission, loading, permissions } = useRBAC();
+    const location = useLocation();
     
     const getRoleName = (user) => {
         return String(
@@ -70,6 +71,9 @@ const ProtectedModule = ({ module, permissionKey = null, action = 'view', childr
         console.warn(`[ProtectedModule] Access denied for module: ${module}. Redirecting to safe landing.`);
         // Redirect to safe landing instead of showing error page
         const safeLanding = isPrivileged ? '/hr/dashboard' : '/employee/dashboard';
+        if (location.pathname === safeLanding) {
+            return <Navigate to="/unauthorized" replace />;
+        }
         return <Navigate to={safeLanding} replace />;
     }
 

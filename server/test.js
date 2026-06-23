@@ -1,0 +1,1 @@
+const bcrypt = require('bcryptjs'); bcrypt.compare('123456789', '').then(res => console.log('Matches:', res));
