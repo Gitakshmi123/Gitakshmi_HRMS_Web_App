@@ -44,7 +44,43 @@ exports.createRoster = async (req, res) => {
     try {
         const tenantId = req.headers['x-tenant-id'];
         const { Roster, RosterAssignment, RosterRotation } = getModels(req);
+        const { startDate, endDate, employees } = req.body;
         
+        // --- OVERLAP VALIDATION ---
+        if (employees && employees.length > 0 && startDate && endDate) {
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            
+            // Find overlapping rosters
+            const overlappingRosters = await Roster.find({
+                tenant: tenantId,
+                startDate: { $lte: end },
+                endDate: { $gte: start },
+                employees: { $in: employees }
+            }).populate('employees', 'firstName lastName employeeId');
+            
+            if (overlappingRosters.length > 0) {
+                // Collect names of employees that are overlapping
+                let overlappingEmpIds = new Set();
+                overlappingRosters.forEach(r => {
+                    r.employees.forEach(emp => {
+                        if (employees.includes(emp._id.toString())) {
+                            overlappingEmpIds.add(`${emp.firstName} ${emp.lastName} (${emp.employeeId})`);
+                        }
+                    });
+                });
+                
+                if (overlappingEmpIds.size > 0) {
+                    const empNames = Array.from(overlappingEmpIds).join(', ');
+                    return res.status(400).json({ 
+                        success: false, 
+                        message: `Cannot assign multiple rosters. The following employees are already in another roster for this period: ${empNames}` 
+                    });
+                }
+            }
+        }
+        // --- END OVERLAP VALIDATION ---
+
         const newRoster = new Roster({
             ...req.body,
             tenant: tenantId,
@@ -470,5 +506,62 @@ exports.assignCompanyDefaultToEmployee = async (req, tenantId, employeeId) => {
         }
     } catch (error) {
         console.error('[ASSIGN_COMPANY_DEFAULT_ERROR]', error);
+    }
+};
+
+// 11. Update Roster Details (Edit)
+exports.updateRoster = async (req, res) => {
+    try {
+        const tenantId = req.headers['x-tenant-id'];
+        const { Roster } = getModels(req);
+        
+        const roster = await Roster.findById(req.params.id);
+        if (!roster) return res.status(404).json({ success: false, message: 'Roster not found' });
+        
+        // Prevent editing if published, depending on business rules, but name/dates might be okay
+        // if (roster.status === 'Published') return res.status(400).json({ success: false, message: 'Cannot edit published roster' });
+
+        roster.rosterName = req.body.rosterName || roster.rosterName;
+        // Other fields like startDate/endDate could be updated here if needed, 
+        // but changing dates might require regenerating assignments.
+        // For now, allow basic updates like name.
+        if (req.body.startDate) roster.startDate = new Date(req.body.startDate);
+        if (req.body.endDate) roster.endDate = new Date(req.body.endDate);
+        
+        await roster.save();
+        res.status(200).json({ success: true, message: 'Roster updated successfully', data: roster });
+    } catch (error) {
+        console.error('[UPDATE_ROSTER_ERROR]', error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};
+
+// 12. Delete Roster
+exports.deleteRoster = async (req, res) => {
+    try {
+        const tenantId = req.headers['x-tenant-id'];
+        const { Roster, RosterAssignment, EmployeeRoster } = getModels(req);
+        
+        const roster = await Roster.findById(req.params.id);
+        if (!roster) return res.status(404).json({ success: false, message: 'Roster not found' });
+        
+        // Remove assignments
+        await RosterAssignment.deleteMany({ rosterId: roster._id });
+        
+        // Remove from legacy EmployeeRoster if it was published
+        if (roster.status === 'Published') {
+            await EmployeeRoster.deleteMany({
+                tenant: tenantId,
+                employeeId: { $in: roster.employees },
+                date: { $gte: roster.startDate, $lte: roster.endDate },
+                generatedBy: 'Roster_Rotation'
+            });
+        }
+        
+        await Roster.findByIdAndDelete(roster._id);
+        res.status(200).json({ success: true, message: 'Roster deleted successfully' });
+    } catch (error) {
+        console.error('[DELETE_ROSTER_ERROR]', error);
+        res.status(500).json({ success: false, message: 'Server Error' });
     }
 };

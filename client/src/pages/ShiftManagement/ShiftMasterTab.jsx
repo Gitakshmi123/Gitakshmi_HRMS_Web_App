@@ -279,7 +279,20 @@ export default function ShiftMasterTab() {
   const handleShiftSelectChange = (value) => {
     if (value === 'Custom') {
       setIsCustomShift(true);
-      form.setFieldsValue({ customName: '' });
+      
+      // Auto-generate next sequence code
+      let nextNum = 21;
+      if (shifts && shifts.length > 0) {
+        const numbers = shifts.map(s => {
+          const match = s.code.match(/\d+/);
+          return match ? parseInt(match[0], 10) : 0;
+        });
+        const maxNum = Math.max(...numbers);
+        nextNum = Math.max(maxNum + 1, 21);
+      }
+      const nextCode = `S${String(nextNum).padStart(3, '0')}`;
+
+      form.setFieldsValue({ customName: '', code: nextCode });
     } else {
       setIsCustomShift(false);
       const s = predefinedShifts.find(x => x.name === value);

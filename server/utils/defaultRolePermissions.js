@@ -138,10 +138,6 @@ const EMPLOYEE_PERMS = buildPerms({
   'employee.tickets':     actions(['view', 'create', 'edit', 'delete']),
   'employee.exit':        actions(['view', 'create', 'edit', 'delete']),
   'employee.manpowerRequisition': actions(['view', 'create', 'edit', 'delete']),
-  'overview.dashboard':   actions(['view']), // basic view only
-  'onboarding.dashboard': actions(['view']),
-  'onboarding.tasks': actions(['view', 'edit']),
-  'onboarding.documents': actions(['view', 'create']),
   'onboarding.employeePortal': actions(['view', 'edit']),
 });
 
