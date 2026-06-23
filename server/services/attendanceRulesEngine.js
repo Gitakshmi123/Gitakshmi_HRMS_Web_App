@@ -246,7 +246,9 @@ function evaluateLateAndEarly({ date, logs, settings, shiftStart: shiftStartOver
             // However, some systems only mark 'isLate' flag if diff > threshold.
             // Let's stick to: isLate = True if (Arrival > ShiftStart + Grace)
 
-            if (lateMinutes > (isFlexibleGradeTiming ? 0 : graceTime)) {
+            // CUSTOM IMPLEMENTATION: User explicitly requested 15 mins allowance
+            const effectiveGraceTime = Math.max(graceTime || 0, 15);
+            if (lateMinutes > (isFlexibleGradeTiming ? 0 : effectiveGraceTime)) {
                 isLate = true;
             }
 
@@ -464,8 +466,12 @@ function applyAttendanceRules(params) {
                             meta.penaltyApplied = 'late_lop_full';
                         }
                     }
-                } else if (lateCfg.enabled) {
+                // CUSTOM IMPLEMENTATION: 15 min late 3 times allowed, 4th time = Half Day
+                } else if (lateCfg.enabled || true) {
                     const currentLateCount = accumulatedLateCount + 1;
+
+                    // Fallback to 4 if user didn't explicitly configure it
+                    const marksToHalfDay = lateCfg.lateMarksToHalfDay || 4; 
 
                     // Check LOP Threshold First (Severity High)
                     if (lateCfg.lateMarksToFullDay > 0 && currentLateCount % lateCfg.lateMarksToFullDay === 0) {
@@ -475,7 +481,7 @@ function applyAttendanceRules(params) {
                         meta.penaltyApplied = 'late_lop_full';
                     }
                     // Check Half Day Threshold (Severity Medium)
-                    else if (lateCfg.lateMarksToHalfDay > 0 && currentLateCount % lateCfg.lateMarksToHalfDay === 0) {
+                    else if (marksToHalfDay > 0 && currentLateCount % marksToHalfDay === 0) {
                         if (status !== 'absent') { // Don't downgrade if already absent
                             status = 'half_day';
                             lopDays = Math.max(lopDays, 0.5);

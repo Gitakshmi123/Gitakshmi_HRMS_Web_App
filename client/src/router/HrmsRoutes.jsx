@@ -473,6 +473,10 @@ export default function HrmsRoutes() {
 
           <Route path="my-tasks" element={<ProtectedModule module="backgroundVerification"><MyTasks /></ProtectedModule>} />
           <Route path="payslip-templates" element={<ProtectedModule module="payroll" permissionKey="payroll.payslips"><PayslipTemplates /></ProtectedModule>} />
+          
+          <Route path="manpower-requisition" element={<ProtectedModule module="recruitment" permissionKey="hiring.createReq"><ManpowerRequisitionList /></ProtectedModule>} />
+          <Route path="manpower-requisition/:id" element={<ProtectedModule module="recruitment" permissionKey="hiring.createReq"><ManpowerRequisitionForm /></ProtectedModule>} />
+          <Route path="manpower_requisition" element={<Navigate to="manpower-requisition" replace />} />
         </Route>
 
         {/* --- ATTENDANCE MODULE --- */}
@@ -746,6 +750,7 @@ export default function HrmsRoutes() {
         <Route path="resignation" element={<EmployeePermissionRoute permissionKey="employee.exit"><EmployeeExit /></EmployeePermissionRoute>} />
         <Route path="manpower-requisition" element={<EmployeePermissionRoute permissionKey="employee.manpowerRequisition"><ManpowerRequisitionList /></EmployeePermissionRoute>} />
         <Route path="manpower-requisition/:id" element={<EmployeePermissionRoute permissionKey="employee.manpowerRequisition"><ManpowerRequisitionForm /></EmployeePermissionRoute>} />
+        <Route path="manpower_requisition" element={<Navigate to="../manpower-requisition" replace />} />
         <Route
           path="payslips"
           element={

@@ -420,7 +420,7 @@ const OfficialRecordsTab = React.memo(function OfficialRecordsTab({
         </TabularRow>
 
         <TabularRow columns={4}>
-          <TabularField label="LEAVE POLICY">
+          <TabularField label="LEAVE CONFIGURATION">
             <select
               value={leavePolicy}
               onChange={(e) => setLeavePolicy?.(e.target.value)}

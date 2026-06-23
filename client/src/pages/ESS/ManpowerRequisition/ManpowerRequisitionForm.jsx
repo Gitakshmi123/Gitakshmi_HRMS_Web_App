@@ -36,8 +36,8 @@ export default function ManpowerRequisitionForm() {
   const fetchOptions = async () => {
     try {
       const [deptRes, desigRes] = await Promise.all([
-        api.get('/departments'),
-        api.get('/designations') // Assuming this endpoint exists, or similar
+        api.get('/hierarchy/departments'),
+        api.get('/hierarchy/designations') 
       ]);
       if (deptRes.data?.success) setDepartments(deptRes.data.data);
       
@@ -87,7 +87,7 @@ export default function ManpowerRequisitionForm() {
         const res = await api.post('/manpower-requisition', payload);
         if (res.data?.success) {
           message.success('Manpower Requisition submitted successfully for approval!');
-          navigate('/employee/manpower-requisition');
+          navigate('..');
         }
       }
     } catch (err) {
@@ -104,7 +104,7 @@ export default function ManpowerRequisitionForm() {
         <Button 
           type="text" 
           icon={<ArrowLeft size={20} />} 
-          onClick={() => navigate('/employee/manpower-requisition')}
+          onClick={() => navigate('..')}
           className="text-slate-500 hover:bg-slate-100"
         />
         <div>
@@ -306,7 +306,7 @@ export default function ManpowerRequisitionForm() {
 
           {!isEdit && (
             <div className="flex justify-end gap-3 mt-8">
-              <Button onClick={() => navigate('/employee/manpower-requisition')}>
+              <Button onClick={() => navigate('..')}>
                 Cancel
               </Button>
               <Button 

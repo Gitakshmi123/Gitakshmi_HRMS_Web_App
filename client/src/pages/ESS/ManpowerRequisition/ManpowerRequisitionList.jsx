@@ -93,7 +93,7 @@ export default function ManpowerRequisitionList() {
           <Button 
             type="text" 
             icon={<Eye size={16} className="text-slate-500" />} 
-            onClick={() => navigate(`/employee/manpower-requisition/${record._id}`)}
+            onClick={() => navigate(record._id)}
           />
         </Tooltip>
       ),
@@ -113,7 +113,7 @@ export default function ManpowerRequisitionList() {
         <Button 
           type="primary" 
           icon={<Plus size={16} />} 
-          onClick={() => navigate('/employee/manpower-requisition/new')}
+          onClick={() => navigate('new')}
           className="bg-blue-600 hover:bg-blue-700 shadow-sm rounded-lg"
         >
           Raise Request

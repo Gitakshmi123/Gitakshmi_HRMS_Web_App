@@ -337,6 +337,12 @@ export default function EmployeeSidebar({
       let moduleDisplayName = mod.name;
       // Removed redundant Document module block to support granular RBAC for administrators
       if (moduleDisplayName === 'Overview') return;
+      if (moduleDisplayName.toLowerCase().includes('hr dashboard')) {
+        if (!allowManagementFallbackForEss && !hasPermission('overview.dashboard', 'any')) return;
+      }
+      if (moduleDisplayName.toLowerCase().includes('onboarding') || (mod.name || '').toLowerCase().includes('onboarding')) {
+        if (!allowManagementFallbackForEss && !hasPermission('onboarding.dashboard', 'any')) return;
+      }
 
       if (moduleDisplayName === 'People') moduleDisplayName = 'Employee';
       if (moduleDisplayName === 'Leave') moduleDisplayName = 'Policy';
