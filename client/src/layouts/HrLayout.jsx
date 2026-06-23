@@ -12,6 +12,7 @@ import { UIContext } from '../context/UIContext';
 import SectionTabs from '../components/HR/SectionTabs';
 import { getScopedStorageKey } from '../utils/sidebarStorage';
 import DashboardThemeSettings from '../components/DashboardThemeSettings';
+import { getSectionTabs } from '../utils/hrmsNavigationHierarchy';
 // import HRMSAssistantWidget from '../components/common/HRMSAssistantWidget';
 
 const DEFAULT_APPEARANCE = {
@@ -24,8 +25,6 @@ const DEFAULT_APPEARANCE = {
 export default function HRLayout() {
   const { user, logout, hasModule } = useAuth();
   const { hasPermission } = useRBAC();
-  const roleName = String(user?.roleName || (user?.role && typeof user.role === 'object' ? user.role.name : user?.role) || '').toLowerCase();
-  const isPrivilegedRole = ['hr', 'admin', 'company_super_admin', 'company_admin', 'human_resource', 'super_admin', 'psa', 'hr manager', 'hr_manager', 'hr_admin'].includes(roleName);
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -94,99 +93,34 @@ export default function HRLayout() {
   const isMainDashboard = ['/hr', '/hr/', '/tenant/dashboard', '/tenant', '/tenant/', '/hr/dashboard', '/tenant/my-dashboard', '/hr/my-dashboard'].includes(location.pathname);
 
   const sectionTabs = useMemo(() => {
-    const sections = [
-      {
-        match: ['/organization', '/org', '/departments', '/grades', '/organization-policies', '/leave-approvals', '/leave-requests', '/organization/automations', '/shift-management'],
+    const sections = getSectionTabs(pathPrefix, {
+      dashboard: LayoutDashboard,
+      organization: MapPin,
+      employees: Users,
+      departments: Building2,
+      users: UserCog,
+      requirements: Briefcase,
+      settings: Settings2,
+      leave: Plane,
+      clock: Clock,
+      history: History,
+      pin: MapPin,
+      calendar: CalendarDays,
+      fingerprint: Fingerprint,
+      payroll: Banknote,
+      file: FileText,
+      paint: Paintbrush,
+      shield: Shield,
+      mail: Mail,
+      share: Share2,
+      userPlus: UserPlus,
+      chart: BarChart,
+    }).map((section) => {
+      if (!section.match.includes('/career-builder')) return section;
+      return {
+        ...section,
         tabs: [
-          { label: 'Organization', to: `${pathPrefix}/organization`, icon: MapPin, permission: 'people.org' },
-          { label: 'Org Structure', to: `${pathPrefix}/org`, icon: Users, permission: 'people.org' },
-          { label: 'Departments', to: `${pathPrefix}/departments`, icon: Building2, permission: 'people.departments' },
-          { label: 'Grades', to: `${pathPrefix}/grades`, icon: Briefcase, permission: 'people.org' },
-          { label: 'Leave Configuration', to: `${pathPrefix}/organization-policies`, icon: Settings2, permission: 'leave.policies' },
-          { label: 'Requests', to: `${pathPrefix}/leave-approvals`, icon: Plane, permission: 'leave.requests' },
-          { label: 'Shift', to: `${pathPrefix}/shift-management`, icon: Clock, permission: 'attendance.dashboard' },
-          { label: 'Automations', to: `${pathPrefix}/organization/automations`, icon: Settings2, permission: 'people.org' },
-        ],
-      },
-      {
-        match: ['/employees', '/users'],
-        tabs: [
-          { label: 'Employees', to: `${pathPrefix}/employees`, icon: Users, permission: 'people.employees' },
-          { label: 'Users', to: `${pathPrefix}/users`, icon: UserCog, permission: 'people.users' },
-        ],
-      },
-      {
-        match: ['/attendance', '/attendance-calendar', '/face-update-requests'],
-        tabs: [
-          { label: 'Dashboard', to: `${pathPrefix}/attendance`, icon: LayoutDashboard, permission: 'attendance.dashboard' },
-          { label: 'History', to: `${pathPrefix}/attendance-history`, icon: History, permission: 'attendance.history' },
-          { label: 'Live Tracking', to: `${pathPrefix}/attendance/live-tracking`, icon: MapPin, permission: 'attendance.liveTracking' },
-          { label: 'Calendar', to: `${pathPrefix}/attendance-calendar`, icon: CalendarDays, permission: 'attendance.calendar' },
-          { label: 'Face Updates', to: `${pathPrefix}/face-update-requests`, icon: Fingerprint, permission: 'attendance.face' }
-        ],
-      },
-      {
-        match: ['/payroll', '/salary-structure', '/payslip-templates'],
-        tabs: [
-          { label: 'Stats', to: `${pathPrefix}/payroll/dashboard`, icon: LayoutDashboard, permission: 'payroll.stats' },
-          { label: 'Salary', to: `${pathPrefix}/payroll/salary-components`, icon: Banknote, permission: 'payroll.salary' },
-          { label: 'Compensation', to: `${pathPrefix}/payroll/compensation`, icon: Banknote, permission: 'payroll.compensation' },
-          { label: 'Process', to: `${pathPrefix}/payroll/process`, icon: Settings2, permission: 'payroll.process' },
-          { label: 'Run History', to: `${pathPrefix}/payroll/run`, icon: CalendarDays, permission: 'payroll.run' },
-          { label: 'Payslips', to: `${pathPrefix}/payroll/payslips`, icon: FileText, permission: 'payroll.payslips' },
-          { label: 'Templates', to: `${pathPrefix}/payslip-templates`, icon: Paintbrush, permission: 'payroll.templates' },
-        ],
-      },
-      {
-        match: ['/requirements', '/create-requirement', '/applicants', '/internal-applicants', '/candidate-status', '/positions', '/offer-templates', '/offers-joining', '/job/'],
-        tabs: [
-          { label: 'Job List', to: `${pathPrefix}/requirements`, icon: Briefcase, permission: 'hiring.jobList' },
-          { label: 'Create Req', to: `${pathPrefix}/create-requirement`, icon: Briefcase, permission: 'hiring.createReq' },
-          { label: 'External', to: `${pathPrefix}/applicants`, icon: Users, permission: 'hiring.external' },
-          { label: 'Internal', to: `${pathPrefix}/internal-applicants`, icon: Users, permission: 'hiring.internal' },
-          { label: 'Tracker', to: `${pathPrefix}/candidate-status`, icon: LayoutDashboard, permission: 'hiring.tracker' },
-          { label: 'Templates', to: `${pathPrefix}/offer-templates`, icon: FileText, permission: 'hiring.offerTemplates' },
-          { label: 'Offers & Joining', to: `${pathPrefix}/offers-joining`, icon: FileText, permission: 'hiring.offersJoining' },
-        ],
-      },
-      {
-        match: ['/bgv'],
-        tabs: [
-          { label: 'Case Master', to: `${pathPrefix}/bgv`, icon: Shield, permission: 'bgv.caseMaster' },
-          { label: 'Email Logs', to: `${pathPrefix}/bgv/emails`, icon: Mail, permission: 'bgv.emailLogs' },
-        ],
-      },
-      {
-        match: ['/onboarding'],
-        tabs: [],
-      },
-
-      {
-        match: ['/access'],
-        tabs: [],
-      },
-      {
-        match: ['/settings/social-media'],
-        tabs: [
-          { label: 'Dashboard', to: `${pathPrefix}/settings/social-media`, icon: LayoutDashboard, permission: 'socialMedia.dashboard' },
-          { label: 'Accounts', to: `${pathPrefix}/settings/social-media/accounts`, icon: Users, permission: 'socialMedia.accounts' },
-          { label: 'Create Post', to: `${pathPrefix}/settings/social-media/create`, icon: Share2, permission: 'socialMedia.create' },
-          { label: 'History', to: `${pathPrefix}/settings/social-media/history`, icon: History, permission: 'socialMedia.history' },
-        ],
-      },
-      {
-        match: ['/settings/company', '/settings/sequences', '/settings/email-templates'],
-        tabs: [
-          { label: 'Global Settings', to: `${pathPrefix}/settings/company`, icon: Settings2, permission: 'configuration.company' },
-          { label: 'Document Sequences', to: `${pathPrefix}/settings/sequences`, icon: FileText, permission: 'configuration.sequences' },
-          { label: 'Email Templates', to: `${pathPrefix}/settings/email-templates`, icon: Mail, permission: 'configuration.company' },
-        ],
-      },
-      {
-        match: ['/career-builder', '/apply-builder'],
-        tabs: [
-          { label: 'Career Page', to: `${pathPrefix}/career-builder`, icon: Paintbrush, permission: 'portals.careerPage' },
-          { label: 'Apply Page', to: `${pathPrefix}/apply-builder`, icon: Paintbrush, permission: 'portals.applyPage' },
+          ...section.tabs,
           {
             label: 'Public Page',
             icon: ExternalLink,
@@ -212,20 +146,11 @@ export default function HRLayout() {
               if (fallbackCode) {
                 window.open(`/jobs/${encodeURIComponent(fallbackCode)}`, '_blank', 'noopener,noreferrer');
               }
-            }
+            },
           },
         ],
-      },
-      {
-        match: ['/reports'],
-        tabs: [
-          { label: 'Staffing Overview', to: `${pathPrefix}/reports`, icon: Users, permission: 'reports.staffing' },
-          { label: 'Replacement Movements', to: `${pathPrefix}/reports/replacements`, icon: UserPlus, permission: 'reports.movements' },
-          { label: 'Hiring Trends', to: `${pathPrefix}/reports/trends`, icon: BarChart, permission: 'reports.trends' },
-          { label: 'Performance', to: `${pathPrefix}/reports/performance`, icon: Clock, permission: 'reports.performance' },
-        ],
-      },
-    ];
+      };
+    });
 
     const currentSection = sections.find((section) =>
       section.match.some((prefix) => location.pathname.startsWith(`${pathPrefix}${prefix}`)),
@@ -235,7 +160,7 @@ export default function HRLayout() {
 
     // Strict granular filtering — all users (including admins) see only permitted tabs
     return currentSection.tabs.filter(tab => !tab.permission || hasPermission(tab.permission, 'any'));
-  }, [location.pathname, pathPrefix, hasPermission, isPrivilegedRole, user?.companyCode]);
+  }, [location.pathname, pathPrefix, hasPermission, user?.companyCode]);
 
   const pageTitle = useMemo(() => {
     const path = location.pathname;

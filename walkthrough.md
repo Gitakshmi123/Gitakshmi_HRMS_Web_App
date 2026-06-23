@@ -75,3 +75,4 @@ We executed automated script validation (`verify_face_match_logic.js`) on the da
 1. Open the HR **Face Updates** page.
 2. Click any registered face avatar thumbnail to view the baseline registration photo.
 3. Click the **Trash** icon to delete a face profile. Observe that the list refreshes automatically.
+

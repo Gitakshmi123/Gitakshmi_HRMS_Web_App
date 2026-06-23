@@ -12,5 +12,7 @@ router.post('/', authenticate, rosterController.createRoster);
 router.post('/generate', authenticate, rosterController.generateRoster);
 router.post('/publish', authenticate, rosterController.publishRoster);
 router.get('/:id', authenticate, rosterController.getRosterDetails);
+router.put('/:id', authenticate, rosterController.updateRoster);
+router.delete('/:id', authenticate, rosterController.deleteRoster);
 
 module.exports = router;

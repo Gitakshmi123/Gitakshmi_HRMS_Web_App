@@ -31,9 +31,25 @@ exports.createPolicy = async (req, res) => {
         const policy = new ZohoLeavePolicy(policyData);
         await policy.save();
 
+        const { Employee } = getModels(req);
+
+        // Map policy to employees
+        if (policy.applicability) {
+            if (policy.applicability.targetType === 'ALL') {
+                await Employee.updateMany({ tenant: tenantId }, { $set: { zohoLeavePolicy: policy._id } });
+            } else if (policy.applicability.targetType === 'GRADE' && policy.applicability.targetValues?.length > 0) {
+                await Employee.updateMany({ tenant: tenantId, gradeId: { $in: policy.applicability.targetValues } }, { $set: { zohoLeavePolicy: policy._id } });
+            } else if (policy.applicability.targetType === 'DEPARTMENT' && policy.applicability.targetValues?.length > 0) {
+                await Employee.updateMany({ tenant: tenantId, departmentId: { $in: policy.applicability.targetValues } }, { $set: { zohoLeavePolicy: policy._id } });
+            } else if (policy.applicability.targetType === 'DESIGNATION' && policy.applicability.targetValues?.length > 0) {
+                await Employee.updateMany({ tenant: tenantId, designationId: { $in: policy.applicability.targetValues } }, { $set: { zohoLeavePolicy: policy._id } });
+            }
+        }
+
         res.status(201).json({
             success: true,
-            data: policy
+            data: policy,
+            message: 'Policy created and mapped to eligible employees.'
         });
     } catch (error) {
         console.error('Create Leave Policy Error:', error);
@@ -111,7 +127,25 @@ exports.updatePolicy = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Policy not found' });
         }
 
-        res.status(200).json({ success: true, data: policy });
+        const { Employee } = getModels(req);
+
+        // Remove policy from all employees first (reset) to ensure clean re-mapping
+        await Employee.updateMany({ tenant: req.user.tenantId, zohoLeavePolicy: policy._id }, { $set: { zohoLeavePolicy: null } });
+
+        // Map policy to employees
+        if (policy.applicability) {
+            if (policy.applicability.targetType === 'ALL') {
+                await Employee.updateMany({ tenant: req.user.tenantId }, { $set: { zohoLeavePolicy: policy._id } });
+            } else if (policy.applicability.targetType === 'GRADE' && policy.applicability.targetValues?.length > 0) {
+                await Employee.updateMany({ tenant: req.user.tenantId, gradeId: { $in: policy.applicability.targetValues } }, { $set: { zohoLeavePolicy: policy._id } });
+            } else if (policy.applicability.targetType === 'DEPARTMENT' && policy.applicability.targetValues?.length > 0) {
+                await Employee.updateMany({ tenant: req.user.tenantId, departmentId: { $in: policy.applicability.targetValues } }, { $set: { zohoLeavePolicy: policy._id } });
+            } else if (policy.applicability.targetType === 'DESIGNATION' && policy.applicability.targetValues?.length > 0) {
+                await Employee.updateMany({ tenant: req.user.tenantId, designationId: { $in: policy.applicability.targetValues } }, { $set: { zohoLeavePolicy: policy._id } });
+            }
+        }
+
+        res.status(200).json({ success: true, data: policy, message: 'Policy updated and re-mapped.' });
     } catch (error) {
         res.status(400).json({ success: false, message: error.message });
     }

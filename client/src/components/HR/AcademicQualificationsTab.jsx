@@ -19,7 +19,7 @@ const MODE_OPTIONS = [
   'Correspondence'
 ];
 
-export default function AcademicQualificationsTab({
+const AcademicQualificationsTab = React.memo(function AcademicQualificationsTab({
   academicQualifications = [],
   setAcademicQualifications,
   highestQualification,
@@ -234,4 +234,6 @@ export default function AcademicQualificationsTab({
       )}
     </div>
   );
-}
+});
+
+export default AcademicQualificationsTab;

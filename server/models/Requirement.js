@@ -20,7 +20,8 @@ const RequirementSchema = new mongoose.Schema({
     hiringManager: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
     interviewPanel: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Employee' }],
     workMode: { type: String, default: 'On-site' },
-    jobType: { type: String, default: 'Full-Time' }
+    jobType: { type: String, default: 'Full-Time' },
+    grade: { type: mongoose.Schema.Types.ObjectId, ref: 'Grade' }
   },
 
   // STEP 3: Description & Matching

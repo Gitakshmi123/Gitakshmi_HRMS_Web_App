@@ -10,7 +10,7 @@ import { User, Briefcase, FileCheck } from 'lucide-react';
  * Tab 4: Official Records — Employee ID (read-only), Department, Manager, Joining Date.
  * Uses existing form state; no logic change.
  */
-export default function OfficialRecordsTab({
+const OfficialRecordsTab = React.memo(function OfficialRecordsTab({
   employeeCode,
   employeeId,
   setEmployeeId,
@@ -420,7 +420,7 @@ export default function OfficialRecordsTab({
         </TabularRow>
 
         <TabularRow columns={4}>
-          <TabularField label="LEAVE POLICY">
+          <TabularField label="LEAVE CONFIGURATION">
             <select
               value={leavePolicy}
               onChange={(e) => setLeavePolicy?.(e.target.value)}
@@ -483,17 +483,7 @@ export default function OfficialRecordsTab({
               <option value="Custom">Custom Calendar</option>
             </select>
           </TabularField>
-          <TabularField label="LEAVE GROUP">
-            <select
-              value={leaveGroup}
-              onChange={(e) => setLeaveGroup?.(e.target.value)}
-              className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium text-slate-700 dark:text-slate-200"
-            >
-              <option value="">General Group</option>
-              <option value="Management">Management Group</option>
-              <option value="Contractor">Contractor Group</option>
-            </select>
-          </TabularField>
+          <TabularField label="" />
         </TabularRow>
         <TabularRow columns={4}>
           <TabularField label="CONFIRMATION PERIOD (MONTHS)">
@@ -571,4 +561,6 @@ export default function OfficialRecordsTab({
 
     </div>
   );
-}
+});
+
+export default OfficialRecordsTab;

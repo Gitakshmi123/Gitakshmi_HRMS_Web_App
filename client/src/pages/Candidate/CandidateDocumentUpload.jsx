@@ -73,8 +73,8 @@ export default function CandidateDocumentUpload() {
         <div className="h-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <EmployeeForm
             employee={data?.employee || null}
-            externalMode
-            externalToken={token}
+            isExternal
+            token={token}
             onClose={() => {
               showToast('success', 'Submitted', 'Your profile has been sent to HR for approval.');
               navigate('/candidate/applications', { replace: true });

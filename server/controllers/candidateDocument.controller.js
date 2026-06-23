@@ -101,6 +101,42 @@ const notifyHrAdmins = async (db, tenantId, entityType, entityId, title, message
     }
 };
 
+const collectionExists = async (Model) => {
+    try {
+        const collectionName = Model.collection.collectionName;
+        const result = await Model.db.db
+            .listCollections({ name: collectionName }, { nameOnly: true })
+            .toArray();
+        return result.length > 0;
+    } catch (error) {
+        console.warn(`Unable to verify collection ${Model.collection.collectionName}:`, error.message);
+        return true;
+    }
+};
+
+const updateExistingCollection = async (Model, filter, update, options = {}) => {
+    const exists = await collectionExists(Model);
+    if (!exists) {
+        console.warn(`Skipping update for missing collection ${Model.collection.collectionName}.`);
+        return { acknowledged: true, matchedCount: 0, modifiedCount: 0, skipped: true };
+    }
+
+    return Model.updateOne(filter, update, options);
+};
+
+const firstNonEmpty = (...values) => values.find((value) => typeof value === 'string' && value.trim());
+
+const resolveCandidateProfilePic = (record, candidate) => firstNonEmpty(
+    record?.personalDetails?.profilePic,
+    record?.personalDetails?.profileImage,
+    record?.personalDetails?.photo,
+    record?.documentDetails?.profilePic,
+    record?.documentDetails?.profileImage,
+    record?.documentDetails?.photo,
+    record?.documentDetails?.profilePhoto,
+    candidate?.profilePic
+);
+
 /**
  * HR Endpoints
  */
@@ -340,7 +376,7 @@ exports.approveRecord = async (req, res) => {
         const tenantId = req.tenantId;
         const { id } = req.params;
 
-        const { ExternalEmployeeRecord, CandidateDocumentRequest, Employee, Applicant, Application } = getModels(db);
+        const { ExternalEmployeeRecord, CandidateDocumentRequest, Employee, Applicant, Application, Candidate } = getModels(db);
 
         const record = await ExternalEmployeeRecord.findById(id);
         if (!record) {
@@ -357,6 +393,8 @@ exports.approveRecord = async (req, res) => {
         let employee = await Employee.findOne({ 'meta.candidateId': record.candidateId });
         const dept = record.personalDetails?.department || record.jobId?.department || 'GEN';
         const desig = record.personalDetails?.designation || record.jobId?.jobTitle || 'Trainee';
+        const candidate = await Candidate.findById(record.candidateId).select('profilePic').lean();
+        const profilePic = resolveCandidateProfilePic(record, candidate);
 
         if (!employee) {
             employee = new Employee({
@@ -371,6 +409,7 @@ exports.approveRecord = async (req, res) => {
                 contactNo: record.personalDetails?.contactNo,
                 personalEmail: record.personalDetails?.email,
                 email: record.personalDetails?.email,
+                profilePic,
                 gender: record.personalDetails?.gender,
                 maritalStatus: record.personalDetails?.maritalStatus,
                 bloodGroup: record.personalDetails?.bloodGroup,
@@ -411,6 +450,9 @@ exports.approveRecord = async (req, res) => {
                 }
             });
             await employee.save({ session });
+        } else if (profilePic && !employee.profilePic) {
+            employee.profilePic = profilePic;
+            await employee.save({ session });
         }
 
         record.status = 'Approved';
@@ -430,7 +472,8 @@ exports.approveRecord = async (req, res) => {
             { session }
         );
 
-        await Application.updateOne(
+        await updateExistingCollection(
+            Application,
             { candidateId: record.candidateId, jobId: record.jobId },
             { $set: { employeeId: employee._id } },
             { session }

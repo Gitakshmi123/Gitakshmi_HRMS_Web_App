@@ -56,7 +56,15 @@ export default function RuleBuilderTab({ activeShiftId }) {
           setCurrentPolicy(shiftData.currentPolicy);
           const p = shiftData.currentPolicy;
           form.setFieldsValue({
-            attendanceRules: p.attendanceRules || { lateMarks: [], earlyExit: [], absentThresholdMinutes: 240, absentCfg: { autoMarkAbsentOnNoPunch: true, sandwichLeaveEnabled: false, sandwichWeekendFill: false, sandwichHolidayFill: false } },
+            attendanceRules: {
+              ...(p.attendanceRules || {}),
+              lateMarks: p.attendanceRules?.lateMarks || [],
+              earlyExit: p.attendanceRules?.earlyExit || [],
+              absentThresholdMinutes: p.attendanceRules?.absentThresholdMinutes || 240,
+              monthlyLateToHalfDayConversion: p.attendanceRules?.monthlyLateToHalfDayConversion || 0,
+              monthlyLateAction: p.attendanceRules?.monthlyLateAction || 'HALF_DAY',
+              absentCfg: p.attendanceRules?.absentCfg || { autoMarkAbsentOnNoPunch: true, sandwichLeaveEnabled: false, sandwichWeekendFill: false, sandwichHolidayFill: false }
+            },
             permissionEngine: p.permissionEngine || { allowedDurations: [15, 30], monthlyLimitCount: 2, monthlyLimitMinutes: 120, yearlyLimitCount: 24, requiresApproval: true },
             overtimeEngine: p.overtimeEngine || { isEligible: false, minimumMinutesToQualify: 60, maximumMinutesPerDay: 240, normalMultiplier: 1.0, holidayMultiplier: 2.0, weeklyOffMultiplier: 2.0, nightShiftMultiplier: 1.5, requiresApproval: true }
           });
@@ -88,7 +96,9 @@ export default function RuleBuilderTab({ activeShiftId }) {
                 sandwichLeaveEnabled: false,
                 sandwichWeekendFill: false,
                 sandwichHolidayFill: false
-              }
+              },
+              monthlyLateToHalfDayConversion: 0,
+              monthlyLateAction: 'HALF_DAY'
             },
             permissionEngine: { allowedDurations: [15, 30, 60], monthlyLimitCount: 2, monthlyLimitMinutes: 120, yearlyLimitCount: 24, requiresApproval: true },
             overtimeEngine: { 
@@ -224,6 +234,25 @@ export default function RuleBuilderTab({ activeShiftId }) {
                         </div>
                       )}
                     </Form.List>
+
+                    <div className="mt-6 pt-4 border-t border-slate-200">
+                      <div className="flex flex-col mb-3">
+                        <span className="text-sm font-semibold text-slate-700">Monthly Late Penalty</span>
+                        <span className="text-xs text-slate-500">Apply action after a specific number of late marks in a month. (e.g., enter 4 to cut half day on 4th late mark)</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <Form.Item name={['attendanceRules', 'monthlyLateToHalfDayConversion']} label={<span className="text-xs font-medium">Late Marks to Trigger</span>} initialValue={0} tooltip="0 means disabled.">
+                          <InputNumber min={0} className="w-full" placeholder="e.g. 4" />
+                        </Form.Item>
+                        <Form.Item name={['attendanceRules', 'monthlyLateAction']} label={<span className="text-xs font-medium">Penalty Action</span>} initialValue="HALF_DAY">
+                          <Select>
+                            <Option value="HALF_DAY">Half Day</Option>
+                            <Option value="FULL_DAY">Full Day</Option>
+                            <Option value="LWP">Leave Without Pay (LWP)</Option>
+                          </Select>
+                        </Form.Item>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Early Exit Rules */}
@@ -356,16 +385,7 @@ export default function RuleBuilderTab({ activeShiftId }) {
                   <Form.Item hidden name={['permissionEngine', 'yearlyLimitCount']}>
                     <InputNumber />
                   </Form.Item>
-                  
-                  <Form.Item name={['permissionEngine', 'allowCombination']} valuePropName="checked" className="mb-0">
-                    <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200">
-                      <div>
-                        <span className="text-sm font-bold text-slate-700 block">Allow Combining Leaves</span>
-                        <span className="text-xs text-slate-500">If off, each leave must be taken separately.</span>
-                      </div>
-                      <Switch />
-                    </div>
-                  </Form.Item>
+
                   <div className="pt-4 border-t border-slate-100">
                     <Form.Item name={['permissionEngine', 'requiresApproval']} valuePropName="checked" className="mb-0">
                       <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200">

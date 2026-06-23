@@ -257,6 +257,48 @@ async function upsertExternal(req, submit = false) {
   return record;
 }
 
+exports.getReferenceData = async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { request } = await resolveRequestByToken(req, token);
+    const db = req.tenantDB || req.db;
+    const tenantId = request.tenant;
+
+    const Department = db.models.Department || db.model('Department', require('../models/department.model'));
+    const Employee = db.models.Employee || db.model('Employee', require('../models/employee.model'));
+    const SalaryTemplate = db.models.SalaryTemplate || db.model('SalaryTemplate', require('../models/salaryTemplate.model'));
+    const LeavePolicy = db.models.LeavePolicy || db.model('LeavePolicy', require('../models/leavePolicy.model'));
+    const Shift = db.models.Shift || db.model('Shift', require('../models/shift.model'));
+    const Grade = db.models.Grade || db.model('Grade', require('../models/grade.model'));
+    const Role = db.models.Role || db.model('Role', require('../models/role.model'));
+
+    const [departments, managers, salaryTemplates, policies, shifts, grades, roles] = await Promise.all([
+      Department.find({ tenant: tenantId, status: 'Active' }).lean(),
+      Employee.find({ tenant: tenantId, status: 'Active' }).select('firstName lastName').lean(),
+      SalaryTemplate.find({ tenant: tenantId }).lean(),
+      LeavePolicy.find({ tenant: tenantId }).lean(),
+      Shift.find({ tenant: tenantId, status: 'Active' }).lean(),
+      Grade.find({ tenant: tenantId, status: 'Active' }).lean(),
+      Role ? Role.find({ tenant: tenantId }).lean() : Promise.resolve([])
+    ]);
+
+    return res.json({
+      success: true,
+      data: {
+        departments,
+        managers,
+        salaryTemplates,
+        policies,
+        shifts,
+        grades,
+        roles
+      }
+    });
+  } catch (err) {
+    return res.status(err.statusCode || 500).json({ success: false, message: err.message });
+  }
+};
+
 exports.saveDraftByToken = async (req, res) => {
   try {
     const record = await upsertExternal(req, false);

@@ -15,7 +15,7 @@ import { notification } from '../../utils/antdGlobal';
 import api from '../../utils/api';
 import CustomSelect from '../../components/shared/CustomSelect';
 import usePagePermissions from '../../hooks/usePagePermissions';
-import { ShieldAlert, Lock } from 'lucide-react';
+import { DatabaseZap, Lock } from 'lucide-react';
 
 const CompanySettings = ({ forceTab }) => {
     const location = useLocation();
@@ -199,6 +199,32 @@ const CompanySettings = ({ forceTab }) => {
         }
     };
 
+    const handleSeedDemoData = async () => {
+        const confirmed = window.confirm('Create demo data for this company? This will add employees, attendance, leave requests, jobs, candidates, and tickets. Existing records will not be deleted.');
+        if (!confirmed) return;
+
+        try {
+            setSeedingDemo(true);
+            const res = await api.post('/demo-data/seed');
+            const summary = res.data?.data?.summary || {};
+            const total = Object.values(summary).reduce((sum, item) => sum + (item.created || 0) + (item.updated || 0), 0);
+
+            notification.success({
+                message: 'Demo Data Ready',
+                description: `${total || 'All'} demo records prepared. Demo employee password: Demo@12345`,
+                duration: 5
+            });
+        } catch (err) {
+            notification.error({
+                message: 'Demo Seed Failed',
+                description: err.response?.data?.message || 'Could not create demo data.',
+                duration: 5
+            });
+        } finally {
+            setSeedingDemo(false);
+        }
+    };
+
     if (loading) return <div className="p-8 flex justify-center text-slate-500">Loading Enterprise Engine...</div>;
 
     return (
@@ -211,7 +237,21 @@ const CompanySettings = ({ forceTab }) => {
             {activeTab === 'global' && (
                 <div className="space-y-4">
                     <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
-                        <h2 className="text-xl font-semibold mb-3 px-[5px]">Company Profile Overview</h2>
+                        <div className="flex flex-col gap-3 px-[5px] mb-3 lg:flex-row lg:items-center lg:justify-between">
+                            <h2 className="text-xl font-semibold">Company Profile Overview</h2>
+                            {globalPerms.canEdit && (
+                                <button
+                                    type="button"
+                                    onClick={handleSeedDemoData}
+                                    disabled={seedingDemo}
+                                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 text-xs font-bold uppercase tracking-wide text-amber-800 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                    title="Create demo records across HRMS modules"
+                                >
+                                    <DatabaseZap size={16} />
+                                    {seedingDemo ? 'Creating Demo Data...' : 'Create Demo Data'}
+                                </button>
+                            )}
+                        </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 px-[5px]">
                             {companyInfo.map((item) => (
                                 <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50 p-3">

@@ -7,7 +7,7 @@ import { TabularContainer, TabularRow, TabularField, TabularCustomFieldLabel } f
  * Tab 1: Identity Details — Profile Photo, Name, Gender, DOB, Blood Group, Nationality.
  * Two-column responsive grid. Receives form state/setters from parent; no logic change.
  */
-export default function IdentityDetailsTab({
+const IdentityDetailsTab = React.memo(function IdentityDetailsTab({
   profilePreview,
   profilePic,
   setProfilePic,
@@ -508,4 +508,6 @@ export default function IdentityDetailsTab({
       </div>
     </div>
   );
-}
+});
+
+export default IdentityDetailsTab;

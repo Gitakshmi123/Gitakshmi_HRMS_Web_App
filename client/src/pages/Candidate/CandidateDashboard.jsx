@@ -5,8 +5,17 @@ import api from '../../utils/api';
 import { getCompany, getTenantId } from '../../utils/auth';
 import {
     Briefcase, MapPin, Clock, ArrowRight, Layers,
-    TrendingUp, CheckCircle2, XCircle, AlertCircle, Sparkles
+    TrendingUp, CheckCircle2, XCircle, AlertCircle, Sparkles,
+    ChevronRight
 } from 'lucide-react';
+
+const TRACKING_STAGES = [
+    { label: 'Applied', backendKeys: ['applied'] },
+    { label: 'Screening', backendKeys: ['shortlisted', 'screening'] },
+    { label: 'Interview', backendKeys: ['interview', 'technical'] },
+    { label: 'HR Round', backendKeys: ['hr', 'hr round'] },
+    { label: 'Offered', backendKeys: ['offered', 'selected', 'offer issued', 'offer accepted', 'fully signed', 'finalized', 'hired', 'joining letter issued'] }
+];
 
 export default function CandidateDashboard() {
     const navigate = useNavigate();
@@ -174,6 +183,126 @@ export default function CandidateDashboard() {
                 ))}
             </div>
 
+            {/* Active Applications Tracking Section */}
+            <div className="space-y-6 mt-10">
+                <div className="flex items-center gap-3">
+                    <div className="w-1.5 h-6 bg-blue-600 rounded-full animate-pulse" />
+                    <h3 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tight">Active Applications Tracking</h3>
+                </div>
+                
+                {stats.items && stats.items.length > 0 ? (
+                    <div className="grid grid-cols-1 gap-6">
+                        {stats.items.map((app) => {
+                            // Determine current stage index
+                            const currentStatus = String(app.status || 'Applied').toLowerCase();
+                            const currentStageName = String(app.currentStage?.stageName || '').toLowerCase();
+                            
+                            let activeIndex = 0;
+                            for (let i = 0; i < TRACKING_STAGES.length; i++) {
+                                const keys = TRACKING_STAGES[i].backendKeys;
+                                if (keys.some(k => currentStatus.includes(k) || currentStageName.includes(k))) {
+                                    activeIndex = i;
+                                }
+                            }
+                            
+                            return (
+                                <div 
+                                    key={app._id}
+                                    onClick={() => navigate(`/candidate/application/${app._id}`)}
+                                    className="group bg-white p-6 rounded-[2rem] border border-slate-100 hover:border-blue-200 shadow-[0_2px_12px_rgba(0,0,0,0.01)] hover:shadow-[0_12px_32px_rgba(74,143,231,0.08)] hover:-translate-y-0.5 transition-all duration-300 cursor-pointer relative overflow-hidden"
+                                >
+                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center font-bold">
+                                                <Briefcase size={20} />
+                                            </div>
+                                            <div>
+                                                <h4 className="font-bold text-slate-850 text-md leading-tight group-hover:text-blue-600 transition-colors uppercase">
+                                                    {app.requirementId?.jobTitle || 'Position'}
+                                                </h4>
+                                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">
+                                                    {app.requirementId?.department || 'General'} • Applied {app.createdAt ? new Date(app.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recently'}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="flex items-center gap-3 self-start md:self-auto">
+                                            <span className={`px-4 py-1.5 rounded-full border text-[9px] font-black uppercase tracking-wider ${
+                                                ['hired', 'selected', 'offered', 'joining letter issued'].includes(currentStatus)
+                                                    ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                                                    : currentStatus === 'rejected'
+                                                        ? 'bg-rose-50 text-rose-600 border-rose-100'
+                                                        : 'bg-blue-50 text-blue-600 border-blue-100'
+                                            }`}>
+                                                {app.status || 'Applied'}
+                                            </span>
+                                            <ChevronRight size={16} className="text-slate-400 group-hover:translate-x-1 transition-transform" />
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Timeline Step Bar */}
+                                    <div className="mt-8 pt-4 border-t border-slate-50">
+                                        <div className="relative flex justify-between items-center w-full">
+                                            {/* Connecting Line */}
+                                            <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[3px] bg-slate-100 dark:bg-slate-800 -z-10" />
+                                            <div 
+                                                className="absolute left-0 top-1/2 -translate-y-1/2 h-[3px] bg-gradient-to-r from-blue-500 to-indigo-600 -z-10 transition-all duration-500" 
+                                                style={{ width: `${(activeIndex / (TRACKING_STAGES.length - 1)) * 100}%` }}
+                                            />
+                                            
+                                            {/* Steps */}
+                                            {TRACKING_STAGES.map((stage, idx) => {
+                                                const isCompleted = idx < activeIndex;
+                                                const isActive = idx === activeIndex;
+                                                const isRejected = currentStatus === 'rejected' && isActive;
+                                                
+                                                return (
+                                                    <div key={idx} className="flex flex-col items-center relative">
+                                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center border-4 transition-all duration-300 ${
+                                                            isCompleted 
+                                                                ? 'bg-blue-600 border-white text-white shadow-md shadow-blue-500/20' 
+                                                                : isActive 
+                                                                    ? isRejected
+                                                                        ? 'bg-rose-500 border-white text-white shadow-md shadow-rose-500/20 animate-pulse'
+                                                                        : 'bg-indigo-600 border-white text-white shadow-md shadow-indigo-500/20 animate-pulse'
+                                                                    : 'bg-white border-slate-200 text-slate-400'
+                                                        }`}>
+                                                            {isCompleted ? (
+                                                                <CheckCircle2 size={12} strokeWidth={3} />
+                                                            ) : (
+                                                                <div className={`w-2 h-2 rounded-full ${
+                                                                    isActive 
+                                                                        ? 'bg-white' 
+                                                                        : 'bg-slate-300'
+                                                                }`} />
+                                                            )}
+                                                        </div>
+                                                        <span className={`hidden sm:block text-[8px] font-black uppercase tracking-widest mt-2 whitespace-nowrap ${
+                                                            isActive 
+                                                                ? isRejected ? 'text-rose-600' : 'text-indigo-600' 
+                                                                : 'text-slate-400'
+                                                        }`}>
+                                                            {stage.label}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <div className="bg-white p-12 rounded-[2rem] border border-slate-100 text-center">
+                        <Briefcase className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                        <h4 className="text-sm font-black text-slate-700 uppercase tracking-wider">No Active Applications</h4>
+                        <p className="text-xs text-slate-400 max-w-[280px] mx-auto mt-2 leading-relaxed">
+                            You haven't submitted any job applications. View available openings to apply!
+                        </p>
+                    </div>
+                )}
+            </div>
 
         </div>
     );

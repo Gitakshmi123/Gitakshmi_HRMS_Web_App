@@ -13,6 +13,7 @@ import { Can } from '../../components/rbac/PermissionGate';
 import LeaveAnalyticsPanel from './components/LeaveAnalyticsPanel';
 import OpeningBalanceImportModal from './components/OpeningBalanceImportModal';
 import FormulaBuilder from './components/FormulaBuilder';
+import HolidayCalendarWorkspace from './HolidayCalendarWorkspace';
 import * as XLSX from '@sheetjs/xlsx';
 
 // ─── Shared Excel Export Utility ─────────────────────────────────────────────
@@ -510,8 +511,11 @@ function LeaveFormulasPanel({ formulas, assignments, fetchGroups, leaveTypes }) 
         setShowForm(true);
     };
 
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (isSubmitting) return;
+        setIsSubmitting(true);
         try {
             const payload = {
                 name: form.name,
@@ -535,6 +539,8 @@ function LeaveFormulasPanel({ formulas, assignments, fetchGroups, leaveTypes }) 
             fetchGroups();
         } catch (err) {
             showToast('error', 'Error', err.response?.data?.error || 'Save failed');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -839,13 +845,26 @@ function LeaveFormulasPanel({ formulas, assignments, fetchGroups, leaveTypes }) 
 // ─── Group Assignment Panel ──────────────────────────────────────────────────────
 function LeaveGroupAssignmentPanel({ formulas, assignments, fetchGroups }) {
     const [showForm, setShowForm] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [form, setForm] = useState({ name: '', description: '', templateId: '', applicableTo: 'All', departmentIds: [], roles: [] });
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (isSubmitting) return;
+        setIsSubmitting(true);
         try {
             const template = formulas.find(f => f._id === form.templateId);
-            if (!template) return showToast('error', 'Error', 'Select a formula template');
+            if (!template) {
+                setIsSubmitting(false);
+                return showToast('error', 'Error', 'Select a formula template');
+            }
+
+            // Extract leave type names from the template rules for the leaveTypes array
+            const leaveTypeNames = Array.from(new Set([
+                ...(template.rules || []).map(r => String(r.leaveType || '').trim()),
+                ...(template.formulas || []).map(f => String(f.leaveType || '').trim()),
+                ...(template.leaveTypes || [])
+            ].filter(Boolean)));
             
             const payload = {
                 name: form.name,
@@ -854,18 +873,38 @@ function LeaveGroupAssignmentPanel({ formulas, assignments, fetchGroups }) {
                 departmentIds: form.departmentIds,
                 roles: form.roles,
                 isActive: true,
-                isLocked: false, // Active group isn't locked
-                rules: template.rules
+                status: 'ACTIVE',
+                isLocked: false,
+                rules: template.rules,
+                formulas: template.formulas, // Add support for V2 policies
+                leaveTypes: leaveTypeNames,  // Populate leaveTypes so it shows in employee panel
             };
             
-            await api.post('/hr/leave-policies', payload);
-            showToast('success', 'Created', 'Group Assignment Created');
+            // Step 1: Create the policy
+            const createRes = await api.post('/hr/leave-policies', payload);
+            const newPolicyId = createRes.data?.policy?._id || createRes.data?._id;
+
+            showToast('success', 'Created', 'Group Assignment Created — syncing employee balances...');
             setShowForm(false);
             fetchGroups();
+
+            // Step 2: Auto-sync to seed LeaveBalance records for all existing employees
+            if (newPolicyId) {
+                try {
+                    await api.post(`/hr/leave-policies/${newPolicyId}/sync`);
+                    showToast('success', 'Synced', 'Leave balances have been updated for all applicable employees.');
+                } catch (syncErr) {
+                    console.warn('[GROUP_ASSIGNMENT] Auto-sync failed:', syncErr?.response?.data?.error || syncErr.message);
+                    showToast('warning', 'Partial', 'Policy created. Employees can see balances when they open their leave page.');
+                }
+            }
         } catch (err) {
             showToast('error', 'Error', err.response?.data?.error || 'Failed');
+        } finally {
+            setIsSubmitting(false);
         }
     };
+
 
     const handleDelete = async (id) => {
         showConfirmToast('Delete Assignment?', 'This will delete the group assignment.', async () => {
@@ -917,7 +956,7 @@ function LeaveGroupAssignmentPanel({ formulas, assignments, fetchGroups }) {
                             </select>
                         </div>
                         <div className="col-span-1 md:col-span-2 flex gap-3 pt-1">
-                            <button type="submit" className="h-10 px-6 bg-slate-900 text-white rounded-xl text-xs font-black hover:bg-black transition-all">Assign Group</button>
+                            <button type="submit" disabled={isSubmitting} className="h-10 px-6 bg-slate-900 text-white rounded-xl text-xs font-black hover:bg-black transition-all disabled:opacity-50">Assign Group</button>
                             <button type="button" onClick={() => setShowForm(false)} className="h-10 px-5 bg-slate-100 text-slate-600 rounded-xl text-xs font-black hover:bg-slate-200">Cancel</button>
                         </div>
                     </form>
@@ -4722,7 +4761,6 @@ export default function LeavePolicies({ initialView, mode = 'master' }) {
                             </button>
                         )}
                         
-
                         {view === 'policies' && mode === 'config' && (
                             <Can module="leave.policies" action="create">
                                 <button
@@ -4747,7 +4785,7 @@ export default function LeavePolicies({ initialView, mode = 'master' }) {
                         { id: 'leavegroups', label: '3. Group Assignment' },
                         { id: 'policies', label: 'Leave Policies', count: totalPolicies },
                         { id: 'custom', label: 'Policy Mapping', count: mappings.length },
-                        { id: 'holiday', label: 'Holiday Master' },
+                        { id: 'holiday', label: 'Holiday Calendar' },
                         { id: 'opening', label: 'Opening Balance' },
                         { id: 'requests', label: 'Leave Requests' },
                         { id: 'ledger', label: 'Leave Ledger' },
@@ -4829,7 +4867,7 @@ export default function LeavePolicies({ initialView, mode = 'master' }) {
 
                 {view === 'holiday' && (
                     <div className="animate-in slide-in-from-bottom-4 duration-500">
-                        <HolidayMasterPanel />
+                        <HolidayCalendarWorkspace />
                     </div>
                 )}
 

@@ -239,6 +239,32 @@ export default function HRDashboard() {
   const [loadingWishes, setLoadingWishes] = useState(false);
   const [newWish, setNewWish] = useState('');
   const [metricStyles, setMetricStyles] = useState({ bg: '', text: '' });
+  const [seedingDemo, setSeedingDemo] = useState(false);
+
+  const handleGenerateDemoData = async () => {
+    setSeedingDemo(true);
+    try {
+      const res = await api.post('/demo-data/seed');
+      notification.success({
+        message: 'Demo Data Seeded Successfully',
+        description: 'The HRMS has been successfully seeded with dummy data for departments, grades, employees, attendance, leaves, requirements, candidates, tickets, and payroll. Reloading...',
+        placement: 'topRight',
+        duration: 5
+      });
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    } catch (err) {
+      console.error("Demo seeding error:", err);
+      notification.error({
+        message: 'Failed to Seed Demo Data',
+        description: err.response?.data?.error || err.message || 'An error occurred during demo data seeding.',
+        placement: 'topRight'
+      });
+    } finally {
+      setSeedingDemo(false);
+    }
+  };
 
   useEffect(() => {
     const loadMetricStyles = () => {
@@ -774,6 +800,29 @@ export default function HRDashboard() {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={handleGenerateDemoData}
+                disabled={seedingDemo}
+                className={clsx(
+                  "inline-flex h-10 items-center gap-2 rounded-xl px-4 text-xs font-bold uppercase tracking-widest text-white shadow-md transition-all",
+                  seedingDemo 
+                    ? "bg-slate-400 cursor-not-allowed" 
+                    : "bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 hover:shadow-indigo-500/20 hover:-translate-y-0.5 active:translate-y-0"
+                )}
+              >
+                {seedingDemo ? (
+                  <>
+                    <RefreshCcw size={14} className="animate-spin" />
+                    <span>Seeding...</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap size={14} className="text-violet-200" fill="currentColor" />
+                    <span>Seed Demo Data</span>
+                  </>
+                )}
+              </button>
               <Dropdown menu={{ items: departmentMenuItems, onClick: ({ key }) => setFilters({ ...filters, department: key }) }} trigger={['click']}>
                 <button type="button" className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold uppercase tracking-widest text-slate-700 shadow-sm transition hover:border-sky-200 hover:bg-sky-50">
                   <span>{filters.department}</span><ChevronDown size={14} className="text-slate-400" />

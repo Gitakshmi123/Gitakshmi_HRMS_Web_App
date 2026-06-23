@@ -165,13 +165,14 @@ async function connectToDatabase() {
                     const dns = require('dns');
                     dns.setServers(['8.8.8.8', '1.1.1.1']);
                     dnsFallbackApplied = true;
-
                     await mongoose.connect(MONGO_URI, options);
-                    emitStatus(`✅ [DB CONNECTED] source=primary-dns-fixed db=${mongoose.connection.name} host=${mongoose.connection.host}`);
+                    emitStatus(`✅ [DB CONNECTED] source=dns-fallback-srv db=${mongoose.connection.name} host=${mongoose.connection.host}`);
                     return true;
-                } catch (retryErr) {
-                    console.error('❌ Retry after DNS override also failed:', retryErr.message);
+                } catch (dnsErr) {
+                    console.error('❌ Retry after DNS fallback failed:', dnsErr.message);
                 }
+            } else {
+                console.warn('⚠️ DNS SRV lookup failed. Possible ISP or network restriction.');
             }
 
             const fallback = process.env.MONGO_FALLBACK_URI;

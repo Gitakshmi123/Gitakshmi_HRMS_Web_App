@@ -1430,6 +1430,15 @@ async function runPayroll(db, tenantId, month, year, initiatedBy, options = {}) 
 
     for (const employee of employees) {
         try {
+            const { getHolidaysForEmployee } = require('../utils/holidayHelper');
+            const empHolidays = await getHolidaysForEmployee({
+                employeeId: employee._id,
+                year,
+                tenantDB: db,
+                tenantId
+            });
+            const empHolidayDates = new Set(empHolidays.map(h => new Date(h.date).toISOString().split('T')[0]));
+
             const payslip = await calculateEmployeePayroll(
                 db,
                 tenantId,
@@ -1439,7 +1448,7 @@ async function runPayroll(db, tenantId, month, year, initiatedBy, options = {}) 
                 payPeriodStart,
                 payPeriodEnd,
                 daysInMonth,
-                holidayDates,
+                empHolidayDates,
                 payrollRun._id,
                 null,
                 false,

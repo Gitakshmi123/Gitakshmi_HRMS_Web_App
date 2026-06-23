@@ -265,12 +265,25 @@ export default function ShiftMasterTab() {
       });
     } else {
       setEditingId(null);
+      
+      let nextNum = 21;
+      if (shifts && shifts.length > 0) {
+        const numbers = shifts.map(s => {
+          const match = s.code?.match(/\d+/);
+          return match ? parseInt(match[0], 10) : 0;
+        });
+        const maxNum = Math.max(...numbers);
+        nextNum = Math.max(maxNum + 1, 21);
+      }
+      const nextCode = `S${String(nextNum).padStart(3, '0')}`;
+
       form.resetFields();
       form.setFieldsValue({
-        shiftSelect: undefined, status: 'Active', type: 'Regular',
+        shiftSelect: 'Custom', customName: '', code: nextCode, status: 'Active', type: 'Regular',
         validFrom: dayjs(), fullDayHours: 8, fullDayMinutes: 0,
         halfDayHours: 4, halfDayMinutes: 0,
       });
+      setIsCustomShift(true);
     }
     setIsModalVisible(true);
   };
@@ -279,7 +292,20 @@ export default function ShiftMasterTab() {
   const handleShiftSelectChange = (value) => {
     if (value === 'Custom') {
       setIsCustomShift(true);
-      form.setFieldsValue({ customName: '' });
+      
+      // Auto-generate next sequence code
+      let nextNum = 21;
+      if (shifts && shifts.length > 0) {
+        const numbers = shifts.map(s => {
+          const match = s.code.match(/\d+/);
+          return match ? parseInt(match[0], 10) : 0;
+        });
+        const maxNum = Math.max(...numbers);
+        nextNum = Math.max(maxNum + 1, 21);
+      }
+      const nextCode = `S${String(nextNum).padStart(3, '0')}`;
+
+      form.setFieldsValue({ customName: '', code: nextCode });
     } else {
       setIsCustomShift(false);
       const s = predefinedShifts.find(x => x.name === value);

@@ -52,7 +52,7 @@ const MaskedDateInput = ({ value, onChange, className, placeholder = "DD-MM-YYYY
 /**
  * Tab 2: Family Background — Advanced Mode with Dependent Details (Spouse & Children)
  */
-export default function FamilyBackgroundTab({
+const FamilyBackgroundTab = React.memo(function FamilyBackgroundTab({
   fatherName,
   setFatherName,
   fatherFirstName,
@@ -949,4 +949,6 @@ export default function FamilyBackgroundTab({
       )}
     </div>
   );
-}
+});
+
+export default FamilyBackgroundTab;

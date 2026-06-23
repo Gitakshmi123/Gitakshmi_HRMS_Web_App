@@ -13,6 +13,7 @@ router.post('/forgot-password/send-otp', candidateCtrl.sendForgotPasswordOtp);
 router.post('/forgot-password/reset', candidateCtrl.resetPassword);
 
 // Secure token-based pre-onboarding profile completion.
+router.get('/document-upload/:token/reference-data', externalRecordCtrl.getReferenceData);
 router.get('/document-upload/:token', externalRecordCtrl.getByToken);
 router.put('/document-upload/:token/draft', externalRecordCtrl.saveDraftByToken);
 router.post('/document-upload/:token/submit', externalRecordCtrl.submitByToken);

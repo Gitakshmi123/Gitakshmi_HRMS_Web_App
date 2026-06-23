@@ -60,6 +60,7 @@ import CommunicationTab from '../../components/HR/CommunicationTab';
 import OfficialRecordsTab from '../../components/HR/OfficialRecordsTab';
 import AcademicQualificationsTab from '../../components/HR/AcademicQualificationsTab';
 import EmploymentHistoryTab from '../../components/HR/EmploymentHistoryTab';
+import SalaryBreakupStep from '../../components/HR/SalaryBreakupStep';
 import { TabularContainer, TabularRow, TabularField, TabularCustomFieldLabel } from '../../components/HR/TabularForm';
 const BACKEND_URL = API_ROOT || '';
 const NATIONALITIES = ['Indian', 'American', 'British', 'Canadian', 'Australian', 'Other'];
@@ -74,22 +75,11 @@ export default function EmployeeForm({
 }) {
   const [step, setStep] = useState(() => {
     const last = (employee?.status === 'Draft' ? employee?.lastStep : 1) || 1;
-    return Math.min(Math.max(1, last), isExternal ? 8 : 10);
+    return Math.min(Math.max(1, last), isExternal ? 8 : 11);
   });
 
   const getActualStep = (s) => {
-    if (!isExternal) return s;
-    const mapping = {
-      1: 1,
-      2: 3,
-      3: 4,
-      4: 5,
-      5: 6,
-      6: 7,
-      7: 8,
-      8: 9
-    };
-    return mapping[s] || s;
+    return s;
   };
   const actualStep = getActualStep(step);
 
@@ -242,6 +232,7 @@ export default function EmployeeForm({
   const [salaryEffectiveDate, setSalaryEffectiveDate] = useState(employee?.joiningDate ? dayjs(employee.joiningDate).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD'));
   const [salaryStatus, setSalaryStatus] = useState('Active');
   const [salaryTemplates, setSalaryTemplates] = useState([]);
+  const [salaryAssigned, setSalaryAssigned] = useState(!!employee?.salaryAssigned);
 
   // Sync Salary Effective Date with Joining Date if it's currently earlier
   useEffect(() => {
@@ -352,7 +343,7 @@ export default function EmployeeForm({
 
   // Fetch salary templates safely ONLY when on the relevant step
   useEffect(() => {
-    if (actualStep === 10) {
+    if (actualStep === 10 && !isExternal) {
       async function loadTemplates() {
         try {
           const res = await api.get('/payroll/salary-templates').catch(() => ({ data: { data: [] } }));
@@ -363,7 +354,7 @@ export default function EmployeeForm({
       }
       loadTemplates();
     }
-  }, [step]);
+  }, [step, actualStep, isExternal]);
 
 
   const saveSalaryAssignment = async () => {
@@ -519,6 +510,9 @@ export default function EmployeeForm({
       }
       if (employee.salaryTemplateId) {
         setSalaryTemplateId(employee.salaryTemplateId?._id || employee.salaryTemplateId);
+      }
+      if (employee.salaryAssigned !== undefined) {
+        setSalaryAssigned(!!employee.salaryAssigned);
       }
       if (employee.gradeId) {
         setGradeId(employee.gradeId?._id || employee.gradeId);
@@ -741,7 +735,7 @@ export default function EmployeeForm({
 
   const ensureDepartmentForSave = useCallback(async () => {
     const typedName = normalizeDepartmentName(department);
-    if (externalMode) {
+    if (isExternal) {
       return { department: typedName || undefined, departmentId: undefined };
     }
     const existingById = departments.find((dept) => String(dept?._id || dept || '') === String(departmentId || ''));
@@ -802,7 +796,7 @@ export default function EmployeeForm({
     setDepartmentId('');
     setDepartment(typedName);
     return { department: typedName, departmentId: undefined };
-  }, [department, departmentId, departments, externalMode, makeDepartmentCode, normalizeDepartmentName]);
+  }, [department, departmentId, departments, isExternal, makeDepartmentCode, normalizeDepartmentName]);
 
   // Fetch employees for manager dropdown
   const loadManagers = useCallback(async () => {
@@ -845,15 +839,36 @@ export default function EmployeeForm({
     }
   }, [step, firstName, lastName, department, firstNameCapital, jobType]);
 
+  const loadReferenceData = useCallback(async () => {
+    try {
+      const res = await api.get(`/candidate/document-upload/${token}/reference-data`);
+      if (res.data?.success) {
+        const { departments, managers, salaryTemplates, policies, shifts, grades, roles } = res.data.data;
+        setDepartments(departments || []);
+        setManagers(managers || []);
+        setSalaryTemplates(salaryTemplates || []);
+        setPolicies(policies || []);
+        setShifts(shifts || []);
+        setGrades(grades || []);
+      }
+    } catch (err) {
+      console.error('Failed to load candidate reference data', err);
+    }
+  }, [token]);
+
   useEffect(() => {
-    loadDepartments();
-    loadManagers();
-    loadPolicies();
-    loadShifts(); // Shift Management
-    loadGrades(); // Grade Management
-    fetchMappings();
-    if (actualStep === 9 && !employee) loadEmployeeCodePreview();
-  }, [loadDepartments, loadManagers, loadEmployeeCodePreview, step, employee, loadPolicies, loadShifts, loadGrades, fetchMappings]);
+    if (isExternal) {
+      loadReferenceData();
+    } else {
+      loadDepartments();
+      loadManagers();
+      loadPolicies();
+      loadShifts(); // Shift Management
+      loadGrades(); // Grade Management
+      fetchMappings();
+      if (actualStep === 9 && !employee) loadEmployeeCodePreview();
+    }
+  }, [isExternal, loadReferenceData, loadDepartments, loadManagers, loadEmployeeCodePreview, step, employee, loadPolicies, loadShifts, loadGrades, fetchMappings]);
 
   const [employeeCode, setEmployeeCode] = useState('');
 
@@ -1229,6 +1244,12 @@ export default function EmployeeForm({
         if (password && password.length < 6) e.password = 'Password min 6 chars';
         if (!employee?._id && !password) e.password = 'Password is required';
       }
+    }
+
+    if (actualStepNum === 11) {
+      if (!salaryTemplateId && !salaryAssigned) {
+        e.salaryTemplateId = "Salary structure must be assigned (use 'Confirm & Assign') or selected.";
+      }
       if (!salaryEffectiveDate) e.effectiveDate = "Effective Date is required";
       if (joiningDate && salaryEffectiveDate < joiningDate) e.effectiveDate = "Cannot be before Joining Date";
     }
@@ -1510,7 +1531,8 @@ export default function EmployeeForm({
         departmentHead: _departmentHead,
         profilePic: profilePicUrl,
         status: 'Active',
-        lastStep: 10,
+        lastStep: isExternal ? 8 : 11,
+        salaryAssigned: salaryAssigned,
         leavePolicy: leavePolicy || undefined,
         shiftId: shiftId || undefined,
         spouseDetails: showDependents ? spouseDetails : undefined,
@@ -1537,102 +1559,10 @@ export default function EmployeeForm({
 
       let empResult;
       if (isExternal) {
-        // Wrap flat payload into structured sections expected by submitCandidateProfile
-        const externalPayload = {
-          personalDetails: {
-            firstName: payload.firstName,
-            middleName: payload.middleName,
-            lastName: payload.lastName,
-            gender: payload.gender,
-            dob: payload.dob,
-            bloodGroup: payload.bloodGroup,
-            nationality: payload.nationality,
-            maritalStatus: payload.maritalStatus,
-            contactNo: payload.contactNo,
-            alternateContactNo: payload.alternateContactNo,
-            personalEmail: payload.personalEmail,
-            emergencyContactName: payload.emergencyContactName,
-            emergencyContactNumber: payload.emergencyContactNumber,
-            emergencyRelationship: payload.emergencyRelationship,
-            profilePic: payload.profilePic,
-            placeOfBirth: payload.placeOfBirth,
-            hobbies: payload.hobbies,
-            cast: payload.cast,
-            height: payload.height,
-            weight: payload.weight,
-            physicalDisabilityOrSickness: payload.physicalDisabilityOrSickness,
-            physicalDisabilityDetails: payload.physicalDisabilityDetails,
-          },
-          familyDetails: {
-            fatherName: payload.fatherName,
-            fatherFirstName: payload.fatherFirstName,
-            fatherLastName: payload.fatherLastName,
-            fatherBloodGroup: payload.fatherBloodGroup,
-            fatherAadhaar: payload.fatherAadhaar,
-            motherName: payload.motherName,
-            motherFirstName: payload.motherFirstName,
-            motherLastName: payload.motherLastName,
-            motherBloodGroup: payload.motherBloodGroup,
-            motherAadhaar: payload.motherAadhaar,
-            spouseDetails: payload.spouseDetails,
-            children: payload.children,
-            brothers: payload.brothers,
-            sisters: payload.sisters,
-            familyMembers: payload.familyMembers || [],
-          },
-          communicationDetails: {
-            tempAddress: payload.tempAddress,
-            permAddress: payload.permAddress,
-            commAddress: payload.commAddress,
-          },
-          educationDetails: {
-            eduType: payload.education?.type,
-            class10Marksheet: payload.education?.class10Marksheet,
-            class12Marksheet: payload.education?.class12Marksheet,
-            diplomaCertificate: payload.education?.diplomaCertificate,
-            bachelorDegree: payload.education?.bachelorDegree,
-            masterDegree: payload.education?.masterDegree,
-            lastSem1Marksheet: payload.education?.lastSem1Marksheet,
-            lastSem2Marksheet: payload.education?.lastSem2Marksheet,
-            lastSem3Marksheet: payload.education?.lastSem3Marksheet,
-            academicQualifications: payload.academicQualifications || [],
-            highestQualification: payload.highestQualification,
-          },
-          experienceDetails: {
-            experience: payload.experience || [],
-            jobHistoryAnnexure: payload.jobHistoryAnnexure || [],
-          },
-          documentDetails: {
-            aadhaarNo: payload.documents?.aadharNumber,
-            aadhaarFront: payload.documents?.aadharFront,
-            aadhaarBack: payload.documents?.aadharBack,
-            panNo: payload.documents?.panNumber,
-            panCard: payload.documents?.panCard,
-            passportNo: payload.passportNo,
-            passportExpiry: payload.passportExpiry,
-            passportDoc: payload.passportDoc,
-            drivingLicenceNo: payload.drivingLicenceNo,
-            drivingLicenceDoc: payload.drivingLicenceDoc,
-          },
-          bankDetails: {
-            accountHolderName: payload.bankDetails?.accountHolderName || `${payload.firstName || ''} ${payload.lastName || ''}`.trim(),
-            accountNumber: payload.bankDetails?.accountNumber,
-            bankName: payload.bankDetails?.bankName,
-            branchName: payload.bankDetails?.branchName,
-            ifscCode: payload.bankDetails?.ifsc,
-            accountType: payload.bankDetails?.accountType,
-            bankProofUrl: payload.bankDetails?.bankProofUrl,
-          },
-          statutoryDetails: {
-            pfNumber: payload.pfNumber,
-            uanNumber: payload.uanNumber,
-            esiNumber: payload.esiNumber,
-            nomineeName: payload.nomineeName,
-            nomineeRelation: payload.nomineeRelation,
-          },
-          completionPercentage: payload.completionPercentage || 100,
-        };
-        empResult = await api.post(`/public/candidate-documents/submit/${token}`, externalPayload);
+        // Since candidates now fill all steps including Job Info and Employment Setup,
+        // we send the full flat payload exactly like HR does. The backend will store it
+        // in rawEmployeePayload and map it via splitRecordPayload.
+        empResult = await api.post(`/candidate/document-upload/${token}/submit`, payload);
       } else if (employee) {
         empResult = await api.put(`/hr/employees/${employee._id}`, payload);
       } else {
@@ -1641,7 +1571,7 @@ export default function EmployeeForm({
 
 
       // If employee is marked as "Dep Head", update the department's head field
-      if (!externalMode && role === 'Dep Head' && departmentId) {
+      if (!isExternal && role === 'Dep Head' && departmentId) {
         const empId = empResult?.data?.data?._id || empResult?.data?._id || employee?._id;
         if (empId) {
           await api.put(`/hr/departments/${departmentId}`, { head: empId })
@@ -1829,6 +1759,7 @@ export default function EmployeeForm({
         profilePic: profilePicUrl,
         status: 'Draft',
         lastStep: step,
+        salaryAssigned: salaryAssigned,
         leavePolicy: leavePolicy || undefined, // Add Leave Policy
         shiftId: shiftId || undefined, // Shift assignment
         gradeId: gradeId || undefined, // Grade assignment
@@ -1855,7 +1786,7 @@ export default function EmployeeForm({
 
       let draftResponse;
       if (isExternal) {
-        draftResponse = await api.post(`/public/candidate-documents/save-draft/${token}`, payload);
+        draftResponse = await api.put(`/candidate/document-upload/${token}/draft`, payload);
       } else if (employee?._id) {
         draftResponse = await api.put(`/hr/employees/${employee._id}`, payload);
       } else {
@@ -1876,7 +1807,7 @@ export default function EmployeeForm({
 
   const stepTitles = isExternal
     ? ['General Details', 'Academic Qualifications', 'Identity Documents', 'Employment History', 'Bank Details', 'Language Proficiency', 'References & Related', 'Additional Benefits']
-    : ['General Details', 'Job Information', 'Academic Qualifications', 'Identity Documents', 'Employment History', 'Bank Details', 'Language Proficiency', 'References & Related', 'Additional Benefits', 'Employment Setup'];
+    : ['General Details', 'Job Information', 'Academic Qualifications', 'Identity Documents', 'Employment History', 'Bank Details', 'Language Proficiency', 'References & Related', 'Additional Benefits', 'Employment Setup', 'Salary Breakup'];
 
   return (
     <div className="w-full h-full overflow-hidden flex flex-col bg-white">
@@ -2796,40 +2727,6 @@ export default function EmployeeForm({
                   </TabularRow>
                 </TabularContainer>
 
-                <TabularContainer>
-                  <div className="bg-slate-100 dark:bg-slate-800/80 p-3 text-xs font-bold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 uppercase flex items-center gap-2">
-                    <IndianRupee className="w-4 h-4 text-emerald-500" /> Job Assignment
-                  </div>
-                  <TabularRow columns={2}>
-                    <TabularField label="SALARY TEMPLATE" required>
-                      <select
-                        value={salaryTemplateId}
-                        onChange={e => setSalaryTemplateId(e.target.value)}
-                        className={`w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium text-slate-700 dark:text-slate-200 ${errors.salaryTemplateId ? 'text-rose-500' : ''}`}
-                      >
-                        <option value="">Select Structure</option>
-                        {salaryTemplates.map(t => (
-                          <option key={t._id} value={t._id}>{t.name} (CTC: {t.annualCTC})</option>
-                        ))}
-                      </select>
-                      {errors.salaryTemplateId && <div className="text-[9px] font-bold text-rose-500 mt-1 uppercase">{errors.salaryTemplateId}</div>}
-                    </TabularField>
-                    <TabularField label="EFFECTIVE DATE" required>
-                      <div className="flex flex-col w-full h-[38px] justify-center px-3">
-                        <input
-                          type="date"
-                          value={salaryEffectiveDate}
-                          onChange={e => setSalaryEffectiveDate(e.target.value)}
-                          className={`w-full bg-transparent outline-none text-sm font-medium ${errors.effectiveDate ? 'text-rose-500' : ''}`}
-                        />
-                      </div>
-                      {errors.effectiveDate && <div className="text-[9px] font-bold text-rose-500 mt-1 px-3 uppercase">{errors.effectiveDate}</div>}
-                      {!errors.effectiveDate && <div className="text-[9px] font-medium text-slate-400 mt-1 px-3">Note: Cannot be before {joiningDate || 'Joining Date'}</div>}
-                    </TabularField>
-                  </TabularRow>
-                </TabularContainer>
-
-
                 {/* Password Change Confirmation Modal */}
                 {showPasswordConfirm && (
                    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
@@ -2860,6 +2757,20 @@ export default function EmployeeForm({
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Step 11: Salary Breakup Step */}
+            {actualStep === 11 && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <SalaryBreakupStep
+                  employee={employee}
+                  joiningDate={joiningDate}
+                  salaryEffectiveDate={salaryEffectiveDate}
+                  setSalaryEffectiveDate={setSalaryEffectiveDate}
+                  viewOnly={viewOnly}
+                  onSalaryAssigned={() => setSalaryAssigned(true)}
+                />
               </div>
             )}
           </div>

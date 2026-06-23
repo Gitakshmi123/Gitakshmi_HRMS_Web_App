@@ -155,10 +155,12 @@ function translateShiftPolicyToLegacyConfig(shiftMaster, shiftPolicy) {
         },
         
         lateMarkRules: {
-            enabled: shiftPolicy?.attendanceRules?.lateMarks?.length > 0,
+            enabled: shiftPolicy?.attendanceRules?.lateMarks?.length > 0 || shiftPolicy?.attendanceRules?.monthlyLateToHalfDayConversion > 0,
             allowedLateMinutesPerDay: shiftPolicy?.attendanceRules?.lateMarks?.[0]?.minutes || 0,
-            lateMarksToHalfDay: shiftPolicy?.attendanceRules?.lateMarks?.find(r => r.action === 'HALF_DAY')?.minutes ? 3 : 0,
-            autoLeaveDeduction: false
+            lateMarksToHalfDay: (shiftPolicy?.attendanceRules?.monthlyLateAction === 'HALF_DAY') ? shiftPolicy.attendanceRules.monthlyLateToHalfDayConversion : 0,
+            lateMarksToFullDay: (shiftPolicy?.attendanceRules?.monthlyLateAction === 'FULL_DAY' || shiftPolicy?.attendanceRules?.monthlyLateAction === 'LWP') ? shiftPolicy.attendanceRules.monthlyLateToHalfDayConversion : 0,
+            autoLeaveDeduction: shiftPolicy?.attendanceRules?.monthlyLateAction === 'DEDUCT_LEAVE',
+            leaveDeductionType: shiftPolicy?.attendanceRules?.monthlyLateLeaveDeductType || ''
         },
         
         earlyExitRules: {

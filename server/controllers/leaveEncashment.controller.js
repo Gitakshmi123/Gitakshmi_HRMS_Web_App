@@ -116,9 +116,23 @@ exports.getConfig = async (req, res) => {
         const { LeaveEncashmentConfig } = getModels(req);
         let config = await LeaveEncashmentConfig.findOne({ tenant: req.tenantId }).lean();
         if (!config) {
+            // Find a dynamic default encashable leave type
+            const LeavePolicy = req.tenantDB.model('LeavePolicy');
+            const policies = await LeavePolicy.find({ tenant: req.tenantId }).lean();
+            let defaultEncashableType = 'EL';
+            for (const p of policies) {
+                for (const r of (p.rules || [])) {
+                    if (r.encashmentAllowed) {
+                        defaultEncashableType = r.leaveType;
+                        break;
+                    }
+                }
+                if (defaultEncashableType !== 'EL') break;
+            }
+
             config = {
                 allowed: false,
-                leaveType: 'EL',
+                leaveType: defaultEncashableType,
                 formula: 'Basic / 30',
                 minBalanceRetain: 15,
                 maxEncashableDays: 10,
@@ -152,12 +166,28 @@ exports.saveConfig = async (req, res) => {
         const { LeaveEncashmentConfig } = getModels(req);
         const { allowed, leaveType, formula, minBalanceRetain, maxEncashableDays, taxRule } = req.body;
 
+        // Find a dynamic default if leaveType is missing
+        let defaultEncashableType = 'EL';
+        if (!leaveType) {
+            const LeavePolicy = req.tenantDB.model('LeavePolicy');
+            const policies = await LeavePolicy.find({ tenant: req.tenantId }).lean();
+            for (const p of policies) {
+                for (const r of (p.rules || [])) {
+                    if (r.encashmentAllowed) {
+                        defaultEncashableType = r.leaveType;
+                        break;
+                    }
+                }
+                if (defaultEncashableType !== 'EL') break;
+            }
+        }
+
         const config = await LeaveEncashmentConfig.findOneAndUpdate(
             { tenant: req.tenantId },
             {
                 tenant: req.tenantId,
                 allowed: Boolean(allowed),
-                leaveType: leaveType || 'EL',
+                leaveType: leaveType || defaultEncashableType,
                 formula: formula || 'Basic / 30',
                 minBalanceRetain: Number(minBalanceRetain) || 15,
                 maxEncashableDays: Number(maxEncashableDays) || 10,

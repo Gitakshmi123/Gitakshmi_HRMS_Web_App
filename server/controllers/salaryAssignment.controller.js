@@ -237,7 +237,7 @@ exports.assignSalaryExcel = async (req, res) => {
         
         // 4. Save SalaryAssignment record for history/tracking
         await SalaryAssignment.create({
-            tenantId: req.tenantId,
+            tenantId: tenantId,
             employeeId: employeeId,
             salaryTemplateId: null, // Excel style might not have a template
             ctcAnnual: annualCTC,

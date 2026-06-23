@@ -137,15 +137,26 @@ const calculateNetDays = async (req, startDate, endDate, employeeId = null) => {
 
     // Fall through to the day-by-day loop below to ensure 100% timezone-safe calculation
 
-    const holidays = await Holiday.find({
-        tenant: req.tenantId,
-        date: { $lte: end },
-        $or: [
-            { endDate: { $exists: false } },
-            { endDate: null, date: { $gte: start } },
-            { endDate: { $gte: start } }
-        ]
-    }).lean();
+    let holidays = [];
+    if (employeeId) {
+        const { getHolidaysForEmployee } = require('../utils/holidayHelper');
+        holidays = await getHolidaysForEmployee({
+            employeeId,
+            year: start.getFullYear(),
+            tenantDB: req.tenantDB,
+            tenantId: req.tenantId
+        });
+    } else {
+        holidays = await Holiday.find({
+            tenant: req.tenantId,
+            date: { $lte: end },
+            $or: [
+                { endDate: { $exists: false } },
+                { endDate: null, date: { $gte: start } },
+                { endDate: { $gte: start } }
+            ]
+        }).lean();
+    }
     const holidaySet = new Set();
     holidays.forEach(h => {
         const s = new Date(h.date);
@@ -296,101 +307,18 @@ exports.getMyBalances = async (req, res) => {
         const effectiveTenantId = new mongoose.Types.ObjectId(emp.tenant || tenantObjectId);
 
 
-        // Ensure "Attendance Based EL Policy" exists
-        let attendancePolicy = await LeavePolicy.findOne({
-            tenant: effectiveTenantId,
-            name: 'Attendance Based EL Policy'
-        });
-
-        // Auto-migrate existing policy: upgrade CL/SL from 6→7 and enable prorateForNewJoiners
-        if (attendancePolicy) {
-            let needsSave = false;
-            const updatedRules = (attendancePolicy.rules || []).map(rule => {
-                const lt = String(rule.leaveType || '').toUpperCase();
-                if (['CL', 'SL'].includes(lt)) {
-                    let changed = false;
-                    const updated = { ...rule.toObject ? rule.toObject() : rule };
-                    if (Number(updated.totalPerYear) !== 7) {
-                        updated.totalPerYear = 7;
-                        changed = true;
-                    }
-                    if (!updated.prorateForNewJoiners) {
-                        updated.prorateForNewJoiners = true;
-                        changed = true;
-                    }
-                    if (changed) needsSave = true;
-                    return updated;
-                }
-                return rule;
-            });
-            if (needsSave) {
-                attendancePolicy.rules = updatedRules;
-                await attendancePolicy.save();
-                console.log('[LEAVE_POLICY_MIGRATE] Upgraded Attendance Based EL Policy CL/SL to 7 days with prorateForNewJoiners');
-            }
-        }
-
-        if (!attendancePolicy) {
-            attendancePolicy = await LeavePolicy.create({
-                tenant: effectiveTenantId,
-                name: 'Attendance Based EL Policy',
-                description: 'Attendance based monthly EL accrual policy',
-                status: 'ACTIVE',
-                isActive: true,
-                applicableTo: 'All',
-                leaveTypes: ['EL', 'CL', 'SL'],
-                rules: [
-                    {
-                        leaveType: 'EL',
-                        totalPerYear: 21,
-                        requiresApproval: true,
-                        color: '#3b82f6',
-                        carryForwardAllowed: true,
-                        maxCarryForward: 15,
-                        halfDayAllowed: true,
-                        monthlyAccrual: true,
-                        accrualType: 'monthly',
-                        monthlyAccrualRate: 1.75,
-                        accrualDependsOnAttendance: true,
-                        minAttendanceDays: 20,
-                        countPresent: true,
-                        countOnDuty: true,
-                        countCompOff: true,
-                        countHoliday: true,
-                        countWeeklyOff: true,
-                        countPaidLeave: false,
-                        accrualSlabs: [{ minAttendanceDays: 20, creditDays: 1.75 }]
-                    },
-                    {
-                        leaveType: 'CL',
-                        totalPerYear: 7,
-                        requiresApproval: true,
-                        color: '#10b981',
-                        carryForwardAllowed: false,
-                        halfDayAllowed: true,
-                        prorateForNewJoiners: true,
-                        minAttendanceDays: 20
-                    },
-                    {
-                        leaveType: 'SL',
-                        totalPerYear: 7,
-                        requiresApproval: true,
-                        color: '#f59e0b',
-                        carryForwardAllowed: false,
-                        halfDayAllowed: true,
-                        prorateForNewJoiners: true,
-                        minAttendanceDays: 20
-                    }
-                ]
-            });
-        }
-
         // Auto-assign to Employee if leavePolicy is null, invalid, or matches a deleted one
         const EmployeeModel = req.tenantDB.model('Employee');
         const policyExists = emp.leavePolicy ? await LeavePolicy.findById(emp.leavePolicy) : null;
         if (!emp.leavePolicy || !policyExists) {
-            emp.leavePolicy = attendancePolicy._id;
-            await EmployeeModel.updateOne({ _id: emp._id }, { $set: { leavePolicy: attendancePolicy._id } });
+            let defaultPolicy = await LeavePolicy.findOne({ tenant: effectiveTenantId, isActive: true });
+            if (defaultPolicy) {
+                emp.leavePolicy = defaultPolicy._id;
+                await EmployeeModel.updateOne({ _id: emp._id }, { $set: { leavePolicy: defaultPolicy._id } });
+            } else {
+                emp.leavePolicy = null;
+                await EmployeeModel.updateOne({ _id: emp._id }, { $unset: { leavePolicy: "" } });
+            }
         }
 
         // ALWAYS cast tenantId to ObjectId for query consistency
