@@ -108,10 +108,13 @@ exports.updateHolidayGroup = async (req, res) => {
 exports.deleteHolidayGroup = async (req, res) => {
     try {
         const { HolidayGroup } = getModels(req);
-        const result = await HolidayGroup.deleteOne({ _id: req.params.id, tenant: req.tenantId });
-        if (result.deletedCount === 0) {
+        
+        const group = await HolidayGroup.findOne({ _id: req.params.id, tenant: req.tenantId });
+        if (!group) {
             return res.status(404).json({ error: "Holiday group not found" });
         }
+
+        await HolidayGroup.deleteOne({ _id: req.params.id, tenant: req.tenantId });
         res.json({ message: "Holiday group deleted successfully" });
     } catch (error) {
         res.status(500).json({ error: error.message });

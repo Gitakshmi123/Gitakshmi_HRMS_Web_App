@@ -196,8 +196,9 @@ async function comparePassword(candidatePassword, storedPassword) {
 }
 
 async function verifyEmployeePortalPassword(employee, tenant, password) {
-  if (!password || !employee?.email || !tenant?._id) return false;
-  if (employee.password && await comparePassword(password, employee.password)) return true;
+  if (!password || !employee?.email || !tenant?._id) { console.log('DEBUG: missing inputs'); return false; }
+  console.log('DEBUG: checking employee.password');
+  if (employee.password && await comparePassword(password, employee.password)) { console.log('DEBUG: matched employee.password'); return true; }
 
   try {
     const User = getUserModel();
@@ -208,10 +209,10 @@ async function verifyEmployeePortalPassword(employee, tenant, password) {
     const r = String(portalUser.role || '').toLowerCase();
     if (!EMPLOYEE_PORTAL_USER_ROLES.has(r)) { console.log('DEBUG: bad role', r); return false; }
     const match = await comparePassword(password, portalUser.password);
-    console.log('DEBUG: portal match', match);
+    console.log('DEBUG: matched portalUser.password:', match);
     return match;
-  } catch (_e) {
-    console.log('DEBUG: error', _e);
+  } catch (err) {
+    console.log('DEBUG: error in verify:', err);
     return false;
   }
 }
@@ -493,11 +494,14 @@ async function resolveEmployeeAuthContext(identifier, password, companyCode = nu
     }
   }
 
+  if (foundEmployee && foundTenant) {
+    if (isEmployeeDeactivated(foundEmployee)) return { error: 'account_deactivated' };
+    const userDoc = await findUserPermissionsByEmail(foundEmployee.email, foundTenant._id);
+    return buildEmployeeAuthContext(foundEmployee, foundTenant, userDoc);
+  }
+
   if (passwordFailed) return { error: 'invalid_password' };
-  if (!foundEmployee || !foundTenant) return { error: 'invalid_email' };
-  if (isEmployeeDeactivated(foundEmployee)) return { error: 'account_deactivated' };
-  const userDoc = await findUserPermissionsByEmail(foundEmployee.email, foundTenant._id);
-  return buildEmployeeAuthContext(foundEmployee, foundTenant, userDoc);
+  return { error: 'invalid_email' };
 }
 
 async function resolveUnifiedAuthContext(identifier, password, companyCode = null) {
@@ -581,7 +585,10 @@ exports.unifiedLogin = async (req, res) => {
     const authContext = await resolveUnifiedAuthContext(identifier, password, companyCode);
     if (!authContext || authContext.error) return res.status(401).json({ success: false, message: authContext?.error || 'invalid_credentials' });
     return finishLogin(req, res, authContext);
-  } catch (err) { return res.status(500).json({ success: false, message: 'server_error' }); }
+  } catch (err) {
+    console.error('DEBUG UNIFIED LOGIN ERROR:', err);
+    return res.status(500).json({ success: false, message: 'server_error' });
+  }
 };
 
 exports.getMe = async (req, res) => {

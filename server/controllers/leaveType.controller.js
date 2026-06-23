@@ -80,9 +80,31 @@ exports.deleteLeaveType = async (req, res) => {
         const type = await LeaveType.findOne({ _id: id, tenant: req.tenantId });
         if (!type) return res.status(404).json({ success: false, error: 'Leave Type not found' });
 
-        const usedInPolicy = await LeavePolicy.exists({ tenant: req.tenantId, "rules.leaveType": type.code });
-        if (usedInPolicy) {
-            return res.status(400).json({ success: false, error: `Cannot delete: Leave Type ${type.code} is assigned to one or more Leave Groups.` });
+        const usedInPolicy = await LeavePolicy.exists({ 
+            tenant: req.tenantId, 
+            $or: [
+                { "rules.leaveType": type.code },
+                { "formulas.leaveType": type.code },
+                { leaveTypes: type.code },
+                { "rules.leaveType": id },
+                { "formulas.leaveType": id },
+                { leaveTypes: id }
+            ]
+        });
+        if (usedInPolicy || inUse) {
+            return res.status(400).json({ success: false, error: `Cannot delete: Leave Type ${type.code} is used in another entity, in a Policy, or in a Leave Group.` });
+        }
+
+        const LeaveRequest = req.tenantDB.model('LeaveRequest');
+        const hasRequests = await LeaveRequest.exists({ tenant: req.tenantId, leaveType: type.code });
+        if (hasRequests) {
+            return res.status(400).json({ success: false, error: `Cannot delete: Leave Type ${type.code} is used in existing leave requests.` });
+        }
+
+        const LeaveBalance = req.tenantDB.model('LeaveBalance');
+        const hasBalances = await LeaveBalance.exists({ tenant: req.tenantId, leaveType: type.code });
+        if (hasBalances) {
+            return res.status(400).json({ success: false, error: `Cannot delete: Leave Type ${type.code} has associated leave balances.` });
         }
 
         await LeaveType.findByIdAndDelete(id);
