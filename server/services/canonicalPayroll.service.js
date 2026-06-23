@@ -16,7 +16,7 @@ function getModel(db, name, schema) {
 
 function toDate(value, fallback = null) {
     if (!value) return fallback;
-    const date = value instanceof Date ? value : new Date(value);
+    const date = value instanceof Date ? new Date(value.getTime()) : new Date(value);
     return isNaN(date.getTime()) ? fallback : date;
 }
 
