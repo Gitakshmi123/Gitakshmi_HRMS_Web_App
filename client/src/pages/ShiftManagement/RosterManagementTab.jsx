@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Button, Table, DatePicker, message, Spin, Tag, Tooltip, Select, Modal, Form, Input, Space, Alert, Drawer, Badge } from 'antd';
-import { CalendarDays, Settings2, RefreshCw, Plus, ShieldAlert, Sparkles, CheckCircle2, Save, FileText, Layers, Trash2, UserCheck, Users, Briefcase, Building2, Activity, ShieldCheck } from 'lucide-react';
+import { CalendarDays, Settings2, RefreshCw, Plus, ShieldAlert, Sparkles, CheckCircle2, Save, FileText, Layers, Trash2, UserCheck, Users, Briefcase, Building2, Activity, ShieldCheck, Edit } from 'lucide-react';
 import dayjs from 'dayjs';
 import api from '../../utils/api';
 import shiftMasterService from '../../services/shiftMasterService';
@@ -34,11 +34,13 @@ export default function RosterManagementTab() {
 
   // Modals state
   const [isNewRosterOpen, setIsNewRosterOpen] = useState(false);
+  const [isEditRosterOpen, setIsEditRosterOpen] = useState(false);
   const [isRotationOpen, setIsRotationOpen] = useState(false);
   const [isConflictOpen, setIsConflictOpen] = useState(false);
   const [isPatternManagerOpen, setIsPatternManagerOpen] = useState(false);
 
   const [newRosterForm] = Form.useForm();
+  const [editRosterForm] = Form.useForm();
   const [newPatternForm] = Form.useForm();
   
   const newRosterEntityType = Form.useWatch('entityType', newRosterForm);
@@ -152,8 +154,8 @@ export default function RosterManagementTab() {
   const handleCreateRoster = async (values) => {
     try {
       setLoading(true);
-      const startDate = values.dateRange[0];
-      const endDate = values.dateRange[1];
+      const startDate = values.startDate;
+      const endDate = startDate.endOf('month');
       
       let selectedEmployees = [];
       if (values.entityType === 'Company') {
@@ -338,6 +340,78 @@ export default function RosterManagementTab() {
     }
   };
 
+  const handleDeleteRoster = () => {
+    if (!activeRoster) return;
+    Modal.confirm({
+      title: 'Delete Roster',
+      content: 'Are you sure you want to delete this roster? All its assignments will be permanently removed. This action cannot be undone.',
+      okText: 'Yes, Delete',
+      okType: 'danger',
+      cancelText: 'Cancel',
+      onOk: async () => {
+        try {
+          setLoading(true);
+          const res = await api.delete(`/enterprise-roster/${activeRoster._id}`);
+          if (res.data.success) {
+            message.success("Roster deleted successfully!");
+            // Refresh rosters
+            const rosterRes = await api.get('/enterprise-roster');
+            const updatedRosters = rosterRes.data?.data || [];
+            setRosters(updatedRosters);
+            
+            if (updatedRosters.length > 0) {
+              const prevMatch = updatedRosters.find(r => 
+                r.month === (selectedMonth.month() + 1) && 
+                r.year === selectedMonth.year()
+              );
+              if (prevMatch) {
+                fetchRosterDetails(prevMatch._id);
+              } else {
+                setActiveRoster(null);
+              }
+            } else {
+              setActiveRoster(null);
+            }
+          }
+        } catch (err) {
+          message.error("Failed to delete roster");
+        } finally {
+          setLoading(false);
+        }
+      }
+    });
+  };
+
+  const handleOpenEditModal = () => {
+    if (!activeRoster) return;
+    editRosterForm.setFieldsValue({
+      rosterName: activeRoster.rosterName
+    });
+    setIsEditRosterOpen(true);
+  };
+
+  const handleUpdateRoster = async (values) => {
+    if (!activeRoster) return;
+    try {
+      setLoading(true);
+      const res = await api.put(`/enterprise-roster/${activeRoster._id}`, {
+        rosterName: values.rosterName
+      });
+      if (res.data.success) {
+        message.success("Roster updated successfully!");
+        setIsEditRosterOpen(false);
+        // Refresh rosters
+        const rosterRes = await api.get('/enterprise-roster');
+        setRosters(rosterRes.data?.data || []);
+        fetchRosterDetails(activeRoster._id);
+      }
+    } catch (err) {
+      message.error("Failed to update roster");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Build Columns for grid (Employee, Week 1, Week 2, Week 3, Week 4, Week 5)
   const buildGridColumns = () => {
     const cols = [
@@ -501,8 +575,33 @@ export default function RosterManagementTab() {
                       {activeRoster.status}
                     </Tag>
                   </div>
+                  <div className="flex gap-2">
+                    <Tooltip title="Edit Roster Name">
+                      <Button type="text" icon={<Edit size={16} />} onClick={handleOpenEditModal} className="text-slate-500 hover:text-indigo-600" />
+                    </Tooltip>
+                    <Tooltip title="Delete Roster">
+                      <Button type="text" danger icon={<Trash2 size={16} />} onClick={handleDeleteRoster} className="text-slate-500 hover:text-red-600" />
+                    </Tooltip>
+                  </div>
+                </div>
+              }
+              bodyStyle={{ padding: 0 }}
+            >
+              {loading ? (
+                <div className="py-20 text-center"><Spin size="large" /></div>
+              ) : (
+                <div className="flex flex-col">
+                  <Table
+                    columns={gridColumns}
+                    dataSource={gridData}
+                    scroll={{ x: 'max-content' }}
+                    pagination={false}
+                    bordered
+                    size="middle"
+                    className="custom-table"
+                  />
                   {activeRoster.status !== 'Published' && (
-                    <div className="flex gap-2">
+                    <div className="flex justify-end gap-3 p-4 border-t border-slate-100 bg-white">
                       <Button
                         icon={<Settings2 size={15} />}
                         onClick={() => setIsRotationOpen(true)}
@@ -515,7 +614,7 @@ export default function RosterManagementTab() {
                         icon={<Save size={15} />}
                         onClick={handleSaveAssignments}
                         loading={saving}
-                        className="flex items-center gap-1"
+                        className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-700"
                       >
                         Save Assignments
                       </Button>
@@ -532,21 +631,6 @@ export default function RosterManagementTab() {
                     </div>
                   )}
                 </div>
-              }
-              bodyStyle={{ padding: 0 }}
-            >
-              {loading ? (
-                <div className="py-20 text-center"><Spin size="large" /></div>
-              ) : (
-                <Table
-                  columns={gridColumns}
-                  dataSource={gridData}
-                  scroll={{ x: 'max-content' }}
-                  pagination={false}
-                  bordered
-                  size="middle"
-                  className="custom-table"
-                />
               )}
             </Card>
           </div>
@@ -650,8 +734,8 @@ export default function RosterManagementTab() {
           </Form.Item>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Form.Item name="dateRange" label={<span className="font-semibold text-slate-700">Roster Date Range <span className="text-red-500">*</span></span>} rules={[{ required: true, message: 'Select start and end dates' }]}>
-              <DatePicker.RangePicker className="w-full" />
+            <Form.Item name="startDate" label={<span className="font-semibold text-slate-700">Roster Start Date <span className="text-red-500">*</span></span>} rules={[{ required: true, message: 'Select start date' }]}>
+              <DatePicker className="w-full" />
             </Form.Item>
 
             <Form.Item name="weeklyOffDays" label={<span className="font-semibold text-slate-700">Weekly Off Days</span>} initialValue={[0]}>
@@ -773,6 +857,33 @@ export default function RosterManagementTab() {
             <Button onClick={() => setIsNewRosterOpen(false)}>Cancel</Button>
             <Button type="primary" htmlType="submit" loading={loading} className="bg-indigo-600">
               Initialize Roster
+            </Button>
+          </div>
+        </Form>
+      </Modal>
+
+      {/* MODAL: Edit Roster */}
+      <Modal
+        title={
+          <div className="flex items-center gap-2 font-semibold">
+            <Edit size={18} className="text-indigo-600" />
+            <span>Edit Roster Details</span>
+          </div>
+        }
+        open={isEditRosterOpen}
+        onCancel={() => setIsEditRosterOpen(false)}
+        footer={null}
+        width={400}
+        destroyOnClose
+      >
+        <Form form={editRosterForm} layout="vertical" onFinish={handleUpdateRoster}>
+          <Form.Item name="rosterName" label="Roster Name" rules={[{ required: true, message: 'Please enter a name' }]}>
+            <Input placeholder="e.g. HR Dept June 2026 Roster" />
+          </Form.Item>
+          <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
+            <Button onClick={() => setIsEditRosterOpen(false)}>Cancel</Button>
+            <Button type="primary" htmlType="submit" loading={loading} className="bg-indigo-600">
+              Save Changes
             </Button>
           </div>
         </Form>
