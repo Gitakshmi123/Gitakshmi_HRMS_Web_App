@@ -392,7 +392,9 @@ export default function HrmsRoutes() {
         <Route
           path="organization/automations"
           element={
-            <Navigate to="/hr/organization" replace />
+            <RBACRoute module="hr" permissionKey="people.org">
+              <Automations />
+            </RBACRoute>
           }
         />
         <Route
