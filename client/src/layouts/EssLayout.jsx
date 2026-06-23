@@ -434,7 +434,7 @@ export default function EssLayout() {
         ],
       },
       {
-        match: ['/management-attendance', '/attendance-calendar', '/face-update-requests', '/attendance-history', '/attendance-live-tracking', '/attendance-settings'],
+        match: ['/management-attendance', '/attendance-calendar', '/face-update-requests', '/attendance-history', '/attendance-live-tracking', '/attendance-settings', '/leave-approvals', '/leave-requests'],
         tabs: [
           {
             label: 'Attendance',
@@ -446,13 +446,13 @@ export default function EssLayout() {
           { label: 'Live Tracking', to: `${pathPrefix}/attendance-live-tracking`, icon: MapPin, permission: 'attendance.dashboard' },
           { label: 'Calendar', to: `${pathPrefix}/attendance-calendar`, icon: CalendarDays, permission: 'attendance.calendar' },
           { label: 'Face Updates', to: `${pathPrefix}/face-update-requests`, icon: Fingerprint, permission: 'attendance.face' },
+          { label: 'Requests', to: `${pathPrefix}/leave-approvals`, icon: Plane, permission: 'leave.requests' },
           { label: 'Settings', to: `${pathPrefix}/attendance-settings`, icon: Settings, permission: 'attendance.dashboard' },
         ],
       },
       {
-        match: ['/leave-approvals', '/leave-policies', '/leave-requests'],
+        match: ['/leave-policies'],
         tabs: [
-          { label: 'Requests', to: `${pathPrefix}/leave-approvals`, icon: Plane, permission: 'leave.requests' },
           { label: 'Policies', to: `${pathPrefix}/leave-policies`, icon: Settings2, permission: 'leave.policies' },
           { label: 'Custom', to: `${pathPrefix}/leave-policies/custom`, icon: Settings2, permission: 'leave.custom' },
         ],
