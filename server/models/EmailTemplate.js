@@ -3,8 +3,9 @@ const mongoose = require('mongoose');
 const EmailTemplateSchema = new mongoose.Schema({
   tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', required: true, index: true },
   name: { type: String, required: true, trim: true },
-  module: { type: String, required: true, trim: true, enum: ['General', 'Recruitment', 'Leave', 'Onboarding', 'Payroll', 'Tickets', 'BGV', 'Automation'] },
+  module: { type: String, required: true, trim: true },
   triggerType: { type: String, required: true, trim: true },
+  recipientType: { type: String, trim: true },
   subject: { type: String, required: true },
   bodyHtml: { type: String, required: true },
   designJson: { type: Object },

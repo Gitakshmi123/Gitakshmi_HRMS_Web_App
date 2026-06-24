@@ -290,10 +290,16 @@ class RecruitmentService {
         ));
 
         // 3. Map data to Requirement Model (matching Requirement.js schema)
+        const gradeSnapshot = s1.gradeId ? await this.resolveGradeSnapshot(tenantId, s1.gradeId).catch(() => null) : null;
+        const resolvedGradeId = gradeSnapshot?.gradeId || (s1.gradeId || undefined);
+        const resolvedGradeName = gradeSnapshot?.grade || s1.grade || undefined;
+
         const requirement = new Requirement({
             tenant: tenantId,
             jobOpeningId: jobId,
             positionId: sanitizedPositionId,
+            gradeId: resolvedGradeId,
+            grade: resolvedGradeName,
             subCompanyId: orgAssignment.subCompanyId || undefined,
             branchId: orgAssignment.branchId || undefined,
             divisionId: orgAssignment.divisionId || undefined,
@@ -546,6 +552,13 @@ class RecruitmentService {
                 reportingTo: finalData.reportingTo || finalData.jobDetails?.reportingTo || pos?.reportingTo,
             });
 
+            const finalJobDetails = {
+                ...(finalData.jobDetails || {}),
+                grade: finalData.jobDetails?.grade || finalData.gradeId || undefined,
+                hiringManager: finalData.jobDetails?.hiringManager || finalData.hiringManager || orgAssignment.managerId || undefined,
+                reportingTo: finalData.jobDetails?.reportingTo || finalData.reportingTo || orgAssignment.managerId || undefined,
+            };
+
             const requirement = new Requirement({
                 ...finalData,
                 tenant: tenantId,
@@ -556,11 +569,7 @@ class RecruitmentService {
                 departmentId: orgAssignment.departmentId || finalData.departmentId,
                 designationId: orgAssignment.designationId || finalData.designationId,
                 department: orgAssignment.department || finalData.department,
-                jobDetails: {
-                    ...(finalData.jobDetails || {}),
-                    hiringManager: finalData.jobDetails?.hiringManager || finalData.hiringManager || orgAssignment.managerId || undefined,
-                    reportingTo: finalData.jobDetails?.reportingTo || finalData.reportingTo || orgAssignment.managerId || undefined,
-                },
+                jobDetails: finalJobDetails,
                 isInternal,
                 createdBy: userId
             });

@@ -9,6 +9,7 @@ router.use(auth.authenticate);
 // SMTP configuration
 router.get('/smtp', emailTemplateController.getSmtpConfig);
 router.put('/smtp', emailTemplateController.updateSmtpConfig);
+router.post('/send-test', emailTemplateController.sendTestEmail);
 
 // Templates CRUD
 router.get('/', emailTemplateController.getTemplates);

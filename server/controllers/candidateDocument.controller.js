@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const crypto = require('crypto');
 const emailService = require('../services/email.service');
+const getTenantDB = require('../utils/tenantDB');
 
 // Schemas
 const CandidateDocumentRequestSchema = require('../models/CandidateDocumentRequest');
@@ -13,6 +14,60 @@ const NotificationSchema = require('../models/Notification');
 const ApplicationSchema = require('../models/Application');
 const CandidateSchema = require('../models/Candidate');
 const AuditLogSchema = require('../models/AuditLog');
+
+/**
+ * resolveTenantDBForToken
+ *
+ * Primary path: return req.tenantDB if the tenant middleware already resolved it.
+ * Fallback path: the token doesn't contain a tenantId prefix (old-format tokens).
+ *   In that case we search all tenant databases until we find the CandidateDocumentRequest.
+ *   Sets req.tenantDB and req.tenantId so subsequent helpers see the resolved connection.
+ *
+ * Returns the mongoose tenant Connection, or null if not found.
+ */
+async function resolveTenantDBForToken(req, token) {
+    // Happy path – middleware already resolved it
+    if (req.tenantDB) return req.tenantDB;
+
+    console.warn(`[TENANT_FALLBACK] No tenantDB on req for token ${token ? token.slice(0, 12) : 'N/A'}... searching all tenants`);
+
+    try {
+        const TenantModel = mongoose.model('Tenant');
+        const tenants = await TenantModel.find({}).select('_id code databaseName').lean();
+
+        if (!tenants || tenants.length === 0) {
+            console.warn('[TENANT_FALLBACK] No tenants found in main DB.');
+            return null;
+        }
+
+        for (const tenant of tenants) {
+            try {
+                const db = await getTenantDB(tenant._id.toString());
+                if (!db) continue;
+
+                if (!db.models.CandidateDocumentRequest) {
+                    db.model('CandidateDocumentRequest', CandidateDocumentRequestSchema);
+                }
+                const CDR = db.model('CandidateDocumentRequest');
+                const found = await CDR.findOne({ token }).select('_id').lean();
+                if (found) {
+                    console.log(`[TENANT_FALLBACK] Token found in tenant: ${tenant.code || tenant._id}`);
+                    req.tenantDB = db;
+                    req.tenantId = tenant._id.toString();
+                    return db;
+                }
+            } catch (innerErr) {
+                // skip individual tenant errors (e.g. connection refused)
+            }
+        }
+
+        console.warn('[TENANT_FALLBACK] Token not found in any tenant database.');
+        return null;
+    } catch (err) {
+        console.error('[TENANT_FALLBACK_ERROR]', err.message);
+        return null;
+    }
+}
 
 function getModels(db) {
     if (!db) throw new Error('Tenant database connection not resolved.');
@@ -746,6 +801,7 @@ exports.getPrefilledDetails = async (req, res) => {
 };
 
 // POST /api/public/candidate-documents/save-draft/:token
+// Also handles PUT requests via the /draft/:token alias route
 exports.saveCandidateDraft = async (req, res) => {
     try {
         const db = req.tenantDB;
@@ -775,6 +831,8 @@ exports.saveCandidateDraft = async (req, res) => {
             });
         }
 
+        // Normalise flat EmployeeForm payload → nested ExternalEmployeeRecord structure
+        const normalised = normaliseCandidatePayload(req.body);
         const {
             personalDetails,
             familyDetails,
@@ -786,7 +844,7 @@ exports.saveCandidateDraft = async (req, res) => {
             statutoryDetails,
             salaryDetails,
             completionPercentage
-        } = req.body;
+        } = normalised;
 
         if (personalDetails) externalRecord.personalDetails = personalDetails;
         if (familyDetails) externalRecord.familyDetails = familyDetails;
@@ -808,6 +866,101 @@ exports.saveCandidateDraft = async (req, res) => {
         res.status(500).json({ success: false, message: 'Failed to save draft details', error: err.message });
     }
 };
+
+/**
+ * Normalise a flat EmployeeForm payload (sent by the candidate portal) into
+ * the nested ExternalEmployeeRecord structure that all downstream logic expects.
+ * If the caller already sent nested objects (e.g. { personalDetails: {...} }) this
+ * function returns them unchanged, so it is safe to call in both cases.
+ */
+function normaliseCandidatePayload(body) {
+    // If nested keys already present, return as-is
+    if (body.personalDetails || body.familyDetails || body.communicationDetails ||
+        body.educationDetails || body.experienceDetails || body.documentDetails) {
+        return body;
+    }
+
+    // Flat-to-nested mapping (matches EmployeeForm.jsx payload keys)
+    const {
+        // personal
+        firstName, middleName, lastName, dob, gender, maritalStatus, bloodGroup,
+        nationality, placeOfBirth, contactNo, personalEmail, email,
+        fatherName, fatherFirstName, fatherLastName, fatherBloodGroup, fatherAadhaar,
+        motherName, motherFirstName, motherLastName, motherBloodGroup, motherAadhaar,
+        emergencyContactName, emergencyContactNumber,
+        profilePic, hobbies, height, weight, cast,
+        physicalDisabilityOrSickness, physicalDisabilityDetails,
+        religion, caste, customFields,
+        // family / dependents
+        spouseDetails, children, brothers, sisters,
+        // address
+        tempAddress, permAddress, commAddress,
+        // education
+        education, academicQualifications, highestQualification,
+        // experience
+        experience, jobHistoryAnnexure,
+        // documents
+        documents,
+        // bank
+        bankDetails,
+        // statutory / salary / job info
+        department, departmentId, designation, role, manager, joiningDate,
+        gradeId, grade, band, salaryTemplateId, payrollTemplateId,
+        leavePolicy, shiftId, status, employeeType,
+        departmentHead, salaryAssigned, perquisites, relatedEmployee, references,
+        // languages, previousInterview etc.
+        languages, previousInterview, previousInterviewDate,
+        previousInterviewDeptLocation, previousInterviewedBy,
+        completionPercentage,
+        ...rest
+    } = body;
+
+    return {
+        personalDetails: {
+            firstName, middleName, lastName, dob, gender, maritalStatus, bloodGroup,
+            nationality, placeOfBirth, contactNo, personalEmail, email,
+            fatherName: fatherName || [fatherFirstName, fatherLastName].filter(Boolean).join(' ') || undefined,
+            fatherFirstName, fatherLastName, fatherBloodGroup, fatherAadhaar,
+            motherName: motherName || [motherFirstName, motherLastName].filter(Boolean).join(' ') || undefined,
+            motherFirstName, motherLastName, motherBloodGroup, motherAadhaar,
+            emergencyContactName, emergencyContactNumber,
+            profilePic, hobbies, height, weight, cast,
+            physicalDisabilityOrSickness, physicalDisabilityDetails,
+            religion, caste,
+            department, departmentId, designation, role, manager, joiningDate,
+            gradeId, grade, band, salaryTemplateId, payrollTemplateId,
+            leavePolicy, shiftId, status, employeeType, departmentHead,
+            salaryAssigned, customFields,
+            languages, previousInterview, previousInterviewDate,
+            previousInterviewDeptLocation, previousInterviewedBy,
+            perquisites, relatedEmployee, references
+        },
+        familyDetails: {
+            spouseDetails: spouseDetails || {},
+            children: children || [],
+            brothers: brothers || [],
+            sisters: sisters || []
+        },
+        communicationDetails: {
+            tempAddress: tempAddress || {},
+            permAddress: permAddress || {},
+            commAddress: commAddress || {}
+        },
+        educationDetails: {
+            education: education || {},
+            academicQualifications: academicQualifications || [],
+            highestQualification
+        },
+        experienceDetails: {
+            experience: experience || [],
+            jobHistoryAnnexure: jobHistoryAnnexure || []
+        },
+        documentDetails: documents || {},
+        bankDetails: bankDetails || {},
+        completionPercentage,
+        ...rest
+    };
+}
 
 // POST /api/public/candidate-documents/submit/:token
 exports.submitCandidateProfile = async (req, res) => {
@@ -839,6 +992,8 @@ exports.submitCandidateProfile = async (req, res) => {
             });
         }
 
+        // Normalise flat EmployeeForm payload → nested ExternalEmployeeRecord structure
+        const normalised = normaliseCandidatePayload(req.body);
         const {
             personalDetails,
             familyDetails,
@@ -850,7 +1005,7 @@ exports.submitCandidateProfile = async (req, res) => {
             statutoryDetails,
             salaryDetails,
             completionPercentage
-        } = req.body;
+        } = normalised;
 
         if (personalDetails) externalRecord.personalDetails = personalDetails;
         if (familyDetails) externalRecord.familyDetails = familyDetails;
@@ -889,5 +1044,63 @@ exports.submitCandidateProfile = async (req, res) => {
     } catch (err) {
         console.error('[SUBMIT_CANDIDATE_PROFILE_ERROR]', err);
         res.status(500).json({ success: false, message: 'Failed to submit profile details', error: err.message });
+    }
+};
+
+// GET /api/public/candidate-documents/reference-data/:token
+// Returns departments, grades, shifts, leave policies and salary templates
+// so the external candidate form can populate dropdowns.
+exports.getCandidateReferenceData = async (req, res) => {
+    try {
+        const db = req.tenantDB;
+        const { token } = req.params;
+        const { CandidateDocumentRequest } = getModels(db);
+
+        // Validate token so we don't leak tenant data to unauthorised callers
+        const request = await CandidateDocumentRequest.findOne({ token });
+        if (!request) {
+            return res.status(404).json({ success: false, message: 'Invalid onboarding document token.' });
+        }
+        if (request.expiresAt < new Date()) {
+            return res.status(400).json({ success: false, message: 'Onboarding link has expired.' });
+        }
+
+        // Lazy-register lightweight schemas so we don't bloat getModels()
+        const registerIfAbsent = (name, schema, collection) => {
+            if (!db.models[name]) db.model(name, schema, collection);
+            return db.model(name);
+        };
+
+        const { Schema } = require('mongoose');
+        const lean = { lean: true };
+
+        const DepartmentModel  = registerIfAbsent('Department',     new Schema({}, { strict: false }), 'departments');
+        const GradeModel       = registerIfAbsent('Grade',          new Schema({}, { strict: false }), 'grades');
+        const ShiftModel       = registerIfAbsent('Shift',          new Schema({}, { strict: false }), 'shifts');
+        const LeavePolicyModel = registerIfAbsent('LeavePolicy',    new Schema({}, { strict: false }), 'leavepolicies');
+        const SalaryTplModel   = registerIfAbsent('SalaryTemplate', new Schema({}, { strict: false }), 'salarytemplates');
+        const EmployeeModel    = db.models.Employee || db.model('Employee', require('../models/Employee'));
+        const RoleModel        = registerIfAbsent('Role',           new Schema({}, { strict: false }), 'roles');
+
+        const [departments, grades, shifts, policies, salaryTemplates, managers, roles] = await Promise.all([
+            DepartmentModel.find({}, { name: 1, _id: 1 }).lean(),
+            GradeModel.find({}, { name: 1, band: 1, _id: 1 }).lean(),
+            ShiftModel.find({}, { name: 1, shiftName: 1, startTime: 1, endTime: 1, _id: 1 }).lean(),
+            LeavePolicyModel.find({}, { name: 1, policyName: 1, _id: 1 }).lean(),
+            SalaryTplModel.find({}, { name: 1, templateName: 1, _id: 1 }).lean(),
+            EmployeeModel.find(
+                { status: { $in: ['Active', 'active'] } },
+                { firstName: 1, lastName: 1, designation: 1, _id: 1 }
+            ).lean(),
+            RoleModel.find({}, { name: 1, roleName: 1, _id: 1 }).lean()
+        ]);
+
+        return res.json({
+            success: true,
+            data: { departments, grades, shifts, policies, salaryTemplates, managers, roles }
+        });
+    } catch (err) {
+        console.error('[GET_CANDIDATE_REFERENCE_DATA_ERROR]', err);
+        res.status(500).json({ success: false, message: 'Failed to load reference data', error: err.message });
     }
 };

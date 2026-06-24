@@ -69,6 +69,16 @@ module.exports = async function tenantResolver(req, res, next) {
         }
       }
 
+      if (!tenantId) {
+        // Matches /candidate/document-upload/{tenantId}_{rest}/{action}
+        // e.g. /candidate/document-upload/6649abc...def_xyz123.../reference-data
+        const empFormMatch = req.path.match(/\/candidate\/document-upload\/([a-f0-9]{24})_/i) ||
+                             req.path.match(/\/document-upload\/([a-f0-9]{24})_/i);
+        if (empFormMatch) {
+          tenantId = empFormMatch[1];
+        }
+      }
+
       if (tenantId && mongoose.Types.ObjectId.isValid(String(tenantId))) {
         req.tenantId = tenantId;
         req.tenantDB = await getTenantDB(tenantId);
