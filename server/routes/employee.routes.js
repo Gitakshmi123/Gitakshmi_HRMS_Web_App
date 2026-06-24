@@ -23,7 +23,49 @@ const hierarchy = require('../middleware/hierarchy.middleware');
 
 // Enterprise hierarchy employee collection:
 // GET/POST /api/employees
+/**
+ * @swagger
+ * /api/employees:
+ *   get:
+ *     summary: Retrieve a list of employees
+ *     description: Retrieve all employees based on hierarchy scope.
+ *     tags: [Employees]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: A list of employees
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Employee'
+ */
 router.get('/', auth.authenticate, hierarchy.filterByScope, hierarchyController.listEmployees);
+/**
+ * @swagger
+ * /api/employees:
+ *   post:
+ *     summary: Create a new employee
+ *     description: Admins and heads can create a new employee.
+ *     tags: [Employees]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/Employee'
+ *     responses:
+ *       201:
+ *         description: Employee created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Success'
+ */
 router.post(
     '/',
     auth.authenticate,

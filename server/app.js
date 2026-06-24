@@ -586,6 +586,12 @@ const recruitmentCheck = checkModuleAccess('recruitment');
 const activeEmployeeCheck = require('./middleware/requireActiveEmployee');
 const { checkPermission } = require('./middleware/rbac.middleware');
 
+/* ===============================
+   SWAGGER DOCUMENTATION
+================================ */
+const setupSwagger = require('./config/swagger.config');
+setupSwagger(app);
+
 // 0. Public Routes (UNPROTECTED)
 app.use('/api/public', publicRoutes);
 app.use('/api/public', require('./routes/publicCandidate.routes'));
@@ -714,6 +720,18 @@ const hrmsPrefix = '/api/hrms';
 app.use(hrmsPrefix, auth, hrRoutes);
 app.use(hrmsPrefix + '/payroll', auth, payrollRoutes);
 app.use(hrmsPrefix + '/attendance', auth, attendanceRoutes);
+
+// ── DMS Integration ──────────────────────────────────────────────────
+// Sync employees from HRMS → DMS (bulk sync, single sync, status)
+app.use('/api/dms-sync', require('./routes/dmsSync.routes'));
+
+// Initialise nightly DMS employee sync cron job (2:00 AM IST)
+try {
+  const { initDmsNightlySyncJob } = require('./jobs/dmsNightlySync.job');
+  initDmsNightlySyncJob();
+} catch (cronErr) {
+  console.warn('[DMS-CRON] ⚠️  Failed to initialize nightly DMS sync job:', cronErr.message);
+}
 
 // Catch-all for API (404)
 app.use('/api', (req, res) => {

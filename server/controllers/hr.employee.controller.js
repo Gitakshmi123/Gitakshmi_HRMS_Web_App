@@ -15,6 +15,7 @@ const { getDefaultPerms } = require('../utils/defaultRolePermissions');
 const companyIdConfigController = require('./companyIdConfig.controller');
 const salarySnapshotCanonicalSync = require('../services/salarySnapshotCanonicalSync.service');
 const employeeHierarchyService = require('../services/employeeHierarchy.service');
+const { syncEmployeeToDMS, notifyDMSEmployeeDeleted } = require('../services/dmsEmployeeSync.service');
 
 // Global counter model (stored in main connection, not tenant databases)
 let GlobalCounter;
@@ -1153,6 +1154,14 @@ exports.create = async (req, res) => {
 
     _invalidateOrgCache(tenantId);
     await emp.populate('gradeId', GRADE_PUBLIC_SELECT);
+    
+    // ── NEW: Trigger background sync to DMS ──
+    setImmediate(() => {
+      syncEmployeeToDMS(emp, req.tenantDB).catch(err =>
+        console.error('[DMS-HOOK] Auto-sync failed:', err.message)
+      );
+    });
+    
     res.json({ success: true, data: sanitizeEmployee(emp) });
 
   } catch (err) {
@@ -1536,6 +1545,13 @@ exports.update = async (req, res) => {
 
     _invalidateOrgCache(tenantId);
     if (!res.headersSent) {
+      // ── NEW: Trigger background sync to DMS ──
+      setImmediate(() => {
+        syncEmployeeToDMS(emp, req.tenantDB).catch(err =>
+          console.error('[DMS-HOOK] Auto-sync failed:', err.message)
+        );
+      });
+      
       return res.json({ success: true, data: sanitizeEmployee(emp) });
     }
 
@@ -1596,6 +1612,14 @@ exports.remove = async (req, res) => {
       return res.status(404).json({ error: "not_found" });
 
     _invalidateOrgCache(tenantId);
+    
+    // ── NEW: Sync deletion to DMS ──
+    setImmediate(() => {
+      notifyDMSEmployeeDeleted(emp.employeeId || emp._id).catch(err =>
+        console.error('[DMS-HOOK] Auto-sync delete failed:', err.message)
+      );
+    });
+
     res.json({ success: true });
 
   } catch (err) {

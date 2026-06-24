@@ -38,6 +38,34 @@ router.post('/medical-cert', upload.single('file'), ctrl.uploadLogo);
 router.use(auth.requireAdminOrHr);
 
 router.post('/logo', upload.single('file'), ctrl.uploadLogo);
+/**
+ * @swagger
+ * /api/uploads/doc:
+ *   post:
+ *     summary: Upload a document or image file
+ *     description: Multipart file upload API supporting PDF, DOC, DOCX, XLS, XLSX, CSV, JPG, PNG, WEBP.
+ *     tags: [File Upload]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *                 description: The file to upload
+ *     responses:
+ *       200:
+ *         description: File uploaded successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Success'
+ */
 router.post('/doc', upload.single('file'), ctrl.uploadLogo); // Reuse uploadLogo for generic doc upload
 
 module.exports = router;

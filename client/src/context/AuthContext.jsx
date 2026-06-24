@@ -152,7 +152,11 @@ export const AuthProvider = ({ children }) => {
       const raw = localStorage.getItem("enabledModules");
       if (!raw) return null;
       const parsed = JSON.parse(raw);
-      return parsed && typeof parsed === "object" ? parsed : null;
+      if (!parsed || typeof parsed !== "object") return null;
+      // If ALL modules are false/missing (stale cache), treat as null so we
+      // wait for the server to provide fresh values — prevents Unauthorized flash.
+      const hasAnyEnabled = Object.values(parsed).some(v => v === true);
+      return hasAnyEnabled ? parsed : null;
     } catch {
       return null;
     }
