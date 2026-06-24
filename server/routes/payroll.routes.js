@@ -167,6 +167,25 @@ router.post('/runs/:id/mark-paid', payrollRunController.markPayrollPaid);
 router.post('/runs/:id/cancel', payrollRunController.cancelPayrollRun);
 
 // Payslip Routes - Employee self-service
+/**
+ * @swagger
+ * /api/payroll/payslips/my:
+ *   get:
+ *     summary: Get my payslips
+ *     description: Retrieve payslips for the authenticated employee.
+ *     tags: [Payroll]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: A list of payslips
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Payslip'
+ */
 router.get('/payslips/my', payslipController.getMyPayslips);
 
 // Payslip Preview Route (HR Only)

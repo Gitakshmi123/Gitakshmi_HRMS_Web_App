@@ -6,18 +6,18 @@ import {
   LayoutDashboard, ChevronDown,
   Bell, ArrowLeft, Shield, UploadCloud
 } from 'lucide-react';
-import { getTenantId } from '../utils/auth';
+import { getCandidateTenantId } from '../utils/auth';
 
 export default function JobPortalLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { candidate, logoutCandidate } = useJobPortalAuth();
   const [profileOpen, setProfileOpen] = useState(false);
-  const tenantId = getTenantId();
+  const tenantId = getCandidateTenantId();
   const isMainDashboard = location.pathname === '/candidate/dashboard';
 
   const handleLogout = () => {
-    const tid = candidate?.tenantId || localStorage.getItem('tenantId');
+    const tid = candidate?.tenantId || getCandidateTenantId();
     logoutCandidate();
     if (tid) {
       navigate(`/jobs/${tid}`);
@@ -31,7 +31,7 @@ export default function JobPortalLayout() {
       const path = window.location.pathname;
       if (path.includes('/apply-job/') || path.includes('/application/')) {
         event.preventDefault();
-        const tid = tenantId || getTenantId();
+        const tid = tenantId || getCandidateTenantId();
         if (tid) {
           navigate(`/jobs/${tid}`, { replace: true });
         } else {

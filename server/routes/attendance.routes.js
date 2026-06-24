@@ -28,6 +28,25 @@ router.use((req, res, next) => {
 // permission because the controller resolves the employee from req.user.
 router.post('/punch', auth.authenticate, requireActiveEmployee, attendCtrl.punch);
 router.post('/mark', auth.authenticate, requireActiveEmployee, trackingCtrl.markAttendance);
+/**
+ * @swagger
+ * /api/attendance/my:
+ *   get:
+ *     summary: Get my attendance
+ *     description: Retrieve attendance records for the authenticated employee.
+ *     tags: [Attendance]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: A list of attendance records
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Attendance'
+ */
 router.get('/my', auth.authenticate, checkPermission('employee.attendance', 'view'), attendCtrl.getMyAttendance);
 router.get(['/today-summary', '/today_summary'], auth.authenticate, (req, res, next) => {
     console.log(`[ATTENDANCE_DEBUG] Hit today-summary. Tenant: ${req.tenantId || 'NONE'}`);

@@ -35,10 +35,23 @@ const upload = multer({
 /**
  * Public Onboarding Document routes
  * (Base mount point: /api/public/candidate-documents)
+ *
+ * Also mounted at /api/candidate/document-upload to serve EmployeeForm.jsx (isExternal mode).
+ * When mounted at that alias the frontend calls /:token/reference-data, /:token/submit, etc.
+ * so we register BOTH /action/:token and /:token/action patterns.
  */
-router.get('/token/:token', candidateDocumentController.getPrefilledDetails);
-router.post('/save-draft/:token', candidateDocumentController.saveCandidateDraft);
-router.post('/submit/:token', candidateDocumentController.submitCandidateProfile);
+
+// --- Pattern A: /action/:token  (used by public candidate portal) ---
+router.get('/token/:token',           candidateDocumentController.getPrefilledDetails);
+router.get('/reference-data/:token',  candidateDocumentController.getCandidateReferenceData);
+router.post('/save-draft/:token',     candidateDocumentController.saveCandidateDraft);
+router.put('/draft/:token',           candidateDocumentController.saveCandidateDraft);
+router.post('/submit/:token',         candidateDocumentController.submitCandidateProfile);
+
+// --- Pattern B: /:token/action  (used by EmployeeForm via /candidate/document-upload alias) ---
+router.get('/:token/reference-data',  candidateDocumentController.getCandidateReferenceData);
+router.post('/:token/submit',         candidateDocumentController.submitCandidateProfile);
+router.put('/:token/draft',           candidateDocumentController.saveCandidateDraft);
 
 // Public document upload endpoint for candidates submitting their profile details
 // Uses Cloudinary if configured, falls back to local storage

@@ -2,6 +2,10 @@ export const TOKEN_KEY = 'token';
 export const CANDIDATE_KEY = 'candidate';
 export const TENANT_KEY = 'tenantId';
 
+// Isolated candidate portal keys
+export const CANDIDATE_TENANT_KEY = 'candidate_tenantId';
+export const CANDIDATE_COMPANY_KEY = 'candidate_company';
+
 export function getToken() {
   return null;
 }
@@ -12,6 +16,8 @@ export function setToken() {
 
 export function removeAuth() {
   localStorage.removeItem(CANDIDATE_KEY);
+  localStorage.removeItem(CANDIDATE_TENANT_KEY);
+  localStorage.removeItem(CANDIDATE_COMPANY_KEY);
 }
 
 export function isTokenValid() {
@@ -80,6 +86,37 @@ export function setCompany(company) {
     }
     if (company.code) {
       localStorage.setItem('companyCode', company.code);
+    }
+  }
+}
+
+// Candidate portal specific helpers
+export function getCandidateTenantId() {
+  const tid = localStorage.getItem(CANDIDATE_TENANT_KEY);
+  return isValidId(tid) ? tid : null;
+}
+
+export function setCandidateTenantId(id) {
+  const cid = cleanId(id);
+  if (cid) {
+    localStorage.setItem(CANDIDATE_TENANT_KEY, cid);
+  }
+}
+
+export function getCandidateCompany() {
+  const companyStr = localStorage.getItem(CANDIDATE_COMPANY_KEY);
+  try {
+    return companyStr ? JSON.parse(companyStr) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setCandidateCompany(company) {
+  if (company) {
+    localStorage.setItem(CANDIDATE_COMPANY_KEY, JSON.stringify(company));
+    if (company.tenantId || company._id) {
+      setCandidateTenantId(company.tenantId || company._id);
     }
   }
 }

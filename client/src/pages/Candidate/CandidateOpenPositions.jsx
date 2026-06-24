@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
-import { getTenantId } from '../../utils/auth';
+import { getCandidateTenantId } from '../../utils/auth';
 import { useJobPortalAuth } from '../../context/JobPortalAuthContext';
 import {
     Briefcase, MapPin, Clock, Search, Filter,
@@ -19,7 +19,7 @@ export default function CandidateOpenPositions() {
     const [searchTerm, setSearchTerm] = useState('');
     const [error, setError] = useState(null);
     const { candidate } = useJobPortalAuth();
-    const [tenantId, setTenantIdState] = useState(getTenantId() || candidate?.tenantId);
+    const [tenantId, setTenantIdState] = useState(getCandidateTenantId() || candidate?.tenantId);
 
     const inputRef = useRef(null);
     const [isFocused, setIsFocused] = useState(false);
@@ -81,7 +81,7 @@ export default function CandidateOpenPositions() {
     useEffect(() => {
         const fetchJobs = async () => {
             const companyCode = (localStorage.getItem('companyCode') || '').trim();
-            const tid = tenantId || getTenantId() || candidate?.tenantId || candidate?.companyCode || companyCode;
+            const tid = tenantId || getCandidateTenantId() || candidate?.tenantId || candidate?.companyCode || companyCode;
             console.log('🔍 [CANDIDATE_OPEN_POSITIONS] Fetching jobs for tenant:', tid);
 
             if (!tid) {
@@ -118,7 +118,7 @@ export default function CandidateOpenPositions() {
         setDetailJob(null);
         setDetailLoading(true);
         try {
-            const tid = tenantId || getTenantId();
+            const tid = tenantId || getCandidateTenantId();
             const res = await api.get(`/public/job/${job._id}?tenantId=${encodeURIComponent(String(tid))}`);
             setDetailJob(res.data || job);
         } catch (err) {
@@ -628,7 +628,7 @@ export default function CandidateOpenPositions() {
                         <button
                             onClick={() => {
                                 closeDetail();
-                                navigate(`/apply-job/${detailJob?._id || detailJob?.id}?tenantId=${tenantId || getTenantId()}`);
+                                navigate(`/apply-job/${detailJob?._id || detailJob?.id}?tenantId=${tenantId || getCandidateTenantId()}`);
                             }}
                             className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-md shadow-blue-100 active:scale-95"
                         >

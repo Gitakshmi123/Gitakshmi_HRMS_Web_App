@@ -19,6 +19,50 @@ const { authenticate } = require('../middleware/auth.jwt');
 // Direct login endpoints unconditionally enabled
 router.post('/login-unified', authCtrl.unifiedLogin);
 router.post('/login/unified', authCtrl.unifiedLogin);
+/**
+ * @swagger
+ * /api/auth/login:
+ *   post:
+ *     summary: Authenticate a user and return a JWT token
+ *     description: Unified login endpoint for HR and Employees.
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 example: admin@company.com
+ *               password:
+ *                 type: string
+ *                 example: securePassword123
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 token:
+ *                   type: string
+ *                   example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+ *       400:
+ *         description: Invalid credentials
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 router.post('/login', authCtrl.unifiedLogin);
 router.post('/login-hr', authCtrl.loginHrController);
 router.post('/login-employee', authCtrl.loginEmployeeController);

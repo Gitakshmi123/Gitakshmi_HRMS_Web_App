@@ -30,6 +30,7 @@ exports.createDepartment = async (req, res, next) => {
     const db = req.tenantDB;
     const Department = db.model("Department");
     const Employee = db.model("Employee");
+    const companyIdConfig = require('./companyIdConfig.controller');
 
     const { name, description, head, code } = req.body;
 
@@ -39,10 +40,36 @@ exports.createDepartment = async (req, res, next) => {
     if (description && description.length > 250)
       return res.status(400).json({ success: false, message: "Description must be at most 250 characters" });
 
-    // Generate code from name if not provided
-    const deptCode = code
-      ? code.toUpperCase()
-      : name.trim().toUpperCase().replace(/\s+/g, '_').substring(0, 10) + '_' + Date.now().toString().slice(-4);
+    // Generate or resolve department code based on sequence configuration
+    let deptCode = code?.trim();
+    try {
+      const idResult = await companyIdConfig.generateIdInternal({
+        tenantId: req.tenantId,
+        entityType: 'DEPT',
+        increment: false
+      });
+      const generationMode = idResult.generationMode || 'AUTO';
+
+      if (generationMode === 'AUTO') {
+        const incrementResult = await companyIdConfig.generateIdInternal({
+          tenantId: req.tenantId,
+          entityType: 'DEPT',
+          increment: true
+        });
+        deptCode = incrementResult.id;
+      } else if (!deptCode) {
+        deptCode = name.trim().toUpperCase().replace(/\s+/g, '_').substring(0, 10) + '_' + Date.now().toString().slice(-4);
+      } else {
+        deptCode = deptCode.toUpperCase();
+      }
+    } catch (configErr) {
+      console.warn("DEPT ID generation warning, falling back to manual generation:", configErr.message);
+      if (!deptCode) {
+        deptCode = name.trim().toUpperCase().replace(/\s+/g, '_').substring(0, 10) + '_' + Date.now().toString().slice(-4);
+      } else {
+        deptCode = deptCode.toUpperCase();
+      }
+    }
 
     // Duplicate name inside SAME tenant DB
     const dupFilter = { name: name.trim(), mainCompanyId: req.tenantId };

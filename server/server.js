@@ -1,4 +1,4 @@
-// Server root - forced restart 2026-06-20T12:48:00
+// Server root - forced restart 2026-06-24T05:52:00
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 

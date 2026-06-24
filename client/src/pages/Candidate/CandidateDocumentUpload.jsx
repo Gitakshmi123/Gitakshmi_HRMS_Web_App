@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { FileText } from 'lucide-react';
 import api from '../../utils/api';
 import { showToast } from '../../utils/uiNotifications';
+import { setCandidateTenantId } from '../../utils/auth';
 import EmployeeForm from '../HR/EmployeeForm';
 
 export default function CandidateDocumentUpload() {
@@ -15,7 +16,7 @@ export default function CandidateDocumentUpload() {
 
   useEffect(() => {
     const tenantId = searchParams.get('tenantId');
-    if (tenantId) localStorage.setItem('tenantId', tenantId);
+    if (tenantId) setCandidateTenantId(tenantId);
   }, [searchParams]);
 
   useEffect(() => {

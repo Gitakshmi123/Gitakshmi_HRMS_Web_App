@@ -97,19 +97,18 @@ const shouldSkipStoredAuthHeader = (config) => {
 };
 
 const attachStoredAuthHeader = (config) => {
-  if (shouldSkipStoredAuthHeader(config)) {
-    return config;
-  }
-
-  const token = readStoredAuthToken();
   const headers = { ...(config.headers || {}) };
-  if (token && !headers.Authorization && !headers.authorization) {
-    headers.Authorization = `Bearer ${token}`;
+
+  if (!shouldSkipStoredAuthHeader(config)) {
+    const token = readStoredAuthToken();
+    if (token && !headers.Authorization && !headers.authorization) {
+      headers.Authorization = `Bearer ${token}`;
+    }
   }
 
   try {
-    const tenantId = String(window.localStorage.getItem('tenantId') || window.localStorage.getItem('companyId') || '').trim();
-    const companyCode = String(window.localStorage.getItem('companyCode') || '').trim();
+    const tenantId = String(window.localStorage.getItem('tenantId') || window.localStorage.getItem('companyId') || window.localStorage.getItem('candidate_tenantId') || '').trim();
+    const companyCode = String(window.localStorage.getItem('companyCode') || window.localStorage.getItem('candidate_company') || '').trim();
     if (tenantId && !headers['X-Tenant-ID'] && !headers['x-tenant-id']) {
       headers['X-Tenant-ID'] = tenantId;
     }

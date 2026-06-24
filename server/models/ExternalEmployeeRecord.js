@@ -4,6 +4,8 @@ const ExternalEmployeeRecordSchema = new mongoose.Schema({
     tenant: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', required: true, index: true },
     candidateId: { type: mongoose.Schema.Types.ObjectId, ref: 'Candidate', required: true },
     jobId: { type: mongoose.Schema.Types.ObjectId, ref: 'Requirement', required: true },
+    applicantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Applicant' },
+    documentRequestId: { type: mongoose.Schema.Types.ObjectId, ref: 'CandidateDocumentRequest' },
     
     personalDetails: { type: mongoose.Schema.Types.Mixed, default: {} },
     familyDetails: { type: mongoose.Schema.Types.Mixed, default: {} },

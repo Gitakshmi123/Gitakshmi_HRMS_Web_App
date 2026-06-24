@@ -79,7 +79,9 @@ export default function EmployeeForm({
   });
 
   const getActualStep = (s) => {
-    return s;
+    if (!isExternal) return s;
+    if (s === 1) return 1;
+    return s + 1; // Skips Job Information for external candidates
   };
   const actualStep = getActualStep(step);
 

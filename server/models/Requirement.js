@@ -61,6 +61,7 @@ const RequirementSchema = new mongoose.Schema({
     externalInterviewers: [{ name: String, email: String }], // External interviewers
     
     mode: { type: String, enum: ['Online', 'Offline', 'Telephonic', 'Virtual', 'In-person'], default: 'Online' },
+    meetingLink: { type: String }, // For online mode meeting links
     durationMinutes: { type: Number, default: 30 },
 
     feedbackFormId: { type: mongoose.Schema.Types.ObjectId, ref: 'StageFeedbackForm' }, // Custom form per stage
