@@ -302,8 +302,14 @@ export function getSectionTabs(pathPrefix, icons = {}) {
         { label: 'Departments', to: buildPath(pathPrefix, 'departments'), icon: icon('departments'), permission: 'people.departments' },
         { label: 'Grades', to: buildPath(pathPrefix, 'grades'), icon: icon('requirements'), permission: 'people.org' },
         { label: 'Leave Configuration', to: buildPath(pathPrefix, 'organization-policies'), icon: icon('settings'), permission: 'leave.policies' },
-        { label: 'Shift', to: buildPath(pathPrefix, 'shift-management'), icon: icon('clock'), permission: 'attendance.dashboard' },
         { label: 'Automations', to: buildPath(pathPrefix, 'organization/automations'), icon: icon('settings'), permission: 'people.org' },
+      ],
+    },
+    {
+      match: ['/leave-approvals', '/leave-requests', '/shift-management'],
+      tabs: [
+        { label: 'Requests', to: buildPath(pathPrefix, 'leave-approvals'), icon: icon('leave'), permission: 'leave.requests' },
+        { label: 'Shift', to: buildPath(pathPrefix, 'shift-management'), icon: icon('clock'), permission: 'attendance.dashboard' },
       ],
     },
     {
