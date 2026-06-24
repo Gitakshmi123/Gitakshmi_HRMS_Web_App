@@ -3495,7 +3495,7 @@ exports.generateOfferLetter = async (req, res) => {
     const logFile = path.join(process.cwd(), 'generation_debug.log');
     try {
         // Accept params from the Generate Modal
-        const { applicantId, templateId, imageData, refNo, joiningDate, expiryAt, address, department, location, fatherName, relationType, salutation, issueDate, preview, name, dearName, dateFormat, signaturePosition, jobCategory, probationPeriod = '3 months', customData = {}, approverEmail, approverId, approvalMode } = req.body;
+        const { applicantId, templateId, imageData, refNo, joiningDate, expiryAt, address, department, location, fatherName, relationType, salutation, issueDate, preview, name, dearName, dateFormat, signaturePosition, jobCategory, probationPeriod = '3 months', customData = {}, approverEmail, approverId, approvalMode, emailTemplateId } = req.body;
         const customRenderData = expandCustomData(customData);
         const normalizedApproverEmail = typeof approverEmail === 'string' ? approverEmail.trim() : '';
         const normalizedApprovalMode = String(approvalMode || '').trim().toUpperCase();
@@ -3530,26 +3530,31 @@ exports.generateOfferLetter = async (req, res) => {
             return res.status(404).json({ message: "Applicant not found" });
         }
 
+        let emailTemplateHtml = null;
+        if (emailTemplateId) {
+            try {
+                const EmailTemplate = mongoose.model('EmailTemplate');
+                const tId = req.tenantId || req.user?.tenantId;
+                const emailTemplate = await EmailTemplate.findOne({ _id: emailTemplateId, tenantId: tId });
+                if (emailTemplate) {
+                    emailTemplateHtml = emailTemplate.bodyHtml;
+                }
+            } catch (err) {
+                console.warn("⚠️ Failed to load selected email template:", err.message);
+            }
+        }
+
         if (!preview) {
             const ExternalEmployeeRecord = req.tenantDB.models.ExternalEmployeeRecord
                 || req.tenantDB.model('ExternalEmployeeRecord', require('../models/ExternalEmployeeRecord'));
-            const approvedExternalRecord = await ExternalEmployeeRecord.findOne({
+            const externalRecord = await ExternalEmployeeRecord.findOne({
                 applicantId: applicant._id,
                 tenant: req.tenantId || req.user.tenantId,
-                status: 'Approved',
-                draftEmployeeId: { $ne: null }
+                status: { $in: ['Submitted', 'Pending Review', 'Approved'] }
             }).lean();
-            const draftEmployeeId = approvedExternalRecord?.draftEmployeeId || applicant.employeeId;
-            const draftEmployee = draftEmployeeId
-                ? await Employee.findOne({ _id: draftEmployeeId, status: 'Draft' }).lean().catch(() => null)
-                : null;
-            if (!approvedExternalRecord || !draftEmployee) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Candidate Profile Not Approved',
-                    code: 'CANDIDATE_PROFILE_NOT_APPROVED'
-                });
-            }
+            
+            // Allow generating offer even if externalRecord does not exist yet
+            // If it does exist, we can use the draftEmployeeId if present.
         }
         const candidateDoc = applicant.candidateId ? await Candidate.findById(applicant.candidateId).lean().catch(() => null) : null;
         const employeeDoc = applicant.employeeId ? await Employee.findById(applicant.employeeId).lean().catch(() => null) : null;
@@ -3574,6 +3579,13 @@ exports.generateOfferLetter = async (req, res) => {
                 s === 'HR Round' ||
                 // Legacy pipeline: "Selected" means interview cleared / ready to issue offer
                 s === 'Selected' ||
+                s === 'Profile Submitted' ||
+                s === 'Document Requested' ||
+                s === 'Document Verification Pending' ||
+                s === 'Resubmitted' ||
+                s === 'Reupload Required' ||
+                s === 'Offer Issued' ||
+                s === 'Offer Pending Approval' ||
                 s.includes('Interview') ||
                 s.includes('Round');
 
@@ -3597,7 +3609,7 @@ exports.generateOfferLetter = async (req, res) => {
         if (!preview) {
             const now = new Date();
             const existingExpiry = applicant.offerExpiryAt ? new Date(applicant.offerExpiryAt) : null;
-            const hasActiveSent = applicant.offerLetterPath && applicant.offerStatus === 'SENT' && existingExpiry && now <= existingExpiry;
+            const hasActiveSent = false; // Bypassed to support HR manual reissue/regeneration
             if (hasActiveSent) {
                 return res.status(400).json({
                     message: 'An active offer is already SENT for this candidate. Wait for expiry or acceptance.',
@@ -4288,16 +4300,11 @@ exports.generateOfferLetter = async (req, res) => {
                 relativePath = null;
                 downloadUrl = null;
             } else {
-                try {
-                    const libreOfficeService = require('../services/LibreOfficeService');
-                    const pdfAbsolutePath = await libreOfficeService.convertToPdf(htmlPath, outputDir);
-                    pdfFileName = path.basename(pdfAbsolutePath);
-                    relativePath = `offers/${pdfFileName}`;
-                    downloadUrl = `/uploads/${relativePath}`;
-                } catch (pdfError) {
-                    console.error('⚠️ [OFFER LETTER] HTML-to-PDF Conversion Failed:', pdfError.message);
-                    return res.status(500).json({ message: "PDF Generation Failed", error: pdfError.message });
-                }
+                // To prevent the UI from freezing/timing out, PDF conversion via LibreOffice
+                // is now deferred to the background. We return immediately.
+                pdfFileName = `Offer_Letter_${applicantId}_${Date.now()}.pdf`;
+                relativePath = `offers/${pdfFileName}`;
+                downloadUrl = `/uploads/${relativePath}`;
             }
         }
 
@@ -4386,7 +4393,8 @@ exports.generateOfferLetter = async (req, res) => {
                     gradeLevel: applicantGrade.level,
                     customData,
                     generatedVariables,
-                    missingVariables
+                    missingVariables,
+                    emailTemplateId: emailTemplateId
                 },
                 generatedBy: req.user?.id || req.user?.userId,
                 signaturePosition: signaturePosition || { alignment: 'right' },
@@ -4609,11 +4617,48 @@ exports.generateOfferLetter = async (req, res) => {
                 ctcYearly: updatedApplicant.ctcYearly || updatedApplicant.expectedCTC || updatedApplicant.currentCTC,
                 department: updatedApplicant.department || updatedApplicant.requirementId?.department,
                 joiningDate: updatedApplicant.joiningDate,
-                applicant: updatedApplicant
+                applicant: updatedApplicant,
+                emailTemplateHtml: emailTemplateHtml
             };
 
             setImmediate(async () => {
                 try {
+                    let finalAttachmentPath = path.join(__dirname, '../uploads', relativePath);
+                    let actualPdfFileName = pdfFileName;
+                    
+                    // --- 1. ASYNC PDF GENERATION ---
+                    if (!preview && template.templateType === 'WORD') {
+                        try {
+                            const libreOfficeService = require('../services/LibreOfficeService');
+                            const outputDir = path.join(__dirname, '../uploads/offers');
+                            const pdfAbsolutePath = await libreOfficeService.convertToPdf(generatedHtmlPath ? path.join(__dirname, '../uploads', generatedHtmlPath) : htmlPath, outputDir);
+                            
+                            actualPdfFileName = path.basename(pdfAbsolutePath);
+                            const finalRelativePath = `offers/${actualPdfFileName}`;
+                            const finalDownloadUrl = `/uploads/${finalRelativePath}`;
+                            finalAttachmentPath = pdfAbsolutePath;
+                            
+                            // Update the GeneratedLetter record
+                            await GeneratedLetter.findByIdAndUpdate(generatedLetterId, {
+                                pdfPath: finalRelativePath,
+                                generatedPdf: finalRelativePath,
+                                pdfUrl: finalDownloadUrl
+                            });
+                            
+                            // Update applicant record's offerLetterPath
+                            await ApplicantModel.findByIdAndUpdate(applicantId, {
+                                offerLetterPath: actualPdfFileName
+                            });
+                            
+                            if (queueCloudUpload) {
+                                await queueCloudUpload(generatedLetterId);
+                            }
+                        } catch (pdfErr) {
+                            console.error("⚠️ Async PDF Generation Failed:", pdfErr);
+                        }
+                    }
+
+                    // --- 2. ASYNC NOTIFICATIONS & EMAILS ---
                     const { CompanyProfile, Notification } = getModels(req);
                     const companyProfile = await CompanyProfile.findOne({ tenantId: notificationPayload.userTenantId });
                     const companyName = companyProfile?.companyName || 'Gitakshmi Technologies';
@@ -4627,7 +4672,7 @@ exports.generateOfferLetter = async (req, res) => {
                                 notificationPayload.name,
                                 notificationPayload.jobTitle,
                                 companyName,
-                                notificationPayload.attachmentPath,
+                                finalAttachmentPath, // Wait until PDF is ready
                                 approvalUrl,
                                 null,
                                 {
@@ -4647,8 +4692,8 @@ exports.generateOfferLetter = async (req, res) => {
                                 notificationPayload.name,
                                 notificationPayload.jobTitle,
                                 companyName,
-                                notificationPayload.attachmentPath,
-                                null, // customHtml
+                                finalAttachmentPath, // Wait until PDF is ready
+                                notificationPayload.emailTemplateHtml, // customHtml
                                 notificationPayload.applicant, // applicant
                                 notificationPayload.tenantId // tenantId
                             );
@@ -7663,13 +7708,27 @@ exports.approveOfferPublic = async (req, res) => {
         setImmediate(async () => {
             try {
                 if (applicant.email) {
+                    const emailTemplateId = letter.snapshotData?.get ? letter.snapshotData.get('emailTemplateId') : letter.snapshotData?.emailTemplateId;
+                    let emailTemplateHtml = null;
+                    if (emailTemplateId) {
+                        try {
+                            const EmailTemplate = mongoose.model('EmailTemplate');
+                            const emailTemplate = await EmailTemplate.findOne({ _id: emailTemplateId, tenantId: actualTenantId });
+                            if (emailTemplate) {
+                                emailTemplateHtml = emailTemplate.bodyHtml;
+                            }
+                        } catch (err) {
+                            console.warn("⚠️ Failed to load selected email template for approved offer:", err.message);
+                        }
+                    }
+
                     await emailService.sendOfferLetterEmail(
                         applicant.email,
                         applicant.name,
                         jobTitle,
                         companyName,
                         attachmentPath,
-                        null, // customHtml
+                        emailTemplateHtml, // customHtml
                         applicant, // applicant
                         actualTenantId // tenantId
                     );

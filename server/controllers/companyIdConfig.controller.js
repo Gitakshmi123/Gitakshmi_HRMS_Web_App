@@ -16,7 +16,8 @@ const DEFAULT_DOC_TYPES = {
     INTN: { name: 'Intern ID', prefix: 'INTN', formatTemplate: '{{PREFIX}}-{{YEAR}}-{{COUNTER}}', startFrom: 1000, resetPolicy: 'YEARLY', generationMode: 'AUTO' },
     INT: { name: 'Interview', prefix: 'INT', formatTemplate: '{{COMPANY}}/{{PREFIX}}/{{YEAR}}/{{COUNTER}}', startFrom: 1, generationMode: 'AUTO' },
     EXP: { name: 'Experience Letter', prefix: 'EXP', formatTemplate: '{{COMPANY}}/{{PREFIX}}/{{YEAR}}/{{COUNTER}}', startFrom: 1, generationMode: 'AUTO' },
-    REL: { name: 'Relieving Letter', prefix: 'REL', formatTemplate: '{{COMPANY}}/{{PREFIX}}/{{YEAR}}/{{COUNTER}}', startFrom: 1, generationMode: 'AUTO' }
+    REL: { name: 'Relieving Letter', prefix: 'REL', formatTemplate: '{{COMPANY}}/{{PREFIX}}/{{YEAR}}/{{COUNTER}}', startFrom: 1, generationMode: 'AUTO' },
+    DEPT: { name: 'Department Code', prefix: 'DEPT', formatTemplate: '{{PREFIX}}-{{COUNTER}}', startFrom: 1, resetPolicy: 'NEVER', generationMode: 'AUTO' }
 };
 
 // Legacy mappings for migration
@@ -28,7 +29,8 @@ const LEGACY_MAP = {
     'INTERN': 'INTN',
     'CANDIDATE': 'CAND',
     'JOB_REQUISITION': 'JOB',
-    'POSITION': 'POS'
+    'POSITION': 'POS',
+    'DEPARTMENT': 'DEPT'
 };
 
 /**

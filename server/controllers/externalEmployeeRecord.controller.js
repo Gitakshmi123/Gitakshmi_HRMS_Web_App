@@ -47,7 +47,11 @@ async function writeAudit(req, { module, action, entityId, before = null, after 
 
 async function resolveRequestByToken(req, token) {
   const { CandidateDocumentRequest, Applicant, ExternalEmployeeRecord } = getModels(req);
-  const request = await CandidateDocumentRequest.findOne({ token: hashToken(token) });
+  const crypto = require('crypto');
+  const tokenHash = crypto.createHash('sha256').update(String(token || '')).digest('hex');
+  const request = await CandidateDocumentRequest.findOne({ 
+      $or: [{ token: token }, { token: tokenHash }] 
+  });
   if (!request) {
     const err = new Error('Invalid document upload link');
     err.statusCode = 404;
@@ -66,7 +70,7 @@ async function resolveRequestByToken(req, token) {
     throw err;
   }
 
-  const externalRecord = await ExternalEmployeeRecord.findOne({ applicantId: applicant._id }).lean();
+  const externalRecord = await ExternalEmployeeRecord.findOne({ candidateId: request.candidateId, jobId: request.jobId }).lean();
   return { request, applicant, externalRecord };
 }
 
@@ -222,7 +226,7 @@ async function upsertExternal(req, submit = false) {
   };
 
   const record = await ExternalEmployeeRecord.findOneAndUpdate(
-    { applicantId: request.applicantId },
+    { candidateId: request.candidateId, jobId: request.jobId },
     { $set: update },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
@@ -427,7 +431,30 @@ exports.approve = async (req, res) => {
       after: { recordId: record._id, draftEmployeeId: draftEmployee._id },
     });
 
-    return res.json({ success: true, message: 'Profile approved and draft employee created', data: { record, employee: draftEmployee } });
+    // Auto-start onboarding pipeline so it appears in the Onboarding Dashboard
+    try {
+      const onboardingCtrl = require('./onboarding.controller');
+      await onboardingCtrl.autoStartOnboardingForApplicant({
+        req,
+        applicant,
+        actor: req.user,
+        source: 'external_profile_approved',
+        ensurePortalLink: true,
+        notifyCandidate: false // They already filled the form
+      });
+      
+      // Fast-forward instance status to 'verification' since documents are already collected
+      const db = req.tenantDB || req.db;
+      const OnboardingInstance = db.models.OnboardingInstance || db.model('OnboardingInstance', require('../models/OnboardingInstance'));
+      await OnboardingInstance.updateOne(
+        { employee: draftEmployee._id },
+        { $set: { status: 'verification' } }
+      );
+    } catch (onbErr) {
+      console.warn('[Approve External Record] Auto-onboarding failed:', onbErr.message, onbErr.stack);
+    }
+
+    return res.json({ success: true, message: 'Profile approved and draft employee created. Candidate moved to Onboarding Dashboard.', data: { record, employee: draftEmployee } });
   } catch (err) {
     await session.abortTransaction();
     return res.status(500).json({ success: false, message: err.message });

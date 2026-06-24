@@ -152,6 +152,7 @@ exports.sendDocumentRequest = async (req, res) => {
 
         // Find application or applicant
         let app = await Application.findById(applicationId).populate('jobId candidateId');
+        let applicant;
         let candidateId;
         let jobId;
         let candidateEmail;
@@ -163,7 +164,7 @@ exports.sendDocumentRequest = async (req, res) => {
             candidateEmail = app.candidateId?.email || app.email;
             candidateName = app.candidateId?.name || app.name;
         } else {
-            const applicant = await Applicant.findById(applicationId).populate('requirementId candidateId');
+            applicant = await Applicant.findById(applicationId).populate('requirementId candidateId');
             if (!applicant) {
                 return res.status(404).json({ success: false, message: 'Application/Applicant not found' });
             }
@@ -174,7 +175,41 @@ exports.sendDocumentRequest = async (req, res) => {
         }
 
         if (!candidateId) {
-            return res.status(400).json({ success: false, message: 'Candidate details not linked to this application.' });
+            // Check if candidate already exists in the tenant DB with this email
+            let candidateDoc = await Candidate.findOne({ email: candidateEmail.toLowerCase().trim(), tenant: tenantId });
+            if (!candidateDoc) {
+                // Auto-create Candidate profile
+                const companyIdConfig = require('./companyIdConfig.controller');
+                const bcrypt = require('bcryptjs');
+                const candIdResult = await companyIdConfig.generateIdInternal({
+                    tenantId,
+                    entityType: 'CANDIDATE',
+                    increment: true
+                });
+                const hashedPassword = await bcrypt.hash(crypto.randomBytes(16).toString('hex'), 10);
+                candidateDoc = new Candidate({
+                    tenant: tenantId,
+                    candidateId: candIdResult.id,
+                    name: candidateName,
+                    email: candidateEmail.toLowerCase().trim(),
+                    password: hashedPassword,
+                    mobile: (app ? (app.mobile || app.phone) : (applicant ? applicant.mobile : '')) || ''
+                });
+                await candidateDoc.save();
+            }
+            candidateId = candidateDoc._id;
+            
+            // Save link to application / applicant
+            if (app) {
+                app.candidateId = candidateId;
+                await app.save();
+            } else {
+                const appToUpdate = await Applicant.findById(applicationId);
+                if (appToUpdate) {
+                    appToUpdate.candidateId = candidateId;
+                    await appToUpdate.save();
+                }
+            }
         }
 
         // Fetch populated candidate to get exact email/name
@@ -188,6 +223,8 @@ exports.sendDocumentRequest = async (req, res) => {
         const expiresAt = new Date();
         expiresAt.setDate(expiresAt.getDate() + 7); // 7 days expiration
 
+        const resolvedApplicantId = app ? app._id : (applicant ? applicant._id : applicationId);
+
         let docRequest = await CandidateDocumentRequest.findOne({ candidateId, jobId });
         if (docRequest) {
             docRequest.token = requestToken;
@@ -195,11 +232,13 @@ exports.sendDocumentRequest = async (req, res) => {
             docRequest.expiresAt = expiresAt;
             docRequest.sentBy = req.user?.id || req.user?._id;
             docRequest.sentAt = new Date();
+            docRequest.applicantId = resolvedApplicantId;
             await docRequest.save();
         } else {
             docRequest = new CandidateDocumentRequest({
                 tenant: tenantId,
                 candidateId,
+                applicantId: resolvedApplicantId,
                 jobId,
                 token: requestToken,
                 status: 'Pending',
@@ -649,8 +688,20 @@ exports.getPrefilledDetails = async (req, res) => {
         const { token } = req.params;
         const { CandidateDocumentRequest, ExternalEmployeeRecord } = getModels(db);
 
-        const request = await CandidateDocumentRequest.findOne({ token }).populate('candidateId jobId');
+        const crypto = require('crypto');
+        const tokenHash = crypto.createHash('sha256').update(String(token || '')).digest('hex');
+        
+        console.log(`[DEBUG] getPrefilledDetails - Token: ${token}, Hash: ${tokenHash}`);
+        const request = await CandidateDocumentRequest.findOne({ 
+            $or: [{ token: token }, { token: tokenHash }] 
+        }).populate('candidateId jobId');
+        
+        console.log(`[DEBUG] getPrefilledDetails - Found Request:`, request ? request._id : 'null');
+
         if (!request) {
+            console.log(`[DEBUG] getPrefilledDetails - Querying ALL tokens to see if it exists...`);
+            const allReqs = await CandidateDocumentRequest.find({}, 'token');
+            console.log(`[DEBUG] getPrefilledDetails - Total doc reqs in DB: ${allReqs.length}. Tokens:`, allReqs.map(r => r.token));
             return res.status(404).json({ success: false, message: 'Invalid onboarding document token.' });
         }
 
@@ -701,7 +752,12 @@ exports.saveCandidateDraft = async (req, res) => {
         const { token } = req.params;
         const { CandidateDocumentRequest, ExternalEmployeeRecord } = getModels(db);
 
-        const request = await CandidateDocumentRequest.findOne({ token, status: { $ne: 'Approved' } });
+        const crypto = require('crypto');
+        const tokenHash = crypto.createHash('sha256').update(String(token || '')).digest('hex');
+        const request = await CandidateDocumentRequest.findOne({ 
+            $or: [{ token: token }, { token: tokenHash }], 
+            status: { $ne: 'Approved' } 
+        });
         if (!request) {
             return res.status(404).json({ success: false, message: 'Invalid onboarding document token.' });
         }
@@ -760,7 +816,12 @@ exports.submitCandidateProfile = async (req, res) => {
         const { token } = req.params;
         const { CandidateDocumentRequest, ExternalEmployeeRecord } = getModels(db);
 
-        const request = await CandidateDocumentRequest.findOne({ token, status: { $ne: 'Approved' } });
+        const crypto = require('crypto');
+        const tokenHash = crypto.createHash('sha256').update(String(token || '')).digest('hex');
+        const request = await CandidateDocumentRequest.findOne({ 
+            $or: [{ token: token }, { token: tokenHash }], 
+            status: { $ne: 'Approved' } 
+        });
         if (!request) {
             return res.status(404).json({ success: false, message: 'Invalid onboarding document token.' });
         }

@@ -41,6 +41,7 @@ const CompanySettings = ({ forceTab }) => {
         location.pathname.includes('sequences') ? 'docs' : 'global'
     );
     const [error, setError] = useState(null);
+    const [seedingDemo, setSeedingDemo] = useState(false);
 
     // RBAC Hooks
     const globalPerms = usePagePermissions('configuration.company');
@@ -397,7 +398,7 @@ const CompanySettings = ({ forceTab }) => {
                                             <option value="NEVER">Never</option>
                                         </select>
                                     </div>
-                                    {(doc.key === 'EMP' || doc.key === 'INTN') && (
+                                    {(doc.key === 'EMP' || doc.key === 'INTN' || doc.key === 'DEPT') && (
                                         <div className="w-full xl:w-32">
                                             <label className="text-[10px] font-bold text-slate-500 uppercase">Generation Mode</label>
                                             <select
