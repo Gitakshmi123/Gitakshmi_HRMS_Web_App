@@ -363,6 +363,7 @@ export default function Departments() {
 function DeptFormModal({ dept, depts, employees, onClose }) {
     const [form] = Form.useForm();
     const [saving, setSaving] = useState(false);
+    const [idGenMode, setIdGenMode] = useState('AUTO');
 
     useEffect(() => {
         if (dept) {
@@ -375,8 +376,27 @@ function DeptFormModal({ dept, depts, employees, onClose }) {
                 status: dept.status === 'active',
                 location: dept.meta?.location || 'Main Branch'
             });
+            setIdGenMode('MANUAL');
         } else {
             form.resetFields();
+            const fetchNextCode = async () => {
+                try {
+                    const res = await api.post('/company-id-config/next', {
+                        entityType: 'DEPT',
+                        increment: false
+                    });
+                    if (res.data && res.data.success) {
+                        const mode = res.data.data?.generationMode || 'AUTO';
+                        setIdGenMode(mode);
+                        if (mode === 'AUTO') {
+                            form.setFieldsValue({ code: res.data.nextId || res.data.data?.id });
+                        }
+                    }
+                } catch (err) {
+                    console.error('Failed to fetch next department code:', err);
+                }
+            };
+            fetchNextCode();
         }
     }, [dept, form]);
 
@@ -408,7 +428,7 @@ function DeptFormModal({ dept, depts, employees, onClose }) {
     };
 
     const handleValuesChange = (changedValues) => {
-        if (!dept && changedValues.name !== undefined) {
+        if (!dept && idGenMode === 'MANUAL' && changedValues.name !== undefined) {
             const name = changedValues.name || '';
             const code = name.includes(' ') 
                 ? name.split(' ').filter(w => w).map(w => w[0]).join('').substring(0, 3).toUpperCase()
@@ -431,7 +451,7 @@ function DeptFormModal({ dept, depts, employees, onClose }) {
                     <Input placeholder="Engineering" />
                 </Form.Item>
                 <Form.Item name="code" label="Code" rules={[{ required: true }]}>
-                    <Input placeholder="ENG" />
+                    <Input placeholder="ENG" disabled={!!dept || idGenMode === 'AUTO'} readOnly={!!dept || idGenMode === 'AUTO'} />
                 </Form.Item>
             </div>
 

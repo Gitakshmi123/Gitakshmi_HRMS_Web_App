@@ -3589,7 +3589,7 @@ exports.bulkUploadEmployees = async (req, res) => {
         }
 
         if (rowValues['email']) {
-          const companyEmail = rowValues['email'].find(m => (m.key.includes('company') || m.key.includes('work')) && String(m.value || '').trim() !== '');
+          const companyEmail = rowValues['email'].find(m => (m.key.includes('company') || m.key.includes('work') || m.key.includes('official')) && String(m.value || '').trim() !== '');
           const chosenEmail = companyEmail || rowValues['email'].find(m => String(m.value || '').trim() !== '');
           email = chosenEmail && chosenEmail.value ? chosenEmail.value.toString().trim().toLowerCase() : '';
         }
@@ -3618,6 +3618,7 @@ exports.bulkUploadEmployees = async (req, res) => {
         if (rowValues['bankLocation']) bankLocation = rowValues['bankLocation'][0].value ? rowValues['bankLocation'][0].value.toString().trim() : '';
         if (rowValues['policyName']) policyName = rowValues['policyName'][0].value ? rowValues['policyName'][0].value.toString().trim() : '';
         if (rowValues['password']) password = rowValues['password'][0].value ? rowValues['password'][0].value.toString().trim() : '';
+        if (!password && row['_generatedPassword']) password = String(row['_generatedPassword']).trim();
         if (rowValues['panNumber']) panNumber = rowValues['panNumber'][0].value ? rowValues['panNumber'][0].value.toString().trim() : '';
         if (rowValues['aadharNumber']) aadharNumber = rowValues['aadharNumber'][0].value ? rowValues['aadharNumber'][0].value.toString().trim() : '';
 

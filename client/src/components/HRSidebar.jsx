@@ -311,14 +311,20 @@ export default function HRSidebar({
 
       // Unify variants for both sidebar display and grouping logic
       if (rawModName === 'overview') return; // Handled manually
+      if (rawModName === 'leave master') return; // Explicitly hidden/deleted per user request
       if (rawModName === 'support' || rawModName === 'ticket inbox' || rawModName === 'tickets') {
         if (rawModName !== 'emp service') hasSupportModule = true;
       }
 
       // USER REQUEST: Extra safety for HR Dashboard appearing without access.
       // Strictly rely on permissions, ignoring the user's role.
-      if (moduleDisplayName.toLowerCase().includes('hr dashboard')) {
-        if (!hasPermission('overview.dashboard', 'any')) return;
+      if (moduleDisplayName.toLowerCase().includes('hr dashboard') || rawModName === 'overview') {
+        if (!isPrivilegedSidebarRole && !hasPermission('overview.dashboard', 'any')) return;
+      }
+
+      // USER REQUEST: Hide Onboarding from standard employees
+      if (rawModName.includes('onboarding') || moduleDisplayName.toLowerCase().includes('onboarding')) {
+        if (!isPrivilegedSidebarRole && !hasPermission('onboarding.dashboard', 'any')) return;
       }
 
       if (moduleDisplayName === 'Reports') {

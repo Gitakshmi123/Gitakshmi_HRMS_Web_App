@@ -180,6 +180,9 @@ export default function RosterManagementTab() {
          return;
       }
 
+      // Ensure no duplicate employees are added to the roster
+      selectedEmployees = [...new Set(selectedEmployees)];
+
       const payload = {
         rosterName: values.rosterName,
         month: startDate.month() + 1,
@@ -262,7 +265,7 @@ export default function RosterManagementTab() {
 
   const handleCellChange = (employeeId, weekNo, shiftId) => {
     const updated = [...assignments];
-    const matchIndex = updated.findIndex(a => a.employeeId._id === employeeId && a.weekNo === weekNo);
+    const matchIndex = updated.findIndex(a => (a.employeeId?._id === employeeId || a.employeeId === employeeId) && a.weekNo === weekNo);
     const targetWeek = weeks.find(w => w.weekNo === weekNo);
 
     if (matchIndex > -1) {
@@ -436,7 +439,7 @@ export default function RosterManagementTab() {
           <div className="text-center font-medium text-slate-600">
             <div>Week {w.weekNo}</div>
             <div className="text-[10px] text-slate-400 font-normal">
-              {dayjs(w.startDate).format('DD MMM')} - {dayjs(w.endDate).format('DD MMM')}
+              {dayjs(w.startDate).format('DD MMM')}
             </div>
           </div>
         ),
@@ -600,39 +603,41 @@ export default function RosterManagementTab() {
                     size="middle"
                     className="custom-table"
                   />
-                  {activeRoster.status !== 'Published' && (
-                    <div className="flex justify-end gap-3 p-4 border-t border-slate-100 bg-white">
-                      <Button
-                        icon={<Settings2 size={15} />}
-                        onClick={() => setIsRotationOpen(true)}
-                        className="flex items-center gap-1"
-                      >
-                        Auto-Rotate Shifts
-                      </Button>
-                      <Button
-                        type="primary"
-                        icon={<Save size={15} />}
-                        onClick={handleSaveAssignments}
-                        loading={saving}
-                        className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-700"
-                      >
-                        Save Assignments
-                      </Button>
-                      <Button
-                        type="primary"
-                        danger
-                        icon={<CheckCircle2 size={15} />}
-                        onClick={handlePublish}
-                        disabled={assignments.length === 0}
-                        className="flex items-center gap-1"
-                      >
-                        Publish & Sync
-                      </Button>
-                    </div>
-                  )}
                 </div>
               )}
             </Card>
+
+            {/* Action Buttons moved below the card per user request */}
+            {activeRoster && activeRoster.status !== 'Published' && (
+              <div className="flex justify-end gap-3 p-4 bg-white rounded-xl shadow-sm border border-slate-200">
+                <Button
+                  icon={<Settings2 size={15} />}
+                  onClick={() => setIsRotationOpen(true)}
+                  className="flex items-center gap-1"
+                >
+                  Auto-Rotate Shifts
+                </Button>
+                <Button
+                  type="primary"
+                  icon={<Save size={15} />}
+                  onClick={handleSaveAssignments}
+                  loading={saving}
+                  className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-700"
+                >
+                  Save Assignments
+                </Button>
+                <Button
+                  type="primary"
+                  danger
+                  icon={<CheckCircle2 size={15} />}
+                  onClick={handlePublish}
+                  disabled={assignments.length === 0}
+                  className="flex items-center gap-1"
+                >
+                  Publish & Sync
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Validation & conflicts panel */}

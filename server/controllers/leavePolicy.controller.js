@@ -121,6 +121,11 @@ exports.createPolicy = async (req, res) => {
         // Validation for empty rules removed to support creating Leave Groups without rules initially
 
 
+        // Derive leaveTypes array from rules if not explicitly provided
+        const derivedLeaveTypes = (req.body.leaveTypes && Array.isArray(req.body.leaveTypes) && req.body.leaveTypes.length > 0)
+            ? req.body.leaveTypes
+            : normalizedRules.map(r => String(r.leaveType || '').trim()).filter(Boolean);
+
         const policy = new LeavePolicy({
             tenant: tenantId,
             name,
@@ -128,6 +133,7 @@ exports.createPolicy = async (req, res) => {
             status: normalizedStatus,
             isActive: normalizedStatus === 'ACTIVE',
             applicableTo,
+            leaveTypes: derivedLeaveTypes,
             departmentIds: departmentIds || [],
             branchIds: branchIds || [],
             roles,
@@ -141,15 +147,27 @@ exports.createPolicy = async (req, res) => {
                 ? req.body.specificEmployeeIds 
                 : (specificEmployeeId ? [specificEmployeeId] : []),
             rules: normalizedRules,
+            formulas: req.body.formulas || [],
             effectiveFrom: req.body.effectiveFrom || null,
             expiryDate: req.body.expiryDate || null
         });
 
         await policy.save();
 
+        // Sync this specific new policy to all applicable employees immediately
         let applyResult = null;
-        if (policy.isActive) {
-            applyResult = await syncAllActivePoliciesForTenant(req, tenantId);
+        if (policy.isActive && normalizedRules.length > 0) {
+            try {
+                applyResult = await leaveManagementService.applyPolicyToExistingEmployees({
+                    tenantId,
+                    tenantDB: req.tenantDB,
+                    policyId: policy._id,
+                    prorate: true
+                });
+                console.log(`[CREATE_POLICY] Auto-synced policy "${name}" to ${applyResult?.employeesProcessed || 0} employees.`);
+            } catch (syncErr) {
+                console.warn('[CREATE_POLICY] Auto-sync warning:', syncErr.message);
+            }
         }
 
         res.status(201).json({
@@ -574,13 +592,20 @@ exports.deletePolicy = async (req, res) => {
             return res.status(404).json({ error: 'Policy not found' });
         }
 
-        // 1. Remove policy reference from all employees
-        const employeesUpdated = await Employee.updateMany(
-            { leavePolicy: policyObjectId, tenant: tenantId },
-            { $unset: { leavePolicy: "" } }
-        );
+        // 1. Check if policy is assigned to any employees
+        const inUse = await Employee.exists({ leavePolicy: policyObjectId, tenant: tenantId });
+        if (inUse) {
+            return res.status(400).json({ error: `Cannot delete: Leave Policy is currently assigned to one or more employees.` });
+        }
 
-        // 2. Delete all leave balances associated with this policy
+        const HolidayGroupSchema = require('../models/HolidayGroup');
+        const HolidayGroup = req.tenantDB.models.HolidayGroup || req.tenantDB.model('HolidayGroup', HolidayGroupSchema);
+        const inGroup = await HolidayGroup.exists({ tenant: tenantId, "applicability.leavePolicies": policyObjectId });
+        if (inGroup) {
+            return res.status(400).json({ error: `Cannot delete: Leave Policy is currently assigned to a Holiday Group.` });
+        }
+
+        // 2. Delete all leave balances associated with this policy (if any, though shouldn't exist if not assigned)
         const balancesDeleted = await LeaveBalance.deleteMany({
             policy: policyObjectId,
             tenant: tenantId
@@ -593,7 +618,7 @@ exports.deletePolicy = async (req, res) => {
 
         res.json({
             message: 'Policy deleted successfully',
-            employeesAffected: employeesUpdated.modifiedCount,
+            employeesAffected: 0,
             balancesDeleted: balancesDeleted.deletedCount,
             reassignedEmployees: resyncResult.employeesProcessed
         });
@@ -947,7 +972,7 @@ exports.assignPolicyToEmployee = async (req, res) => {
             employee,
             tenantId,
             policy,
-            year: new Date(employee.joiningDate || new Date()).getFullYear(),
+            year: new Date().getFullYear(),
             prorate: true,
             models
         });

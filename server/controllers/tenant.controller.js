@@ -416,10 +416,14 @@ exports.createCompany = async (req, res) => {
       });
     }
 
+    // Default: all modules enabled for new companies. If the caller explicitly
+    // sends an enabledModules object or a modules array, honour it; otherwise
+    // onboard the tenant with every module active so they don't hit an
+    // "Unauthorized" wall on first login.
     const normalizedEnabledModules = Array.isArray(modules)
       ? enabledModulesFromArray(modules)
       : (enabledModules && typeof enabledModules === 'object' && !Array.isArray(enabledModules)
-        ? normalizeEnabledModulesObject(enabledModules, defaultEnabledModules(false))
+        ? normalizeEnabledModulesObject(enabledModules, defaultEnabledModules(true))
         : defaultEnabledModules(true));
 
     const company = new Tenant({
@@ -779,10 +783,14 @@ exports.getMyModules = async (req, res, next) => {
         modules: enabledModulesToArray(defaultEnabledModules(true)) 
       });
     }
+    // If the tenant has no enabledModules configured (legacy tenant),
+    // default ALL modules to true so employees/HR don't hit Unauthorized.
+    const hasConfiguredModules = t.enabledModules && typeof t.enabledModules === 'object' && Object.keys(t.enabledModules).length > 0;
+    const effectiveEnabledModules = hasConfiguredModules ? t.enabledModules : defaultEnabledModules(true);
     const resolvedModules = Array.isArray(t.modules) && t.modules.length > 0
       ? t.modules
-      : enabledModulesToArray(t.enabledModules || {});
-    res.json({ enabledModules: t.enabledModules || {}, modules: resolvedModules });
+      : enabledModulesToArray(effectiveEnabledModules);
+    res.json({ enabledModules: effectiveEnabledModules, modules: resolvedModules });
   } catch (err) { next(err); }
 };
 
@@ -833,10 +841,10 @@ exports.getMyTenant = async (req, res, next) => {
         logo: t.logo || t.meta?.logo,
         code: t.code,
         status: t.status,
-        enabledModules: t.enabledModules || {},
+        enabledModules: (t.enabledModules && Object.keys(t.enabledModules).length > 0) ? t.enabledModules : defaultEnabledModules(true),
         modules: (Array.isArray(t.modules) && t.modules.length > 0)
           ? t.modules
-          : enabledModulesToArray(t.enabledModules || {})
+          : enabledModulesToArray((t.enabledModules && Object.keys(t.enabledModules).length > 0) ? t.enabledModules : defaultEnabledModules(true))
       });
     }
 

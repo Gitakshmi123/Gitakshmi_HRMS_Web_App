@@ -354,6 +354,7 @@ const musicRoutes = require('./routes/music.routes');
 const workflowRoutes = require('./routes/workflow.routes');
 const emailTemplateRoutes = require('./routes/emailTemplate.routes');
 const automationRoutes = require('./routes/automation.routes');
+const demoDataRoutes = require('./routes/demoData.routes');
 app.use((req, res, next) => {
     // console.log(`[ACCESS] ${req.method} ${req.originalUrl}`);
     next();
@@ -631,6 +632,7 @@ app.use('/api/hierarchy', auth, require('./routes/hierarchy.routes'));
 app.use('/api/email-templates', auth, require('./routes/emailTemplate.routes'));
 app.use('/api/automations', auth, require('./routes/automation.routes'));
 app.use('/api/workflows', auth, workflowRoutes);
+app.use('/api/demo-data', demoDataRoutes);
 
 // 3. Attendance & Shifts (Order Specific routes first)
 app.use('/api/shift-master', auth, attendanceCheck, require('./routes/shiftMaster.routes'));
@@ -682,6 +684,7 @@ app.use('/api/offer-templates', auth, recruitmentCheck, offerTemplateRoutes);
 app.use('/api/interviews', auth, recruitmentCheck, require('./routes/interview.routes'));
 app.use('/api/tracker', auth, recruitmentCheck, require('./routes/tracker.routes'));
 app.use('/api/requirements', auth, recruitmentCheck, requirementRoutes);
+app.use('/api/manpower-requisition', auth, require('./routes/manpowerRequisition.routes'));
 app.use('/api', auth, recruitmentCheck, require('./routes/feedback.routes'));
 app.use('/api/job-portal', require('./routes/jobPortal.routes'));
 app.use('/api/career', (req, res, next) => {

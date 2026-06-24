@@ -257,7 +257,13 @@ class SalaryCalculationEngine {
 
         if (code === 'PROFESSIONAL_TAX') {
             const ptPolicy = policy.professionalTax || {};
-            if (ptPolicy.enabled === false) return 0;
+            
+            // List of states that levy Professional Tax
+            const ptStates = ['andhra pradesh', 'assam', 'bihar', 'gujarat', 'jharkhand', 'karnataka', 'kerala', 'madhya pradesh', 'maharashtra', 'manipur', 'meghalaya', 'mizoram', 'nagaland', 'odisha', 'puducherry', 'sikkim', 'tamil nadu', 'telangana', 'tripura', 'west bengal'];
+            const currentState = String(ctx.payrollContext?.locationContext?.workState || '').toLowerCase();
+            const isPtState = !currentState || ptStates.includes(currentState);
+
+            if (ptPolicy.enabled === false || !isPtState) return 0;
             
             // If slabs are provided, calculate based on Gross
             if (Array.isArray(ptPolicy.slabs) && ptPolicy.slabs.length > 0) {
@@ -761,7 +767,13 @@ class SalaryCalculationEngine {
         // Professional Tax (Step 14)
         let pt = 0;
         const ptPolicy = ctxRules.locationPolicy?.professionalTax || {};
-        if (ptPolicy.enabled !== false) {
+        
+        // List of states that levy Professional Tax
+        const ptStates = ['andhra pradesh', 'assam', 'bihar', 'gujarat', 'jharkhand', 'karnataka', 'kerala', 'madhya pradesh', 'maharashtra', 'manipur', 'meghalaya', 'mizoram', 'nagaland', 'odisha', 'puducherry', 'sikkim', 'tamil nadu', 'telangana', 'tripura', 'west bengal'];
+        const currentState = String(ctxRules.locationContext?.workState || '').toLowerCase();
+        const isPtState = !currentState || ptStates.includes(currentState);
+
+        if (ptPolicy.enabled !== false && isPtState) {
             if (Array.isArray(ptPolicy.slabs) && ptPolicy.slabs.length > 0) {
                 const match = ptPolicy.slabs.find(slab => {
                     const min = this._safeNum(slab.minIncome);

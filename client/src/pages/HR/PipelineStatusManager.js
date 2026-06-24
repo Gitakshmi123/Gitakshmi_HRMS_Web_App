@@ -50,7 +50,8 @@ export const normalizeStatus = (status) => {
     const finalizedAliases = [
         'offer issued', 'offer expired', 'offer letter issued', 'offer generated', 
         'salary assigned', 'selected', 'joining letter issued', 'joining letter signed', 'joining letter accepted', 
-        'offer accepted – awaiting company approval', 'fully signed', 'finalized', 'hired', 'joined', 'active'
+        'offer accepted – awaiting company approval', 'fully signed', 'finalized', 'hired', 'joined', 'active',
+        'document requested', 'document draft saved', 'profile submitted', 'document verification pending', 'resubmitted', 'reupload required'
     ];
     if (finalizedAliases.includes(sl)) return 'Finalized';
     

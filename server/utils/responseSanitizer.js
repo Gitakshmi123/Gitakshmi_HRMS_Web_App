@@ -12,19 +12,20 @@ function asId(value) {
 }
 
 function sanitizeEnabledModules(enabledModules = {}) {
+  const isEmpty = Object.keys(enabledModules).length === 0;
   return {
-    hr: Boolean(enabledModules.hr),
-    payroll: Boolean(enabledModules.payroll),
-    attendance: Boolean(enabledModules.attendance),
-    leave: Boolean(enabledModules.leave),
-    recruitment: Boolean(enabledModules.recruitment),
-    backgroundVerification: Boolean(enabledModules.backgroundVerification),
-    documentManagement: Boolean(enabledModules.documentManagement),
-    socialMediaIntegration: Boolean(enabledModules.socialMediaIntegration),
-    employeePortal: Boolean(enabledModules.employeePortal),
-    reports: Boolean(enabledModules.reports),
-    onboarding: Boolean(enabledModules.onboarding),
-    policy: Boolean(enabledModules.policy),
+    hr: isEmpty ? true : Boolean(enabledModules.hr),
+    payroll: isEmpty ? true : Boolean(enabledModules.payroll),
+    attendance: isEmpty ? true : Boolean(enabledModules.attendance),
+    leave: isEmpty ? true : Boolean(enabledModules.leave),
+    recruitment: isEmpty ? true : Boolean(enabledModules.recruitment),
+    backgroundVerification: isEmpty ? true : Boolean(enabledModules.backgroundVerification),
+    documentManagement: isEmpty ? true : Boolean(enabledModules.documentManagement),
+    socialMediaIntegration: isEmpty ? true : Boolean(enabledModules.socialMediaIntegration),
+    employeePortal: enabledModules.employeePortal !== false,
+    reports: isEmpty ? true : Boolean(enabledModules.reports),
+    onboarding: isEmpty ? true : Boolean(enabledModules.onboarding),
+    policy: isEmpty ? true : Boolean(enabledModules.policy),
   };
 }
 

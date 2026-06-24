@@ -326,12 +326,29 @@ async function executeFinalAction(tenantDB, entityModel, entityId, status) {
             setImmediate(async () => {
               try {
                 if (applicant.email) {
+                  const emailTemplateId = letter.snapshotData?.get ? letter.snapshotData.get('emailTemplateId') : letter.snapshotData?.emailTemplateId;
+                  let emailTemplateHtml = null;
+                  if (emailTemplateId) {
+                      try {
+                          const EmailTemplate = mongoose.model('EmailTemplate');
+                          const emailTemplate = await EmailTemplate.findOne({ _id: emailTemplateId, tenantId: letter.tenant });
+                          if (emailTemplate) {
+                              emailTemplateHtml = emailTemplate.bodyHtml;
+                          }
+                      } catch (err) {
+                          console.warn("⚠️ Failed to load selected email template for approved offer in approval service:", err.message);
+                      }
+                  }
+
                   await emailService.sendOfferLetterEmail(
                     applicant.email,
                     applicant.name,
                     jobTitle,
                     companyName,
-                    attachmentPath
+                    attachmentPath,
+                    emailTemplateHtml, // customHtml
+                    applicant, // applicant
+                    letter.tenant // tenantId
                   );
                 }
 

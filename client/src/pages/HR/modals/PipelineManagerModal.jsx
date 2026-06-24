@@ -86,13 +86,15 @@ export default function PipelineManagerModal({ visible, onClose, requirement, on
                 tempId: s.stageId || `stage_${Date.now()}_${i}`,
                 stageId: s.stageId || s.id,
                 mode: s.mode || 'Online',
+                meetingLink: s.meetingLink || '',
                 durationMinutes: s.durationMinutes || 30,
                 assignedInterviewers: Array.isArray(s.assignedInterviewers)
                     ? s.assignedInterviewers.map((it) => (typeof it === 'object' ? it?._id : it)).filter(Boolean)
                     : (s.assignedInterviewer ? [s.assignedInterviewer] : []),
                 assignedInterviewer: (s.assignedInterviewers && s.assignedInterviewers.length > 0)
                     ? (typeof s.assignedInterviewers[0] === 'object' ? s.assignedInterviewers[0]._id : s.assignedInterviewers[0])
-                    : (s.assignedInterviewer || '')
+                    : (s.assignedInterviewer || ''),
+                externalInterviewers: s.externalInterviewers || []
             }));
 
             setStages(mapped);
@@ -144,9 +146,11 @@ export default function PipelineManagerModal({ visible, onClose, requirement, on
             evaluationCriteria: template ? template.criteria.map(c => c.label) : [],
             stageType: stageData.stageType || 'Interview',
             mode: stageData.mode || 'Online',
+            meetingLink: '',
             durationMinutes: stageData.durationMinutes || 45,
             assignedInterviewers: [],
             assignedInterviewer: '',
+            externalInterviewers: [],
             isSystemStage: false
         };
 
@@ -250,8 +254,10 @@ export default function PipelineManagerModal({ visible, onClose, requirement, on
                 )
                     .filter((id) => id && id !== '')
                     .map((id) => (typeof id === 'object' ? (id._id || id) : id)),
+                externalInterviewers: s.externalInterviewers || [],
                 feedbackFormId: s.feedbackFormId || null,
                 mode: s.mode,
+                meetingLink: s.meetingLink || '',
                 durationMinutes: s.durationMinutes,
                 stageType: s.stageType || 'Interview',
                 evaluationCriteria: s.evaluationCriteria || []
@@ -393,6 +399,18 @@ export default function PipelineManagerModal({ visible, onClose, requirement, on
                                                                                     <option value="In-person">In-person</option>
                                                                                 </select>
                                                                             </div>
+                                                                            {stg.mode === 'Online' && (
+                                                                                <div className="mt-4 bg-indigo-50/50 dark:bg-indigo-900/10 p-3 rounded-2xl border border-indigo-100/50 dark:border-indigo-800/30">
+                                                                                    <label className="text-[9px] font-black text-indigo-400 uppercase tracking-[0.15em] mb-1.5 block">Meeting Link</label>
+                                                                                    <input
+                                                                                        type="url"
+                                                                                        value={stg.meetingLink || ''}
+                                                                                        onChange={e => updateStage(index, 'meetingLink', e.target.value)}
+                                                                                        placeholder="https://zoom.us/j/..."
+                                                                                        className="w-full bg-white dark:bg-slate-800 border-none rounded-xl py-2 px-3 text-[11px] font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-indigo-300 shadow-sm placeholder:text-slate-300"
+                                                                                    />
+                                                                                </div>
+                                                                            )}
                                                                         </div>
 
                                                                         {/* Right Side: Interviewer & Form */}
@@ -469,7 +487,62 @@ export default function PipelineManagerModal({ visible, onClose, requirement, on
                                                                                         }}
                                                                                         className="w-full py-2 border border-dashed border-indigo-200 rounded-2xl text-[9px] font-black uppercase tracking-widest text-[#4F46E5] hover:bg-indigo-50/50 flex items-center justify-center gap-1 transition-all"
                                                                                     >
-                                                                                        <Plus size={10} strokeWidth={3} /> Add Another Interviewer
+                                                                                        <Plus size={10} strokeWidth={3} /> Add Internal Interviewer
+                                                                                    </button>
+                                                                                    
+                                                                                    {/* External Interviewers */}
+                                                                                    {(stg.externalInterviewers || []).map((ext, extIdx) => (
+                                                                                        <div key={`ext_${extIdx}`} className="space-y-2 bg-amber-50/50 dark:bg-amber-900/10 p-2 rounded-xl border border-amber-100/50 dark:border-amber-800/30">
+                                                                                            <div className="flex items-center justify-between">
+                                                                                                <span className="text-[9px] font-black text-amber-600 uppercase tracking-widest">External Interviewer</span>
+                                                                                                <button
+                                                                                                    type="button"
+                                                                                                    onClick={() => {
+                                                                                                        const currExt = [...stg.externalInterviewers];
+                                                                                                        currExt.splice(extIdx, 1);
+                                                                                                        updateStage(index, 'externalInterviewers', currExt);
+                                                                                                    }}
+                                                                                                    className="text-rose-500 hover:bg-rose-50 p-1 rounded-lg"
+                                                                                                >
+                                                                                                    <Trash2 size={12} />
+                                                                                                </button>
+                                                                                            </div>
+                                                                                            <div className="flex flex-col gap-2">
+                                                                                                <input
+                                                                                                    type="text"
+                                                                                                    placeholder="Name"
+                                                                                                    value={ext.name || ''}
+                                                                                                    onChange={(e) => {
+                                                                                                        const currExt = [...stg.externalInterviewers];
+                                                                                                        currExt[extIdx].name = e.target.value;
+                                                                                                        updateStage(index, 'externalInterviewers', currExt);
+                                                                                                    }}
+                                                                                                    className="w-full bg-white border border-slate-200 rounded-xl py-1.5 px-3 text-[11px] font-bold outline-none focus:ring-2 focus:ring-amber-200"
+                                                                                                />
+                                                                                                <input
+                                                                                                    type="email"
+                                                                                                    placeholder="Email"
+                                                                                                    value={ext.email || ''}
+                                                                                                    onChange={(e) => {
+                                                                                                        const currExt = [...stg.externalInterviewers];
+                                                                                                        currExt[extIdx].email = e.target.value;
+                                                                                                        updateStage(index, 'externalInterviewers', currExt);
+                                                                                                    }}
+                                                                                                    className="w-full bg-white border border-slate-200 rounded-xl py-1.5 px-3 text-[11px] font-bold outline-none focus:ring-2 focus:ring-amber-200"
+                                                                                                />
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    ))}
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => {
+                                                                                            const currExt = stg.externalInterviewers ? [...stg.externalInterviewers] : [];
+                                                                                            currExt.push({ name: '', email: '' });
+                                                                                            updateStage(index, 'externalInterviewers', currExt);
+                                                                                        }}
+                                                                                        className="w-full py-2 border border-dashed border-amber-200 rounded-2xl text-[9px] font-black uppercase tracking-widest text-amber-600 hover:bg-amber-50/50 flex items-center justify-center gap-1 transition-all"
+                                                                                    >
+                                                                                        <Plus size={10} strokeWidth={3} /> Add External Interviewer
                                                                                     </button>
                                                                                 </div>
                                                                             </div>

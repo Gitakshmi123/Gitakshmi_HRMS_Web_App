@@ -448,6 +448,7 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
     };
     const [applicants, setApplicants] = useState([]);
     const [templates, setTemplates] = useState([]);
+    const [emailTemplates, setEmailTemplates] = useState([]);
 
     const [resumeUrl, setResumeUrl] = useState(null);
     const [isResumeModalOpen, setIsResumeModalOpen] = useState(false);
@@ -499,18 +500,27 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
 
     const canGenerateOffer = (app) => {
         const status = String(app?.status || '');
-        const hasApprovedDraft = Boolean(app?.employeeId) && ['Draft Employee', 'Document Verified', 'Profile Approved'].includes(status);
-        if (!hasApprovedDraft) return false;
         if (isOfferPendingStage(app) || isOfferAcceptedStage(app) || isOfferSignedStage(app)) return false;
-        // Block if documents not approved
-        if (app.documentRequestStatus !== 'Approved') return false;
-        return true;
+        
+        // Allow generating offer if they are finalized/selected OR if documents are submitted/approved
+        const stage = String(app?.currentStage?.stageName || '').toLowerCase();
+        if (status === 'Finalized' || status === 'Selected' || stage === 'finalized') return true;
+        if (app?.documentRequestStatus === 'Submitted' || app?.documentRequestStatus === 'Approved') return true;
+        
+        // Fallback for candidates who bypassed the external onboarding flow
+        const hasApprovedDraft = Boolean(app?.employeeId) && ['Draft Employee', 'Document Verified', 'Profile Approved'].includes(status);
+        return hasApprovedDraft;
     };
 
     const canSendDocuments = (app) => {
         const status = String(app?.status || '');
         const stage = String(app?.currentStage?.stageName || '').toLowerCase();
-        return (status === 'Finalized' || status === 'Selected' || stage === 'finalized')
+        
+        // Allow sending document request at Finalized or anywhere during the Offer stage
+        const isEligibleStage = status === 'Finalized' || status === 'Selected' || stage === 'finalized' || 
+                                isOfferPendingStage(app) || isOfferAcceptedStage(app) || isOfferSignedStage(app);
+                                
+        return isEligibleStage
             && !app?.employeeId
             && !['Document Requested', 'Document Draft Saved', 'Profile Submitted', 'Draft Employee'].includes(status);
     };
@@ -1326,7 +1336,7 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
     // Helper: Check if a status is terminal/finalized
     const isFinalizedStatus = (s) => {
         const ns = normalizeStatus(s);
-        return ns === 'Finalized' || ['Finalized', 'Selected', 'Joining Letter Issued', 'Offer Issued', 'Offer Accepted', 'Offer Accepted – Awaiting Company Approval', 'Fully Signed', 'Hired', 'Joined'].includes(s);
+        return ns === 'Finalized' || ['Finalized', 'Selected', 'Joining Letter Issued', 'Offer Issued', 'Offer Accepted', 'Offer Accepted – Awaiting Company Approval', 'Fully Signed', 'Hired', 'Joined', 'Document Requested', 'Profile Submitted', 'Document Verification Pending', 'Resubmitted', 'Reupload Required'].includes(s);
     };
 
     // Cumulative Filtering Logic: Check if a candidate's status has reached or passed a specific tab
@@ -1484,6 +1494,7 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
         expiryAt: '',
         location: '',
         templateId: '',
+        emailTemplateId: '',
         position: '',
         jobCategory: 'Full Time', // Intern vs Full Time
         probationPeriod: '',
@@ -2127,6 +2138,15 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
             // Non-critical, just log
             console.warn("Failed to load joining templates (might be empty or missing permission)", err.message);
         }
+
+        // Fetch Email Templates (independently)
+        try {
+            const emailRes = await api.get('/email-templates');
+            const templatesList = emailRes.data?.templates || emailRes.data || [];
+            setEmailTemplates(templatesList.filter(t => t.isActive !== false));
+        } catch (err) {
+            console.warn("Failed to load email templates (might be empty or missing permission)", err.message);
+        }
     }
 
 
@@ -2450,6 +2470,7 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
             expiryAt: defaultExpiry.toISOString(),
             location: applicant.workLocation || applicant.location || 'Ahmedabad',
             templateId: '',
+            emailTemplateId: '',
             position: applicant.requirementId?.jobTitle || '',
             jobCategory: applicant.jobCategory || 'Full Time',
             probationPeriod: candidateProbationPeriod,
@@ -2761,6 +2782,7 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
                 const payload = {
                     applicantId: selectedApplicant._id,
                     templateId: offerData.templateId,
+                    emailTemplateId: offerData.emailTemplateId,
                     joiningDate: offerData.joiningDate,
                     expiryAt: offerData.expiryAt,
                     location: offerData.location,
@@ -2994,6 +3016,7 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
             const payload = {
                 applicantId: selectedApplicant._id,
                 templateId: offerData.templateId,
+                emailTemplateId: offerData.emailTemplateId,
                 joiningDate: offerData.joiningDate,
                 expiryAt: offerData.expiryAt,
                 location: offerData.location,
@@ -3712,15 +3735,6 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
                         <h1 className="text-xl font-black text-slate-900 tracking-tight whitespace-nowrap">
                             {showAllCandidates ? 'All Candidates' : (jobSpecific && selectedRequirement ? selectedRequirement.jobTitle : 'Candidate Pipeline')}
                         </h1>
-                        {jobSpecific && selectedRequirement && (
-                            <button
-                                onClick={() => setShowPipelineManager(true)}
-                                className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 text-slate-800 hover:bg-slate-100 rounded-lg text-xs font-bold transition-all border border-slate-200 shadow-sm"
-                            >
-                                <Settings size={14} className="animate-spin-slow" />
-                                <span>MANAGE PIPELINE</span>
-                            </button>
-                        )}
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 justify-start sm:justify-end w-full">
@@ -3862,23 +3876,9 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
                                                 {count}
                                             </div>
                                         </button>
-                                    );
+                                     );
                                 })}
                             </div>
-
-                            {/* Inline Pipeline Controls */}
-                            {selectedRequirement && (
-                                <div className="flex flex-wrap items-center gap-2 sm:gap-3 lg:ml-2 lg:pl-4 lg:border-l border-slate-100 flex-shrink-0 w-full lg:w-auto bg-white/80 lg:bg-transparent pt-1 lg:pt-0">
-                                    <button
-                                        onClick={() => setShowPipelineManager(true)}
-                                        className="h-9 sm:h-10 px-3 sm:px-4 flex items-center gap-1.5 sm:gap-2 bg-white text-slate-600 border border-slate-200 rounded-xl shadow-sm hover:bg-slate-50 hover:text-slate-950 hover:border-slate-300 transition font-bold text-[10px] sm:text-xs uppercase tracking-wider whitespace-nowrap group"
-                                    >
-                                        <Settings size={16} />
-                                        <span className="hidden sm:inline">Manage Pipeline</span>
-                                        <span className="sm:hidden">Manage</span>
-                                    </button>
-                                </div>
-                            )}
                         </div>
                     )}
                 </div>
@@ -4125,7 +4125,7 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
 
                                                 {/* Action Area */}
                                                 <div className="mt-auto border-t border-slate-100 p-3 bg-slate-50/50 group-hover:bg-slate-50 transition-colors">
-                                                    <div className="grid grid-cols-3 gap-2">
+                                                    <div className="grid grid-cols-2 gap-2 mb-2">
                                                         {/* Slot 1: Interview Action/Status */}
                                                         {app.interview?.date ? (
                                                             <button
@@ -4147,8 +4147,25 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
                                                                 SCHEDULE
                                                             </button>
                                                         )}
-
-                                                        {/* Slot 2: Resume */}
+                                                        
+                                                        {/* Slot 2: Line up Interview Panel */}
+                                                        <button
+                                                            onClick={(e) => { 
+                                                                e.stopPropagation(); 
+                                                                // Ensure we edit the pipeline for this candidate's requirement
+                                                                if (app.requirementId && (!selectedRequirement || selectedRequirement._id !== app.requirementId._id)) {
+                                                                    setSelectedRequirement(app.requirementId);
+                                                                }
+                                                                setShowPipelineManager(true); 
+                                                            }}
+                                                            className="py-2 rounded-lg bg-indigo-600 border border-indigo-700 text-white text-[10px] font-black uppercase tracking-wider hover:bg-indigo-700 hover:shadow-md transition-all flex items-center justify-center gap-1.5 shadow-sm text-center"
+                                                            title="Line Up Interview Panel"
+                                                        >
+                                                            <Users size={12} /> LINE UP
+                                                        </button>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        {/* Slot 3: Resume */}
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); handleViewResume(app.resume); }}
                                                             className="py-2 rounded-lg bg-white border border-slate-200 text-slate-600 text-[10px] font-black uppercase tracking-wider hover:bg-slate-100 hover:text-slate-950 hover:border-slate-300 transition-all flex items-center justify-center gap-1.5 shadow-sm"
@@ -4157,7 +4174,7 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
                                                             <FileText size={12} /> RESUME
                                                         </button>
 
-                                                        {/* Slot 3: Actions */}
+                                                        {/* Slot 4: Actions */}
                                                         <div className="relative">
                                                             <button
                                                                 onClick={(e) => {
@@ -4764,6 +4781,27 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
                         </p>
                     </div>
 
+                    {/* Email Template Selection */}
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase text-slate-600 dark:text-slate-400 tracking-wider flex items-center gap-2">
+                            <Mail size={12} className="text-blue-500" />
+                            Email Template
+                        </label>
+                        <select
+                            value={offerData.emailTemplateId || ''}
+                            onChange={(e) => setOfferData(prev => ({ ...prev, emailTemplateId: e.target.value }))}
+                            className="w-full text-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 rounded-xl p-3 h-12 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all shadow-sm"
+                        >
+                            <option value="">-- Default Email Format --</option>
+                            {emailTemplates?.map(t => (
+                                <option key={t._id} value={t._id}>{t.name}</option>
+                            ))}
+                        </select>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                            Select a custom email template to be sent to the candidate upon final approval.
+                        </p>
+                    </div>
+
                     <div className="space-y-4">
                         {Array.isArray(approvalEmails) && approvalEmails.map((approver, index) => (
                             <div key={index} className="flex gap-2 items-start">
@@ -5026,6 +5064,40 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
                                                 ))}
                                             </select>
                                         </div>
+
+                                        <div className="min-w-0">
+                                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Email Template</label>
+                                            <select
+                                                name="emailTemplateId"
+                                                value={offerData.emailTemplateId || ''}
+                                                onChange={handleOfferChange}
+                                                className="mt-1 block w-full border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 p-2 h-[42px]"
+                                            >
+                                                <option value="">-- Default Email Format --</option>
+                                                {emailTemplates.map(t => (
+                                                    <option key={t._id} value={t._id}>{t.name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        {offerData.emailTemplateId && (
+                                            (() => {
+                                                const selectedTpl = emailTemplates.find(t => t._id === offerData.emailTemplateId);
+                                                if (!selectedTpl) return null;
+                                                return (
+                                                    <div className="col-span-full mt-1 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-950/40 space-y-2 backdrop-blur-sm shadow-inner">
+                                                        <div className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Email Template Preview</div>
+                                                        <div className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                                                            <span className="text-slate-400 font-medium mr-2">Subject:</span> {selectedTpl.subject}
+                                                        </div>
+                                                        <div 
+                                                            className="text-xs text-slate-650 dark:text-slate-350 border-t border-slate-200/50 dark:border-slate-800 pt-2 max-h-[160px] overflow-y-auto bg-slate-50/50 dark:bg-slate-950/20 p-2.5 rounded-lg border border-slate-100 dark:border-slate-900"
+                                                            dangerouslySetInnerHTML={{ __html: selectedTpl.bodyHtml }}
+                                                        />
+                                                    </div>
+                                                );
+                                            })()
+                                        )}
 
                                         <div className="min-w-0">
                                             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Job Category <span className="text-red-500">*</span></label>

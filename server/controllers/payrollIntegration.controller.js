@@ -58,7 +58,23 @@ exports.generatePayrollInputs = async (req, res) => {
             });
 
             // Calculate exact Paid Present Days
-            const effectivePresentDays = presentCount + (halfDayCount * 0.5) - totalLopDaysFromPenalties;
+            // If status is half_day (0.5 present) or absent (0 present), the penalty is already reflected.
+            // We only deduct lopDays if it exceeds the status penalty (e.g. manual disciplinary LOP on a present day).
+            let effectivePresentDays = 0;
+            attendanceRecords.forEach(record => {
+                let dayPresence = 0;
+                if (record.status === 'present') dayPresence = 1;
+                else if (record.status === 'half_day') dayPresence = 0.5;
+                
+                // Subtract any lopDays that exceed the structural absence
+                // e.g., if status is present (1) and lopDays is 0.5 -> presence is 0.5
+                // if status is half_day (0.5) and lopDays is 0.5 -> penalty is already in status, so presence remains 0.5
+                // if status is absent (0) and lopDays is 1.0 -> penalty is already in status, presence remains 0
+                const structuralAbsence = 1 - dayPresence;
+                const additionalLop = Math.max(0, (record.lopDays || 0) - structuralAbsence);
+                
+                effectivePresentDays += Math.max(0, dayPresence - additionalLop);
+            });
 
             // 2. Calculate Approved Paid Leaves
             const leaveRequests = await LeaveRequest.find({

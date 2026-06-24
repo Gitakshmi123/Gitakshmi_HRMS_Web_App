@@ -858,6 +858,13 @@ function LeaveGroupAssignmentPanel({ formulas, assignments, fetchGroups }) {
                 setIsSubmitting(false);
                 return showToast('error', 'Error', 'Select a formula template');
             }
+
+            // Extract leave type names from the template rules for the leaveTypes array
+            const leaveTypeNames = Array.from(new Set([
+                ...(template.rules || []).map(r => String(r.leaveType || '').trim()),
+                ...(template.formulas || []).map(f => String(f.leaveType || '').trim()),
+                ...(template.leaveTypes || [])
+            ].filter(Boolean)));
             
             const payload = {
                 name: form.name,
@@ -866,20 +873,38 @@ function LeaveGroupAssignmentPanel({ formulas, assignments, fetchGroups }) {
                 departmentIds: form.departmentIds,
                 roles: form.roles,
                 isActive: true,
-                isLocked: false, // Active group isn't locked
-                rules: template.rules
+                status: 'ACTIVE',
+                isLocked: false,
+                rules: template.rules,
+                formulas: template.formulas, // Add support for V2 policies
+                leaveTypes: leaveTypeNames,  // Populate leaveTypes so it shows in employee panel
             };
             
-            await api.post('/hr/leave-policies', payload);
-            showToast('success', 'Created', 'Group Assignment Created');
+            // Step 1: Create the policy
+            const createRes = await api.post('/hr/leave-policies', payload);
+            const newPolicyId = createRes.data?.policy?._id || createRes.data?._id;
+
+            showToast('success', 'Created', 'Group Assignment Created — syncing employee balances...');
             setShowForm(false);
             fetchGroups();
+
+            // Step 2: Auto-sync to seed LeaveBalance records for all existing employees
+            if (newPolicyId) {
+                try {
+                    await api.post(`/hr/leave-policies/${newPolicyId}/sync`);
+                    showToast('success', 'Synced', 'Leave balances have been updated for all applicable employees.');
+                } catch (syncErr) {
+                    console.warn('[GROUP_ASSIGNMENT] Auto-sync failed:', syncErr?.response?.data?.error || syncErr.message);
+                    showToast('warning', 'Partial', 'Policy created. Employees can see balances when they open their leave page.');
+                }
+            }
         } catch (err) {
             showToast('error', 'Error', err.response?.data?.error || 'Failed');
         } finally {
             setIsSubmitting(false);
         }
     };
+
 
     const handleDelete = async (id) => {
         showConfirmToast('Delete Assignment?', 'This will delete the group assignment.', async () => {

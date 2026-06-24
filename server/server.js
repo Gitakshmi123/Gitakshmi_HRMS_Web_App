@@ -1,4 +1,4 @@
-// Server root - forced restart 2026-06-20T12:48:00
+// Server root - forced restart 2026-06-24T05:52:00
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 
@@ -157,8 +157,10 @@ async function connectToDatabase() {
         );
 
         if (isDnsError) {
+            console.warn('⚠️ DNS SRV lookup failed. Possible ISP or network restriction.');
+
             if (!dnsFallbackApplied && MONGO_URI.startsWith('mongodb+srv://')) {
-                console.warn('⚠️ DNS SRV lookup failed. Attempting to switch to public DNS (8.8.8.8, 1.1.1.1) and retry...');
+                console.log('🔄 Attempting DNS override with Google Public DNS (8.8.8.8)...');
                 try {
                     const dns = require('dns');
                     dns.setServers(['8.8.8.8', '1.1.1.1']);

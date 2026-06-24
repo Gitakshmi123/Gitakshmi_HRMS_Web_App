@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { useJobPortalAuth } from '../../context/JobPortalAuthContext';
 import api, { resolveTenantLogoUrl } from '../../utils/api';
-import { getCompany, setCompany } from '../../utils/auth';
+import { getCandidateCompany, setCandidateCompany } from '../../utils/auth';
 import { companyMatchesPortalIdentifier, getJobPortalIdentifier } from '../../utils/jobPortalContext';
 import { ArrowLeft, ArrowRight, Briefcase, Lock, Mail, User, Phone, ShieldCheck, Sparkles } from 'lucide-react';
 
@@ -24,12 +24,13 @@ export default function CandidateSignup() {
     const [loading, setLoading] = useState(false);
     const [pageLoading, setPageLoading] = useState(true);
     const [logoUrl, setLogoUrl] = useState(() => {
-        const stored = getCompany();
+        const stored = getCandidateCompany();
         return stored ? resolveTenantLogoUrl(stored) : null;
     });
     const [otpSent, setOtpSent] = useState(false);
     const [otp, setOtp] = useState('');
     const [resendTimer, setResendTimer] = useState(0);
+    const [debugOtp, setDebugOtp] = useState('');
 
     useEffect(() => {
         if (resendTimer <= 0) return;
@@ -48,7 +49,7 @@ export default function CandidateSignup() {
 
             setPageLoading(true);
             try {
-                let companyInfo = getCompany();
+                let companyInfo = getCandidateCompany();
 
                 if (!companyMatchesPortalIdentifier(companyInfo, portalIdentifier)) {
                     const res = await api.get(`/public/tenant/${encodeURIComponent(portalIdentifier)}`);
@@ -58,7 +59,7 @@ export default function CandidateSignup() {
                             tenantId: portalIdentifier,
                             code: res.data.code || companyInfo?.code || '',
                         };
-                        setCompany(companyInfo);
+                        setCandidateCompany(companyInfo);
                     }
                 }
 
@@ -93,12 +94,16 @@ export default function CandidateSignup() {
         try {
             const res = await api.post('/candidate/send-otp', {
                 email: formData.email,
+                phone: formData.phone,
                 tenantId: finalPortalIdentifier
             });
             setLoading(false);
             if (res.data?.success) {
                 setOtpSent(true);
                 setResendTimer(60);
+                if (res.data?.debugOtp) {
+                    setDebugOtp(res.data.debugOtp);
+                }
             } else {
                 setError(res.data?.message || 'Failed to send verification code.');
             }
@@ -288,6 +293,12 @@ export default function CandidateSignup() {
                                     We've sent a 6-digit verification code to <span className="font-bold text-slate-800">{formData.email}</span>. Please enter it below:
                                 </p>
                             </div>
+
+                            {debugOtp && (
+                                <div className="bg-amber-50 border border-amber-100 p-3 rounded-2xl text-amber-700 text-xs font-bold text-center mb-4">
+                                    [DEV ONLY] OTP Code: <span className="text-sm font-extrabold select-all tracking-wider ml-1">{debugOtp}</span>
+                                </div>
+                            )}
 
                             <div className="space-y-1.5">
                                 <label className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 ml-3">Verification Code</label>

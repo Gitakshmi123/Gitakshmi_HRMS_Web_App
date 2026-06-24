@@ -97,7 +97,7 @@ export default function AddCompany() {
     const [gstLookupMessage, setGstLookupMessage] = useState('');
     const [errors, setErrors] = useState({});
 
-    const defaultEnabledModules = createDefaultEnabledModules(false, PSA_MODULE_CODES);
+    const defaultEnabledModules = createDefaultEnabledModules(true, PSA_MODULE_CODES);
 
     const handleInputChange = (e) => {
         const { name } = e.target;

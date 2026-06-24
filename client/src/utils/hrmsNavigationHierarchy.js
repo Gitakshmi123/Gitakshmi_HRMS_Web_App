@@ -6,7 +6,6 @@ export const MODULE_ORDER = [
   'Access',
   'Employee',
   'Attendance',
-  'Leave Master',
   'Policy',
   'Payroll',
   'Hiring',
@@ -127,7 +126,6 @@ export const MODULE_NAME_TO_CODE = {
   attendance: 'attendance',
   'attendance management': 'attendance',
   leave: 'leave',
-  'leave master': 'leave',
   policy: 'leave',
   payroll: 'payroll',
   'payroll system': 'payroll',
@@ -157,7 +155,6 @@ export const MODULE_DISPLAY_ALIASES = {
   people: 'Employee',
   employees: 'Employee',
   leave: 'Policy',
-  'leave master': 'Leave Master',
   'access control': 'Access',
   support: 'Ticket Inbox',
   tickets: 'Ticket Inbox',
@@ -229,9 +226,8 @@ export const MANAGEMENT_MODULES = [
   { moduleName: 'Dashboard', route: 'dashboard', icon: 'dashboard', moduleCode: 'hr', permissionKeys: ['overview.dashboard'] },
   { moduleName: 'Access', route: 'access', icon: 'access', moduleCode: 'accessControl', permissionKeys: ['configuration.access'] },
   { moduleName: 'Employee', route: 'employees', icon: 'employees', moduleCode: 'hr', permissionKeys: ['people.employees', 'people.directory', 'people.departments', 'people.org', 'people.users'] },
-  { moduleName: 'Attendance', route: 'attendance', employeeRoute: 'management-attendance', icon: 'attendance', moduleCode: 'attendance', permissionKeys: ['attendance.dashboard', 'attendance.history', 'attendance.liveTracking', 'attendance.calendar', 'attendance.face'] },
-  { moduleName: 'Leave Master', route: 'leave-policies', employeeRoute: 'leave-policies', icon: 'leavePolicies', moduleCode: 'leave', permissionKeys: ['leave.policies', 'leave.custom'] },
-  { moduleName: 'Policy', route: 'leave-approvals', icon: 'leaveRequests', moduleCode: 'leave', permissionKeys: ['leave.requests', 'leave.policies', 'policy.view', 'policy.manage'] },
+  { moduleName: 'Attendance', route: 'attendance', employeeRoute: 'management-attendance', icon: 'attendance', moduleCode: 'attendance', permissionKeys: ['attendance.dashboard', 'attendance.history', 'attendance.liveTracking', 'attendance.calendar', 'attendance.face'], matchRoutes: ['attendance', 'attendance-history', 'attendance/live-tracking', 'attendance-calendar', 'face-update-requests', 'leave-approvals', 'leave-requests'] },
+  { moduleName: 'Policy', route: 'organization-policies', icon: 'leaveRequests', moduleCode: 'leave', permissionKeys: ['leave.requests', 'leave.policies', 'policy.view', 'policy.manage'], matchRoutes: ['organization-policies', 'leave-policies'] },
   { moduleName: 'Payroll', route: 'payroll/dashboard', icon: 'payrollDashboard', moduleCode: 'payroll', permissionKeys: ['payroll.stats', 'payroll.salary', 'payroll.compensation', 'payroll.process', 'payroll.run', 'payroll.payslips'] },
   { moduleName: 'Hiring', route: 'requirements', icon: 'requirements', moduleCode: 'recruitment', permissionKeys: ['hiring.jobList', 'hiring.createReq', 'hiring.positions', 'hiring.external', 'hiring.internal', 'hiring.tracker', 'hiring.offerTemplates', 'hiring.offersJoining'] },
   { moduleName: 'Onboarding', route: 'onboarding/dashboard', icon: 'onboarding', moduleCode: 'onboarding', permissionKeys: ['onboarding.dashboard', 'onboarding.templates', 'onboarding.instances', 'onboarding.tasks'] },
@@ -299,16 +295,21 @@ export function getSectionTabs(pathPrefix, icons = {}) {
   const icon = (name) => icons[name];
   return [
     {
-      match: ['/organization', '/org', '/departments', '/grades', '/organization-policies', '/leave-approvals', '/leave-requests', '/organization/automations', '/shift-management'],
+      match: ['/organization', '/org', '/departments', '/grades', '/organization-policies', '/organization/automations', '/shift-management'],
       tabs: [
         { label: 'Organization', to: buildPath(pathPrefix, 'organization'), icon: icon('organization'), permission: 'people.org' },
         { label: 'Org Structure', to: buildPath(pathPrefix, 'org'), icon: icon('employees'), permission: 'people.org' },
         { label: 'Departments', to: buildPath(pathPrefix, 'departments'), icon: icon('departments'), permission: 'people.departments' },
         { label: 'Grades', to: buildPath(pathPrefix, 'grades'), icon: icon('requirements'), permission: 'people.org' },
         { label: 'Leave Configuration', to: buildPath(pathPrefix, 'organization-policies'), icon: icon('settings'), permission: 'leave.policies' },
+        { label: 'Automations', to: buildPath(pathPrefix, 'organization/automations'), icon: icon('settings'), permission: 'people.org' },
+      ],
+    },
+    {
+      match: ['/leave-approvals', '/leave-requests', '/shift-management'],
+      tabs: [
         { label: 'Requests', to: buildPath(pathPrefix, 'leave-approvals'), icon: icon('leave'), permission: 'leave.requests' },
         { label: 'Shift', to: buildPath(pathPrefix, 'shift-management'), icon: icon('clock'), permission: 'attendance.dashboard' },
-        { label: 'Automations', to: buildPath(pathPrefix, 'organization/automations'), icon: icon('settings'), permission: 'people.org' },
       ],
     },
     {
@@ -319,13 +320,14 @@ export function getSectionTabs(pathPrefix, icons = {}) {
       ],
     },
     {
-      match: ['/attendance', '/attendance-calendar', '/face-update-requests'],
+      match: ['/attendance', '/attendance-calendar', '/face-update-requests', '/leave-approvals', '/leave-requests'],
       tabs: [
         { label: 'Dashboard', to: buildPath(pathPrefix, 'attendance'), icon: icon('dashboard'), permission: 'attendance.dashboard' },
         { label: 'History', to: buildPath(pathPrefix, 'attendance-history'), icon: icon('history'), permission: 'attendance.history' },
         { label: 'Live Tracking', to: buildPath(pathPrefix, 'attendance/live-tracking'), icon: icon('pin'), permission: 'attendance.liveTracking' },
         { label: 'Calendar', to: buildPath(pathPrefix, 'attendance-calendar'), icon: icon('calendar'), permission: 'attendance.calendar' },
         { label: 'Face Updates', to: buildPath(pathPrefix, 'face-update-requests'), icon: icon('fingerprint'), permission: 'attendance.face' },
+        { label: 'Requests', to: buildPath(pathPrefix, 'leave-approvals'), icon: icon('leave'), permission: 'leave.requests' },
       ],
     },
     {

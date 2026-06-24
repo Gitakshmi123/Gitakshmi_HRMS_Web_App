@@ -1071,10 +1071,35 @@ exports.rescoreAllApplicants = async (req, res) => {
 exports.requestDocuments = async (req, res) => {
     try {
         const crypto = require('crypto');
-        const { Applicant, CandidateDocumentRequest, Notification, AuditLog } = getModels(req);
+        const { Applicant, CandidateDocumentRequest, Notification, AuditLog, Candidate } = getModels(req);
         const app = await Applicant.findById(req.params.id).populate('requirementId');
         if (!app) return res.status(404).json({ success: false, message: 'Application not found' });
-        if (!app.candidateId) return res.status(400).json({ success: false, message: 'Candidate account is not linked to this application' });
+
+        const tenantId = req.tenantId || req.user?.tenantId;
+        if (!app.candidateId) {
+            let candidateDoc = await Candidate.findOne({ email: app.email.toLowerCase().trim(), tenant: tenantId });
+            if (!candidateDoc) {
+                const companyIdConfig = require('./companyIdConfig.controller');
+                const bcrypt = require('bcryptjs');
+                const candIdResult = await companyIdConfig.generateIdInternal({
+                    tenantId,
+                    entityType: 'CANDIDATE',
+                    increment: true
+                });
+                const hashedPassword = await bcrypt.hash(crypto.randomBytes(16).toString('hex'), 10);
+                candidateDoc = new Candidate({
+                    tenant: tenantId,
+                    candidateId: candIdResult.id,
+                    name: app.name,
+                    email: app.email.toLowerCase().trim(),
+                    password: hashedPassword,
+                    mobile: app.mobile || ''
+                });
+                await candidateDoc.save();
+            }
+            app.candidateId = candidateDoc._id;
+            await app.save();
+        }
 
         const stage = String(app.currentStage?.stageName || '').trim().toLowerCase();
         const status = String(app.status || '').trim().toLowerCase();
@@ -1090,10 +1115,9 @@ exports.requestDocuments = async (req, res) => {
             });
         }
 
-        const rawToken = crypto.randomBytes(32).toString('hex');
+        const rawToken = `${tenantId}_${crypto.randomBytes(24).toString('hex')}`;
         const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
         const expiresAt = dayjs().add(Number(process.env.CANDIDATE_DOCUMENT_TOKEN_DAYS || 7), 'day').toDate();
-        const tenantId = req.tenantId || req.user?.tenantId;
 
         const docRequest = await CandidateDocumentRequest.findOneAndUpdate(
             { applicantId: app._id, status: { $in: ['Pending', 'Submitted', 'Rejected'] } },

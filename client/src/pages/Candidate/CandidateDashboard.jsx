@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useJobPortalAuth } from '../../context/JobPortalAuthContext';
 import api from '../../utils/api';
-import { getCompany, getTenantId } from '../../utils/auth';
+import { getCandidateCompany, getCandidateTenantId } from '../../utils/auth';
 import {
     Briefcase, MapPin, Clock, ArrowRight, Layers,
     TrendingUp, CheckCircle2, XCircle, AlertCircle, Sparkles,
@@ -29,7 +29,7 @@ export default function CandidateDashboard() {
         setLoading(true);
         setError(null);
         try {
-            const tid = candidate?.tenantId || getTenantId();
+            const tid = candidate?.tenantId || getCandidateTenantId();
 
             if (!tid) {
                 setError("Company identification lost. Please log in again.");
@@ -81,7 +81,7 @@ export default function CandidateDashboard() {
     }, [candidate]);
 
     useEffect(() => {
-        const company = getCompany();
+        const company = getCandidateCompany();
         if (company?.name) {
             setCompanyName(company.name);
         }

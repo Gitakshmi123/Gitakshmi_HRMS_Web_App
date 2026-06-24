@@ -11,6 +11,7 @@ const {
 } = require('../validations/grade.validation');
 
 router.get('/', auth.authenticate, validate(listGradesSchema), gradeController.getGrades);
+router.post('/bulk-upload', auth.authenticate, auth.requireHr, gradeController.bulkUploadGrades);
 router.get('/:id', auth.authenticate, validate(gradeIdSchema), gradeController.getGradeById);
 router.post('/', auth.authenticate, auth.requireHr, validate(createGradeSchema), gradeController.createGrade);
 router.put('/:id', auth.authenticate, auth.requireHr, validate(updateGradeSchema), gradeController.updateGrade);

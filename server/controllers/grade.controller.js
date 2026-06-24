@@ -260,3 +260,146 @@ exports.toggleGradeStatus = async (req, res) => {
     return sendError(res, error, 'Failed to update grade status');
   }
 };
+
+exports.bulkUploadGrades = async (req, res) => {
+  try {
+    const { records } = req.body;
+
+    if (!records || !Array.isArray(records)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Records must be an array',
+        uploadedCount: 0,
+        failedCount: 0,
+        errors: ['Invalid request format - records must be an array']
+      });
+    }
+
+    if (records.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No records provided',
+        uploadedCount: 0,
+        failedCount: 0,
+        errors: ['No grade records to upload']
+      });
+    }
+
+    if (records.length > 1000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Maximum 1000 records allowed per upload',
+        uploadedCount: 0,
+        failedCount: records.length,
+        errors: ['Exceeded maximum record limit of 1000 records']
+      });
+    }
+
+    const Grade = getGradeModel(req);
+    const tenant = getTenantId(req);
+    const userId = getUserId(req);
+
+    let uploadedCount = 0;
+    let failedCount = 0;
+    const errors = [];
+    const warnings = [];
+
+    for (let i = 0; i < records.length; i++) {
+      const record = records[i];
+      const rowNum = i + 2; // Assuming Excel row (1-indexed + header)
+
+      try {
+        const name = record['Grade Name'] || record.Name || record.name || record.gradename || '';
+        const code = record['Grade Code'] || record.Code || record.code || record.gradecode || '';
+        const level = record['Hierarchy Level'] || record.Level || record.level || record.gradelevel || record.hierarchy_level || '';
+        const description = record.Description || record.description || '';
+
+        if (!name || typeof name !== 'string' || name.trim().length < 2) {
+          failedCount++;
+          errors.push(`Row ${rowNum}: Grade name is required and must be at least 2 characters`);
+          continue;
+        }
+
+        const gradeName = name.trim();
+        const gradeNormalizedName = gradeName.toLowerCase();
+        
+        let gradeCode = normalizeCode(code);
+        if (!gradeCode) {
+          failedCount++;
+          errors.push(`Row ${rowNum}: Grade code is required`);
+          continue;
+        }
+
+        const gradeLevel = parseInt(level, 10);
+        if (isNaN(gradeLevel) || gradeLevel < 1) {
+          failedCount++;
+          errors.push(`Row ${rowNum}: Level must be a positive integer`);
+          continue;
+        }
+
+        // Find existing grade by code or name (and isDeleted: false) under this tenant
+        const existingGrade = await Grade.findOne({
+          tenant,
+          isDeleted: false,
+          $or: [
+            { code: gradeCode },
+            { normalizedName: gradeNormalizedName }
+          ]
+        });
+
+        if (existingGrade) {
+          // Update existing
+          existingGrade.name = gradeName;
+          existingGrade.normalizedName = gradeNormalizedName;
+          existingGrade.code = gradeCode;
+          existingGrade.level = gradeLevel;
+          existingGrade.description = description.trim();
+          existingGrade.isActive = true;
+          existingGrade.updatedBy = userId;
+          await existingGrade.save();
+          uploadedCount++;
+          warnings.push(`Row ${rowNum}: Updated existing grade (${gradeName})`);
+        } else {
+          // Create new
+          await Grade.create({
+            tenant,
+            name: gradeName,
+            normalizedName: gradeNormalizedName,
+            code: gradeCode,
+            level: gradeLevel,
+            description: description.trim(),
+            isActive: true,
+            createdBy: userId,
+            updatedBy: userId
+          });
+          uploadedCount++;
+        }
+      } catch (rowErr) {
+        failedCount++;
+        let errMsg = rowErr.message || 'Failed to process record';
+        if (rowErr.code === 11000) {
+          errMsg = 'A grade with this name or code already exists';
+        }
+        errors.push(`Row ${rowNum}: ${errMsg}`);
+      }
+    }
+
+    return res.json({
+      success: uploadedCount > 0,
+      message: uploadedCount > 0 ? 'Bulk upload completed' : 'Bulk upload failed',
+      uploadedCount,
+      failedCount,
+      errors,
+      warnings
+    });
+  } catch (error) {
+    console.error('[GRADE] bulkUploadGrades error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error during bulk upload',
+      uploadedCount: 0,
+      failedCount: req.body?.records?.length || 0,
+      errors: [error.message || 'An unexpected error occurred']
+    });
+  }
+};
