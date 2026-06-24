@@ -274,6 +274,20 @@ export default function RequirementForm({ onClose, onSuccess, initialData, isEdi
         fetchTemplates();
     }, []);
 
+    const fetchGrades = async () => {
+        try {
+            const res = await api.get('/grades');
+            const payload = res?.data;
+            const data = Array.isArray(payload)
+                ? payload
+                : (Array.isArray(payload?.data) ? payload.data : []);
+            setGrades(Array.isArray(data) ? data : []);
+        } catch (err) {
+            console.error('Failed to load grades', err);
+            setGrades([]);
+        }
+    };
+
     useEffect(() => {
         const fetchEmployees = async () => {
             try {
@@ -287,6 +301,7 @@ export default function RequirementForm({ onClose, onSuccess, initialData, isEdi
             }
         };
         fetchEmployees();
+        fetchGrades();
     }, []);
 
     useEffect(() => {
@@ -311,6 +326,7 @@ export default function RequirementForm({ onClose, onSuccess, initialData, isEdi
         jobTitle: '',
         department: '',
         jobType: 'Full-Time',
+        gradeId: '',
         grade: '',
         workMode: 'On-site',
         country: '',
@@ -505,7 +521,20 @@ export default function RequirementForm({ onClose, onSuccess, initialData, isEdi
     }, [isEdit]);
     useEffect(() => {
         if (initialData) {
-            setFormData(prev => ({ ...prev, ...normalizeLocationFields(initialData) }));
+            const normalizedInitialData = normalizeLocationFields(initialData);
+            const resolvedGradeId = normalizedInitialData.gradeId
+                ? (typeof normalizedInitialData.gradeId === 'object' ? (normalizedInitialData.gradeId._id || '') : normalizedInitialData.gradeId)
+                : (normalizedInitialData.jobDetails?.grade ? (typeof normalizedInitialData.jobDetails.grade === 'object' ? (normalizedInitialData.jobDetails.grade._id || '') : normalizedInitialData.jobDetails.grade) : '');
+            const resolvedGradeName = normalizedInitialData.grade
+                || (normalizedInitialData.jobDetails?.grade ? (typeof normalizedInitialData.jobDetails.grade === 'object' ? normalizedInitialData.jobDetails.grade.name : '') : '');
+
+            setFormData(prev => ({
+                ...prev,
+                ...normalizedInitialData,
+                gradeId: resolvedGradeId,
+                grade: resolvedGradeName
+            }));
+
             if (isEdit && initialData._id) {
                 setDraftId(initialData._id);
             }
@@ -654,6 +683,13 @@ export default function RequirementForm({ onClose, onSuccess, initialData, isEdi
             clean.interviewPanel = clean.interviewPanel
                 .filter(id => id && id !== "")
                 .map(id => typeof id === 'object' ? (id._id || id) : id);
+        }
+
+        // Sanitize gradeId
+        if (!clean.gradeId || clean.gradeId === "") {
+            delete clean.gradeId;
+        } else if (typeof clean.gradeId === 'object') {
+            clean.gradeId = clean.gradeId._id || clean.gradeId;
         }
 
         // Sanitize positionId
@@ -817,6 +853,11 @@ export default function RequirementForm({ onClose, onSuccess, initialData, isEdi
                     isSystemStage: stg.isSystemStage || false
                 };
             });
+        }
+
+        if (dataPayload.gradeId && !dataPayload.grade) {
+            const selectedGrade = grades.find((g) => String(g._id) === String(dataPayload.gradeId));
+            dataPayload.grade = selectedGrade?.name || dataPayload.grade || '';
         }
 
         dataPayload.bgvConfig = formData.bgvConfig;
@@ -1333,6 +1374,15 @@ export default function RequirementForm({ onClose, onSuccess, initialData, isEdi
         );
     };
 
+    const handleGradeSelection = (gradeId) => {
+        const selectedGrade = grades.find((g) => String(g._id) === String(gradeId));
+        setFormData((prev) => ({
+            ...prev,
+            gradeId: gradeId || '',
+            grade: gradeId ? (selectedGrade?.name || '') : ''
+        }));
+    };
+
     const updateField = (field, val) => {
         setFormData(prev => ({ ...prev, [field]: val }));
         if (field === 'positionId' && val) handlePositionChange(val);
@@ -1361,10 +1411,12 @@ export default function RequirementForm({ onClose, onSuccess, initialData, isEdi
                         visibility: cleanData.visibility,
                         workMode: cleanData.workMode,
                         jobType: cleanData.jobType,
-                        grade: cleanData.grade,
+                        grade: cleanData.gradeId || cleanData.grade,
                         hiringManager: cleanData.hiringManager,
                         interviewPanel: cleanData.interviewPanel
                     },
+                    gradeId: cleanData.gradeId,
+                    grade: cleanData.grade,
                     jobDescription: {
                         roleOverview: cleanData.description,
                         responsibilities: cleanData.responsibilities,
@@ -1924,13 +1976,13 @@ export default function RequirementForm({ onClose, onSuccess, initialData, isEdi
                         {renderFieldWithControls('grade', 'Grade',
                                 <div className="relative">
                                     <select
-                                        value={formData.grade || ''}
-                                        onChange={(e) => updateField('grade', e.target.value)}
+                                        value={formData.gradeId || ''}
+                                        onChange={(e) => handleGradeSelection(e.target.value)}
                                         className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-4 pr-10 text-sm font-semibold text-slate-800 transition-all hover:bg-slate-50 focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-indigo-500/10"
                                     >
                                         <option value="">Select Grade</option>
-                                        {grades.map((g, i) => (
-                                            <option key={i} value={g.name || g._id}>{g.name}</option>
+                                        {grades.map((g) => (
+                                            <option key={g._id} value={g._id}>{g.name || g.code || g._id}</option>
                                         ))}
                                     </select>
                                     <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">

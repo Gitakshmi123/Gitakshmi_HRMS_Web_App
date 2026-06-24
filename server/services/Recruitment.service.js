@@ -125,7 +125,18 @@ class RecruitmentService {
 
         // Helper to update step 1
         const updateStep1 = async (d) => {
-            if (data.positionId || data.department || data.jobType) {
+            const hasStep1Data = [
+                'positionId',
+                'department',
+                'jobType',
+                'gradeId',
+                'grade',
+                'workMode',
+                'location',
+                'vacancy'
+            ].some((key) => data[key] !== undefined && data[key] !== null && data[key] !== '');
+
+            if (hasStep1Data) {
                 const gradeSnapshot = data.gradeId ? await this.resolveGradeSnapshot(tenantId, data.gradeId) : null;
                 d.step1 = {
                     positionId: data.positionId || d.step1?.positionId || undefined,
@@ -286,10 +297,16 @@ class RecruitmentService {
         ));
 
         // 3. Map data to Requirement Model (matching Requirement.js schema)
+        const gradeSnapshot = s1.gradeId ? await this.resolveGradeSnapshot(tenantId, s1.gradeId).catch(() => null) : null;
+        const resolvedGradeId = gradeSnapshot?.gradeId || (s1.gradeId || undefined);
+        const resolvedGradeName = gradeSnapshot?.grade || s1.grade || undefined;
+
         const requirement = new Requirement({
             tenant: tenantId,
             jobOpeningId: jobId,
             positionId: sanitizedPositionId,
+            gradeId: resolvedGradeId,
+            grade: resolvedGradeName,
             subCompanyId: orgAssignment.subCompanyId || undefined,
             branchId: orgAssignment.branchId || undefined,
             divisionId: orgAssignment.divisionId || undefined,
@@ -307,7 +324,7 @@ class RecruitmentService {
                 visibility: s2.visibility || 'External',
                 workMode: s1.workMode || 'On-site',
                 jobType: s1.jobType || 'Full-Time',
-                grade: s1.grade || undefined,
+                grade: resolvedGradeId || undefined,
                 hiringManager: sanitizedHiringManager || orgAssignment.managerId || undefined,
                 reportingTo: orgAssignment.managerId || linkedPosition?.reportingTo || undefined,
                 interviewPanel: sanitizedInterviewPanel
@@ -538,6 +555,13 @@ class RecruitmentService {
                 reportingTo: finalData.reportingTo || finalData.jobDetails?.reportingTo || pos?.reportingTo,
             });
 
+            const finalJobDetails = {
+                ...(finalData.jobDetails || {}),
+                grade: finalData.jobDetails?.grade || finalData.gradeId || undefined,
+                hiringManager: finalData.jobDetails?.hiringManager || finalData.hiringManager || orgAssignment.managerId || undefined,
+                reportingTo: finalData.jobDetails?.reportingTo || finalData.reportingTo || orgAssignment.managerId || undefined,
+            };
+
             const requirement = new Requirement({
                 ...finalData,
                 tenant: tenantId,
@@ -548,11 +572,7 @@ class RecruitmentService {
                 departmentId: orgAssignment.departmentId || finalData.departmentId,
                 designationId: orgAssignment.designationId || finalData.designationId,
                 department: orgAssignment.department || finalData.department,
-                jobDetails: {
-                    ...(finalData.jobDetails || {}),
-                    hiringManager: finalData.jobDetails?.hiringManager || finalData.hiringManager || orgAssignment.managerId || undefined,
-                    reportingTo: finalData.jobDetails?.reportingTo || finalData.reportingTo || orgAssignment.managerId || undefined,
-                },
+                jobDetails: finalJobDetails,
                 isInternal,
                 createdBy: userId
             });
@@ -699,6 +719,10 @@ class RecruitmentService {
             const gradeSnapshot = await this.resolveGradeSnapshot(tenantId, data.gradeId);
             data.gradeId = gradeSnapshot.gradeId;
             data.grade = gradeSnapshot.grade;
+            data.jobDetails = {
+                ...(data.jobDetails || {}),
+                grade: gradeSnapshot.gradeId
+            };
         }
 
         // Use findByIdAndUpdate to perform partial update without validating unrelated fields

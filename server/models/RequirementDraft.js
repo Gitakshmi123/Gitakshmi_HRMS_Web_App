@@ -13,7 +13,6 @@ const RequirementDraftSchema = new mongoose.Schema({
         grade: String,
         department: String,
         jobType: String,
-        grade: String,
         workMode: String,
         location: String,
         vacancy: Number

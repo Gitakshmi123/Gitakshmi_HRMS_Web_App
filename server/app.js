@@ -591,6 +591,10 @@ app.use('/api/public', require('./routes/publicCandidate.routes'));
 app.use('/api/public/careers', require('./routes/publicCareer.routes'));
 app.use('/api/public/offer', require('./routes/public.offer.routes'));
 app.use('/api/public/candidate-documents', require('./routes/publicCandidateDocument.routes'));
+// Alias used by EmployeeForm.jsx (isExternal mode): maps /candidate/document-upload/:token/*
+// to the same publicCandidateDocument router so no frontend URL changes are needed.
+// The router handles: GET reference-data/:token, PUT draft/:token, POST submit/:token, POST upload/:token
+app.use('/api/candidate/document-upload', require('./routes/publicCandidateDocument.routes'));
 
 // 1. Auth & System (Foundation)
 app.use('/api/auth', authRoutes);
@@ -609,7 +613,7 @@ app.use('/api/shift-assignment', shiftAssignmentRoutes);
 app.use('/api/offer-templates', offerTemplateRoutes);
 app.use('/api/social-media-enterprise', socialMediaEnterpriseRoutes);
 app.use('/api', realtimeSocialPostRoutes);
-app.use('/api/email-templates', emailTemplateRoutes);
+// email-templates route registered below with auth middleware (line 627)
 app.use('/api/automations', automationRoutes);
 app.use('/api/social-templates', socialTemplateRoutes);
 app.use('/api/music', musicRoutes);

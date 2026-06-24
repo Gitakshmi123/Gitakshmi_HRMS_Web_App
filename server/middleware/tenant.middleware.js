@@ -47,7 +47,8 @@ module.exports = async function tenantResolver(req, res, next) {
     }
 
     // 2. Handle Public Routes Discovery (paths are /api/public/... in this app)
-    if (req.path.startsWith('/api/public/') || req.path.startsWith('/public/')) {
+    if (req.path.startsWith('/api/public/') || req.path.startsWith('/public/') ||
+        req.path.startsWith('/api/candidate/document-upload/') || req.path.startsWith('/candidate/document-upload/')) {
       let tenantId = req.headers["x-tenant-id"] || req.query.tenantId;
 
       // Extract from path if token starts with a valid ObjectId followed by underscore
@@ -59,9 +60,20 @@ module.exports = async function tenantResolver(req, res, next) {
       }
 
       if (!tenantId) {
-        const candidateDocMatch = req.path.match(/\/candidate-documents\/(?:token|save-draft|submit|upload)\/([a-f0-9]{24})_/i);
+        // Matches /candidate-documents/{action}/{tenantId}_{rest} (public candidate doc portal)
+        const candidateDocMatch = req.path.match(/\/candidate-documents\/(?:token|save-draft|submit|upload|reference-data|draft)\/([a-f0-9]{24})_/i);
         if (candidateDocMatch) {
           tenantId = candidateDocMatch[1];
+        }
+      }
+
+      if (!tenantId) {
+        // Matches /candidate/document-upload/{tenantId}_{rest}/{action}
+        // e.g. /candidate/document-upload/6649abc...def_xyz123.../reference-data
+        const empFormMatch = req.path.match(/\/candidate\/document-upload\/([a-f0-9]{24})_/i) ||
+                             req.path.match(/\/document-upload\/([a-f0-9]{24})_/i);
+        if (empFormMatch) {
+          tenantId = empFormMatch[1];
         }
       }
 

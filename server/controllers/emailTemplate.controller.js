@@ -144,3 +144,60 @@ exports.updateSmtpConfig = async (req, res) => {
         res.status(500).json({ success: false, message: 'Failed to update SMTP config', error: error.message });
     }
 };
+
+exports.sendTestEmail = async (req, res) => {
+    try {
+        const { to, subject, html } = req.body;
+        const tenantId = req.tenantId || req.user?.tenantId;
+        
+        if (!to) {
+            return res.status(400).json({ success: false, message: 'Recipient email is required' });
+        }
+
+        // Validate tenant SMTP config before sending
+        if (tenantId) {
+            try {
+                const mongoose = require('mongoose');
+                const Tenant = mongoose.model('Tenant');
+                const query = mongoose.Types.ObjectId.isValid(tenantId) ? { _id: tenantId } : { tenantId };
+                const tenant = await Tenant.findOne(query).lean();
+                if (!tenant?.smtpConfig?.host || !tenant?.smtpConfig?.user || !tenant?.smtpConfig?.pass) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'SMTP not configured. Please go to SMTP Settings tab and configure your email server before sending test emails.'
+                    });
+                }
+            } catch (dbErr) {
+                console.warn('Could not verify SMTP config from DB:', dbErr.message);
+            }
+        }
+
+        const emailService = require('../services/email.service');
+        await emailService.sendMail({
+            to,
+            subject: subject || '(Test Email) No Subject',
+            html: html || '<p>This is a test email from Gitakshmi HRMS.</p>',
+            tenantId
+        });
+
+        res.json({ success: true, message: 'Test email sent successfully' });
+    } catch (error) {
+        console.error('Error sending test email:', error);
+
+        let userMessage = 'Failed to send test email.';
+        const code = error.code || '';
+        const responseCode = error.responseCode || 0;
+
+        if (code === 'EAUTH' || responseCode === 535) {
+            userMessage = 'SMTP authentication failed (535). Please check your SMTP username and password in SMTP Settings. For Gmail, use an App Password.';
+        } else if (code === 'ECONNREFUSED' || code === 'ETIMEDOUT' || code === 'ESOCKET') {
+            userMessage = `Could not connect to SMTP server (${code}). Please verify the SMTP Host and Port in SMTP Settings.`;
+        } else if (code === 'ENOTFOUND') {
+            userMessage = 'SMTP host not found. Please check the SMTP Host address in SMTP Settings.';
+        } else if (error.message) {
+            userMessage = `Failed to send test email: ${error.message}`;
+        }
+
+        res.status(500).json({ success: false, message: userMessage, error: error.message });
+    }
+};

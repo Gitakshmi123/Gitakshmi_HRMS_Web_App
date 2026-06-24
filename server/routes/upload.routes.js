@@ -30,10 +30,28 @@ const upload = multer({
   limits: { fileSize: 1024 * 1024 * 5 } // 5MB
 });
 
+// Image upload for email editor — accepts all common image formats
+const imageUpload = multer({
+  storage,
+  fileFilter: (req, file, cb) => {
+    const allowed = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp'];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowed.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`File type not allowed. Allowed: ${allowed.join(', ')}`), false);
+    }
+  },
+  limits: { fileSize: 1024 * 1024 * 10 } // 10MB
+});
+
 const ctrl = require('../controllers/upload.controller');
 
 router.use(auth.authenticate);
 router.post('/medical-cert', upload.single('file'), ctrl.uploadLogo);
+
+// Email template image upload — only needs basic auth, not admin role
+router.post('/email-image', imageUpload.single('file'), ctrl.uploadLogo);
 
 router.use(auth.requireAdminOrHr);
 
