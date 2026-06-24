@@ -11,14 +11,46 @@ const leaveCheck = checkModuleAccess('leave');
 router.use(auth.authenticate, leaveCheck);
 
 /**
- * @route   POST /api/zoho-leaves/apply
- * @desc    Submit a new leave request with policy checks
+ * @swagger
+ * /api/zoho-leaves/apply:
+ *   post:
+ *     summary: Submit a new leave request
+ *     description: Submit a new leave request with policy checks.
+ *     tags: [Leaves]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/LeaveRequest'
+ *     responses:
+ *       200:
+ *         description: Leave applied successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Success'
  */
 router.post('/apply', zohoLeaveRequestController.applyLeave);
 
 /**
- * @route   GET /api/zoho-leaves/eligibility
- * @desc    Get current employee's leave eligibility and policy rules
+ * @swagger
+ * /api/zoho-leaves/eligibility:
+ *   get:
+ *     summary: Get leave eligibility
+ *     description: Get current employee's leave eligibility and policy rules.
+ *     tags: [Leaves]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Leave eligibility details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
  */
 router.get('/eligibility', zohoLeaveRequestController.getEligibilityCheck);
 

@@ -30,7 +30,7 @@ const MODULE_PERMISSION_PROBES = {
  * @param {React.ReactNode} children - The components to render if allowed
  */
 const ProtectedModule = ({ module, permissionKey = null, action = 'view', children }) => {
-    const { user, enabledModules } = useAuth();
+    const { user, enabledModules, loading: authLoading } = useAuth();
     const { hasPermission, loading, permissions } = useRBAC();
     const location = useLocation();
     
@@ -48,6 +48,13 @@ const ProtectedModule = ({ module, permissionKey = null, action = 'view', childr
 
     if (isPsa) {
         return <>{children}</>;
+    }
+
+    // While auth is still loading or modules haven't been fetched yet, wait silently.
+    // This prevents a race condition where stale/empty localStorage cache causes
+    // premature Unauthorized redirects before the server returns fresh module data.
+    if (authLoading || enabledModules === null || enabledModules === undefined) {
+        return null;
     }
 
     // Check if module is enabled
@@ -81,3 +88,4 @@ const ProtectedModule = ({ module, permissionKey = null, action = 'view', childr
 };
 
 export default ProtectedModule;
+
