@@ -88,7 +88,23 @@ export default function RosterManagementTab() {
       if (shiftRes.success) setShifts(shiftRes.data);
       setEmployees(Array.isArray(empRes) ? empRes : []);
       setRotations(Array.isArray(rotationRes) ? rotationRes : []);
-      setRosters(Array.isArray(rosterRes) ? rosterRes : []);
+      
+      const rostersData = Array.isArray(rosterRes) ? rosterRes : [];
+      setRosters(rostersData);
+      
+      if (rostersData.length > 0) {
+        const currentMonthMatch = rostersData.find(r => 
+          r.month === (dayjs().month() + 1) && 
+          r.year === dayjs().year()
+        );
+        if (!currentMonthMatch) {
+            const latestRoster = rostersData[0];
+            if (latestRoster && latestRoster.startDate) {
+                setSelectedMonth(dayjs(latestRoster.startDate));
+            }
+        }
+      }
+
       if (deptRes?.success) setDepartments(deptRes.data);
       if (desigRes?.success) setDesignations(desigRes.data);
       if (branchRes?.success) setBranches(branchRes.data);

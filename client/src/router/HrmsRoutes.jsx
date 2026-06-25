@@ -64,6 +64,20 @@ const Compensation = lazy(() => import('../pages/HR/Compensation'));
 const OfferJoiningManager = lazy(() => import('../pages/HR/OfferJoiningManager'));
 const ShiftManagement = lazy(() => import('../pages/ShiftManagement'));
 
+// New Attendance Modules
+const AttendanceLayout = lazy(() => import('../layouts/AttendanceLayout'));
+const AttendanceDashboard = lazy(() => import('../pages/HR/Attendance/AttendanceDashboard'));
+const AttendanceSheet = lazy(() => import('../pages/HR/Attendance/AttendanceSheet'));
+const DailyAttendance = lazy(() => import('../pages/HR/Attendance/DailyAttendance'));
+const AttendanceSummary = lazy(() => import('../pages/HR/Attendance/AttendanceSummary'));
+const RegularizationRequest = lazy(() => import('../pages/HR/Attendance/RegularizationRequest'));
+const AttendanceApproval = lazy(() => import('../pages/HR/Attendance/AttendanceApproval'));
+const AttendanceLock = lazy(() => import('../pages/HR/Attendance/AttendanceLock'));
+const HolidayCalendar = lazy(() => import('../pages/HR/Attendance/HolidayCalendar'));
+const ShiftRoster = lazy(() => import('../pages/HR/Attendance/ShiftRoster'));
+const AttendanceReports = lazy(() => import('../pages/HR/Attendance/AttendanceReports'));
+const MusterRoll = lazy(() => import('../pages/HR/Attendance/MusterRoll'));
+
 // Letter modules
 const LetterDashboard = lazy(() => import('../pages/HR/Letters/LetterDashboard'));
 const IssueLetterWizard = lazy(() => import('../pages/HR/Letters/IssueLetterWizard'));
@@ -482,7 +496,21 @@ export default function HrmsRoutes() {
         </Route>
 
         {/* --- ATTENDANCE MODULE --- */}
-        <Route element={<ProtectedModule module="attendance"><Outlet /></ProtectedModule>}>
+        <Route element={<ProtectedModule module="attendance"><AttendanceLayout /></ProtectedModule>}>
+          {/* New Modules */}
+          <Route path="attendance-dashboard" element={<AttendanceDashboard />} />
+          <Route path="attendance-sheet" element={<AttendanceSheet />} />
+          <Route path="daily-attendance" element={<DailyAttendance />} />
+          <Route path="attendance-summary" element={<AttendanceSummary />} />
+          <Route path="regularization-request" element={<RegularizationRequest />} />
+          <Route path="attendance-approval" element={<AttendanceApproval />} />
+          <Route path="attendance-lock" element={<AttendanceLock />} />
+          <Route path="muster-roll" element={<MusterRoll />} />
+          <Route path="holiday-calendar" element={<HolidayCalendar />} />
+          <Route path="shift-roster" element={<ShiftRoster />} />
+          <Route path="attendance-reports" element={<AttendanceReports />} />
+          
+          {/* Legacy Modules Preserved */}
           <Route path="shift-management" element={<ShiftManagement />} />
           <Route path="attendance" element={<AttendanceAdmin />} />
           <Route path="attendance/live-tracking" element={<AttendanceAdmin forceView="liveTracking" />} />

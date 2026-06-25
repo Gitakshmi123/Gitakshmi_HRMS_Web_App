@@ -397,6 +397,20 @@ export default function EmployeeForm({
   const [shiftId, setShiftId] = useState(employee?.shiftId?._id || employee?.shiftId || '');
   const [shifts, setShifts] = useState([]);
 
+  // Roster Management
+  const [rosterId, setRosterId] = useState(employee?.rosterId?._id || employee?.rosterId || '');
+  const [rosters, setRosters] = useState([]);
+
+  const loadRosters = useCallback(async () => {
+    try {
+      const res = await api.get('/enterprise-roster');
+      setRosters(res.data?.data || res.data || []);
+    } catch (err) {
+      if (err.response?.status === 403 || err.response?.status === 404) return;
+      console.error("Failed to load rosters", err); 
+    }
+  }, []);
+
   // Grade state
   const [gradeId, setGradeId] = useState(employee?.gradeId?._id || employee?.gradeId || '');
   const [grade, setGrade] = useState(employee?.grade || '');
@@ -866,11 +880,12 @@ export default function EmployeeForm({
       loadManagers();
       loadPolicies();
       loadShifts(); // Shift Management
+      loadRosters(); // Roster Management
       loadGrades(); // Grade Management
       fetchMappings();
       if (actualStep === 9 && !employee) loadEmployeeCodePreview();
     }
-  }, [isExternal, loadReferenceData, loadDepartments, loadManagers, loadEmployeeCodePreview, step, employee, loadPolicies, loadShifts, loadGrades, fetchMappings]);
+  }, [isExternal, loadReferenceData, loadDepartments, loadManagers, loadEmployeeCodePreview, step, employee, loadPolicies, loadShifts, loadRosters, loadGrades, fetchMappings]);
 
   const [employeeCode, setEmployeeCode] = useState('');
 
@@ -1186,13 +1201,20 @@ export default function EmployeeForm({
 
     if (actualStepNum === 3) {
       if (!eduType) e.eduType = 'Education Type is required';
-      if (!class10Marksheet && !employee?.education?.class10Marksheet) e.class10 = '10th Marksheet is required';
-      const hasDegree = !!diplomaCertificate || !!bachelorDegree || !!employee?.education?.diplomaCertificate || !!employee?.education?.bachelorDegree;
+      
+      const has10thInAq = academicQualifications && academicQualifications.some(aq => aq.qualification === '10th Standard' && (aq.document || aq.documentUrl));
+      if (!class10Marksheet && !employee?.education?.class10Marksheet && !has10thInAq) e.class10 = '10th Marksheet is required';
+      
+      const has12thInAq = academicQualifications && academicQualifications.some(aq => aq.qualification === '12th Standard' && (aq.document || aq.documentUrl));
+      const hasDegreeInAq = academicQualifications && academicQualifications.some(aq => aq.qualification && aq.qualification !== '10th Standard' && aq.qualification !== '12th Standard' && (aq.document || aq.documentUrl));
+      
+      const hasDegree = !!diplomaCertificate || !!bachelorDegree || !!employee?.education?.diplomaCertificate || !!employee?.education?.bachelorDegree || hasDegreeInAq;
       const hasAlt = (lastSem1 && lastSem2 && lastSem3) || (employee?.education?.lastSem1 && employee?.education?.lastSem2 && employee?.education?.lastSem3);
+      
       if (eduType === 'Diploma') {
         if (!hasDegree && !hasAlt) e.diploma = 'Diploma Certificate OR Last 3 Sem Marksheets required';
       } else if (eduType === 'Regular') {
-        if (!class12Marksheet && !employee?.education?.class12Marksheet) e.class12 = '12th Marksheet is required';
+        if (!class12Marksheet && !employee?.education?.class12Marksheet && !has12thInAq) e.class12 = '12th Marksheet is required';
         if (!hasDegree && !hasAlt) e.bachelor = 'Bachelor Degree OR Last 3 Sem Marksheets required';
       }
     }
@@ -1537,6 +1559,7 @@ export default function EmployeeForm({
         salaryAssigned: salaryAssigned,
         leavePolicy: leavePolicy || undefined,
         shiftId: shiftId || undefined,
+        rosterId: rosterId || undefined,
         spouseDetails: showDependents ? spouseDetails : undefined,
         children: showDependents ? children : [],
         brothers: showDependents ? brothers : [],
@@ -1764,6 +1787,7 @@ export default function EmployeeForm({
         salaryAssigned: salaryAssigned,
         leavePolicy: leavePolicy || undefined, // Add Leave Policy
         shiftId: shiftId || undefined, // Shift assignment
+        rosterId: rosterId || undefined, // Roster assignment
         gradeId: gradeId || undefined, // Grade assignment
         grade: grade || undefined, // Custom Grade Name
         band: band || undefined, // Band assignment
@@ -1815,9 +1839,39 @@ export default function EmployeeForm({
     <div className="w-full h-full overflow-hidden flex flex-col bg-white">
       <div className="w-full flex-1 flex flex-col overflow-hidden">
         <form onSubmit={submit} className="w-full relative flex flex-col h-full overflow-hidden px-4 md:px-8">
-          {/* Employee Onboarding Header */}
-          <div className="mb-3 pt-1.5 sticky top-0 bg-white z-30">
-            <div className="flex items-center gap-3 sm:gap-6">
+          {/* Employee Onboarding Header / Clickable Stepper */}
+          <div className="mb-3 pt-1.5 sticky top-0 bg-white z-30 border-b border-slate-100 pb-2">
+            <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-2">
+              {stepTitles.map((title, index) => {
+                const currentStepNumber = index + 1;
+                const isActive = step === currentStepNumber;
+                const isPassed = step > currentStepNumber;
+                
+                return (
+                  <button
+                    key={title}
+                    type="button"
+                    onClick={() => setStep(currentStepNumber)}
+                    className={`flex items-center gap-2 shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition-all duration-200 border ${
+                      isActive 
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' 
+                        : isPassed 
+                          ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+                          : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${
+                      isActive ? 'bg-white/20' : isPassed ? 'bg-indigo-200' : 'bg-slate-200'
+                    }`}>
+                      {isPassed ? <Check size={12} /> : currentStepNumber}
+                    </div>
+                    {title}
+                  </button>
+                );
+              })}
+            </div>
+            
+            <div className="flex items-center gap-3 sm:gap-6 mt-2 hidden">
               <div className="hidden sm:block text-[10px] md:text-xs font-bold text-slate-900 dark:text-white uppercase tracking-widest whitespace-nowrap">
                 {stepTitles[step - 1]}
               </div>
@@ -2051,6 +2105,9 @@ export default function EmployeeForm({
                        shiftId={shiftId}
                        setShiftId={setShiftId}
                        shifts={shifts}
+                       rosterId={rosterId}
+                       setRosterId={setRosterId}
+                       rosters={rosters}
                        leavePolicy={leavePolicy}
                        setLeavePolicy={setLeavePolicy}
                        policies={policies}

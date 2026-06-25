@@ -33,6 +33,8 @@ const AttendanceSchema = new mongoose.Schema({
   leaveColor: { type: String },
 
   // Punch Details
+  scheduledIn: { type: Date, default: null },
+  scheduledOut: { type: Date, default: null },
   checkIn: { type: Date },
   checkOut: { type: Date },
   checkInTime: { type: Date, default: null },

@@ -36,6 +36,9 @@ const OfficialRecordsTab = React.memo(function OfficialRecordsTab({
   shiftId,
   setShiftId,
   shifts = [],
+  rosterId,
+  setRosterId,
+  rosters = [],
   jobType,
   setJobType,
   leavePolicy,
@@ -361,6 +364,18 @@ const OfficialRecordsTab = React.memo(function OfficialRecordsTab({
               <option value="">Default Shift</option>
               {(shifts || []).map((s) => (
                 <option key={s._id} value={s._id}>{s.name} ({s.startTime} - {s.endTime})</option>
+              ))}
+            </select>
+          </TabularField>
+          <TabularField label="ROSTER">
+            <select
+              value={rosterId}
+              onChange={(e) => setRosterId?.(e.target.value)}
+              className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium text-slate-700 dark:text-slate-200"
+            >
+              <option value="">No Roster</option>
+              {(rosters || []).map((r) => (
+                <option key={r._id} value={r._id}>{r.rosterName} {r.shiftCycle ? `(${r.shiftCycle.length} Days)` : ''}</option>
               ))}
             </select>
           </TabularField>

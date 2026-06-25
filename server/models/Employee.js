@@ -345,7 +345,7 @@ const EmployeeSchema = new mongoose.Schema({
 
   employeeType: {
     type: String,
-    enum: ['Full-time', 'Full-Time', 'Part-time', 'Part-Time', 'Intern', 'Internship', 'Contract', 'Consultant'],
+    enum: ['Full-time', 'Full-Time', 'Part-time', 'Part-Time', 'Intern', 'Internship', 'Contract', 'Consultant', 'Permanent', 'permanent'],
     default: 'Full-time',
     trim: true
   },
@@ -514,6 +514,11 @@ const EmployeeSchema = new mongoose.Schema({
   shiftId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Shift',
+    default: null,
+  },
+  rosterId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'EnterpriseRoster',
     default: null,
   },
 

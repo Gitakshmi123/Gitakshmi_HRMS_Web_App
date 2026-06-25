@@ -47,39 +47,9 @@ exports.createRoster = async (req, res) => {
         const { startDate, endDate, employees } = req.body;
         
         // --- OVERLAP VALIDATION ---
-        if (employees && employees.length > 0 && startDate && endDate) {
-            const start = new Date(startDate);
-            const end = new Date(endDate);
-            
-            // Find overlapping rosters
-            const overlappingRosters = await Roster.find({
-                tenant: tenantId,
-                startDate: { $lte: end },
-                endDate: { $gte: start },
-                employees: { $in: employees }
-            }).populate('employees', 'firstName lastName employeeId');
-            
-            if (overlappingRosters.length > 0) {
-                // Collect names of employees that are overlapping
-                let overlappingEmpIds = new Set();
-                overlappingRosters.forEach(r => {
-                    r.employees.forEach(emp => {
-                        if (employees.includes(emp._id.toString())) {
-                            overlappingEmpIds.add(`${emp.firstName} ${emp.lastName} (${emp.employeeId})`);
-                        }
-                    });
-                });
-                
-                if (overlappingEmpIds.size > 0) {
-                    const empNames = Array.from(overlappingEmpIds).join(', ');
-                    return res.status(400).json({ 
-                        success: false, 
-                        message: `Cannot assign multiple rosters. The following employees are already in another roster for this period: ${empNames}` 
-                    });
-                }
-            }
-        }
+        // Overlap validation disabled as per user request to allow flexible roster assignments.
         // --- END OVERLAP VALIDATION ---
+
 
         const newRoster = new Roster({
             ...req.body,

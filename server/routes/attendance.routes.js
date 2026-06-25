@@ -6,6 +6,7 @@ const requireActiveEmployee = require('../middleware/requireActiveEmployee');
 const attendCtrl = require('../controllers/attendance.controller');
 const faceAttendCtrl = require('../controllers/face-attendance.controller');
 const trackingCtrl = require('../controllers/attendanceTracking.controller');
+const dashboardCtrl = require('../controllers/attendanceDashboardController');
 const { checkPermission } = require('../middleware/rbac.middleware');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
@@ -71,6 +72,10 @@ router.delete('/face/delete-user/:employeeId', auth.authenticate, checkPermissio
 router.get('/team', auth.authenticate, checkPermission('attendance.dashboard', 'view'), attendCtrl.getTeamAttendance);
 
 // --- HR / Admin Routes ---
+router.get('/dashboard-kpi', auth.authenticate, dashboardCtrl.getDashboardKPIs);
+router.get('/daily-attendance', auth.authenticate, dashboardCtrl.getDailyAttendance);
+router.get('/muster-roll', auth.authenticate, dashboardCtrl.getMusterRoll);
+router.post('/muster-roll/save', auth.authenticate, dashboardCtrl.saveMusterRoll);
 router.get('/stats', auth.authenticate, checkPermission('attendance.dashboard', 'view'), attendCtrl.getHRStats);
 router.get('/trend', auth.authenticate, checkPermission('attendance.dashboard', 'view'), attendCtrl.getTrend);
 router.get('/all', auth.authenticate, checkPermission('attendance.dashboard', 'view'), attendCtrl.getAllAttendance);
