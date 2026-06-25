@@ -1,6 +1,8 @@
-import React from 'react';
-import { Card, Row, Col, Typography, Table, Button, Select, DatePicker, Space } from 'antd';
+import React, { useState, useEffect } from 'react';
+import { Card, Row, Col, Typography, Table, Button, Select, DatePicker, Space, Spin } from 'antd';
 import { FilterOutlined } from '@ant-design/icons';
+import api from '../../../utils/api';
+import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -19,15 +21,91 @@ export default function AttendanceSummary() {
     { title: 'Short Hours', dataIndex: 'shortHrs', width: 100, render: text => <Text className="text-pink-500">{text}</Text> },
   ];
 
-  const dataSource = [
-    { key: '1', summaryFor: 'IT', totalEmp: 50, present: 22.8, absent: 1.2, leave: 2.4, od: 1.1, wo: 4.0, holiday: 1.0, shortHrs: '15:20' },
-    { key: '2', summaryFor: 'HR', totalEmp: 120, present: 23.5, absent: 1.0, leave: 1.8, od: 0.8, wo: 4.0, holiday: 2.0, shortHrs: '08:30' },
-    { key: '3', summaryFor: 'Finance', totalEmp: 160, present: 21.9, absent: 1.5, leave: 2.1, od: 0.7, wo: 4.0, holiday: 2.0, shortHrs: '12:15' },
-    { key: '4', summaryFor: 'Operations', totalEmp: 200, present: 22.1, absent: 1.4, leave: 2.3, od: 1.0, wo: 4.0, holiday: 2.0, shortHrs: '14:40' },
-  ];
+  const [data, setData] = useState([]);
+  const [totals, setTotals] = useState({});
+  const [departments, setDepartments] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [filters, setFilters] = useState({
+    fromDate: null,
+    toDate: null,
+    department: 'All'
+  });
 
-  const totals = {
-    key: 'total', summaryFor: 'Total', totalEmp: 1000, present: 22.5, absent: 1.3, leave: 2.2, od: 0.9, wo: 4.0, holiday: 2.0, shortHrs: '50:45'
+  useEffect(() => {
+    fetchSummary();
+    fetchMasters();
+  }, []);
+
+  const fetchMasters = async () => {
+    try {
+      const deptRes = await api.get('/hierarchy/departments').catch(() => null);
+      if (deptRes?.data?.success) setDepartments(deptRes.data.data);
+    } catch (err) {}
+  };
+
+  const fetchSummary = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get('/attendance/muster-roll');
+      if (res.data && Array.isArray(res.data.data)) {
+        processSummary(res.data.data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const processSummary = (rawData) => {
+    let filtered = rawData;
+    if (filters.department !== 'All') {
+      filtered = rawData.filter(item => item.department === filters.department || item.departmentId?._id === filters.department);
+    }
+
+    const deptMap = {};
+    filtered.forEach(row => {
+      const deptName = row.department || row.departmentId?.departmentName || 'Unassigned';
+      if (!deptMap[deptName]) {
+        deptMap[deptName] = { summaryFor: deptName, totalEmp: 0, present: 0, absent: 0, leave: 0, od: 0, wo: 0, holiday: 0, shortHrs: '00:00' };
+      }
+      
+      let pCount = 0, aCount = 0, lCount = 0, odCount = 0, wCount = 0, hCount = 0;
+      for (let i = 1; i <= 31; i++) {
+        const val = row[`day${i}`];
+        if (['P', 'WFH', 'BT', 'HD', 'CO'].includes(val)) pCount++;
+        if (['A', 'LWP', 'AHD'].includes(val)) aCount++;
+        if (['CL', 'SL', 'EL', 'PL', 'ML', 'MARL', 'STL'].includes(val)) lCount++;
+        if (val === 'OD') odCount++;
+        if (val === 'WO') wCount++;
+        if (['H', 'OH'].includes(val)) hCount++;
+      }
+      
+      deptMap[deptName].totalEmp += 1;
+      deptMap[deptName].present += pCount;
+      deptMap[deptName].absent += aCount;
+      deptMap[deptName].leave += lCount;
+      deptMap[deptName].od += odCount;
+      deptMap[deptName].wo += wCount;
+      deptMap[deptName].holiday += hCount;
+    });
+
+    const summaryData = Object.keys(deptMap).map((k, idx) => ({ key: idx.toString(), ...deptMap[k] }));
+    
+    const agg = {
+      key: 'total', summaryFor: 'Total', totalEmp: 0, present: 0, absent: 0, leave: 0, od: 0, wo: 0, holiday: 0, shortHrs: '00:00'
+    };
+    summaryData.forEach(d => {
+      agg.totalEmp += d.totalEmp; agg.present += d.present; agg.absent += d.absent; 
+      agg.leave += d.leave; agg.od += d.od; agg.wo += d.wo; agg.holiday += d.holiday;
+    });
+    
+    setData(summaryData);
+    setTotals(agg);
+  };
+
+  const handleApplyFilter = () => {
+    fetchSummary();
   };
 
   return (
@@ -43,25 +121,29 @@ export default function AttendanceSummary() {
         <Row gutter={[12, 12]} align="bottom">
           <Col span={6}>
             <Text className="text-xs">From Date</Text>
-            <DatePicker size="small" className="w-full" />
+            <DatePicker value={filters.fromDate} onChange={d => setFilters({...filters, fromDate: d})} size="small" className="w-full" />
           </Col>
           <Col span={6}>
             <Text className="text-xs">To Date</Text>
-            <DatePicker size="small" className="w-full" />
+            <DatePicker value={filters.toDate} onChange={d => setFilters({...filters, toDate: d})} size="small" className="w-full" />
           </Col>
           <Col span={6}>
             <Text className="text-xs">Department</Text>
-            <Select defaultValue="All" size="small" className="w-full"><Option value="All">All</Option></Select>
+            <Select value={filters.department} onChange={v => setFilters({...filters, department: v})} size="small" className="w-full">
+              <Option value="All">All</Option>
+              {departments.map(d => <Option key={d._id} value={d.name || d.departmentName}>{d.name || d.departmentName}</Option>)}
+            </Select>
           </Col>
           <Col span={6} className="text-right">
-            <Button type="primary" icon={<FilterOutlined />}>Apply Filter</Button>
+            <Button type="primary" icon={<FilterOutlined />} onClick={handleApplyFilter} loading={loading}>Apply Filter</Button>
           </Col>
         </Row>
       </Card>
 
       <Table
+        loading={loading}
         columns={columns}
-        dataSource={[...dataSource, totals]}
+        dataSource={data.length > 0 ? [...data, totals] : []}
         size="small"
         bordered
         pagination={false}

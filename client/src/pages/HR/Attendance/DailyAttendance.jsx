@@ -8,22 +8,60 @@ const { Option } = Select;
 
 export default function DailyAttendance() {
   const [data, setData] = useState([]);
+  const [filteredData, setFilteredData] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  const [departments, setDepartments] = useState([]);
+  const [shifts, setShifts] = useState([]);
+  
+  const [filters, setFilters] = useState({
+    date: null,
+    department: 'All',
+    shift: 'All',
+    status: 'All'
+  });
+
   useEffect(() => {
-    fetchDailyAttendance();
+    handleApplyFilter();
+    fetchMasters();
   }, []);
 
-  const fetchDailyAttendance = async () => {
+  const fetchMasters = async () => {
+    try {
+      const [deptRes, shiftRes] = await Promise.all([
+        api.get('/hierarchy/departments').catch(() => null),
+        api.get('/shift-master').catch(() => null)
+      ]);
+      if (deptRes?.data?.success) setDepartments(deptRes.data.data);
+      if (shiftRes?.data?.success) setShifts(shiftRes.data.data);
+    } catch (err) {
+      console.error('Failed to fetch masters', err);
+    }
+  };
+
+  const handleApplyFilter = async () => {
     try {
       setLoading(true);
-      const res = await api.get('/attendance/daily-attendance');
-      if (res.data) {
-        const fetchedData = res.data.data ? res.data.data : res.data;
-        if (Array.isArray(fetchedData) && fetchedData.length > 0) {
-          setData(fetchedData);
-        }
+      const endpoint = filters.date ? `/attendance/daily-attendance?date=${filters.date.format('YYYY-MM-DD')}` : '/attendance/daily-attendance';
+      const res = await api.get(endpoint);
+      
+      let fetchedData = res.data?.data ? res.data.data : res.data;
+      if (!Array.isArray(fetchedData)) fetchedData = [];
+      
+      setData(fetchedData);
+      
+      let filtered = [...fetchedData];
+      if (filters.department !== 'All') {
+         filtered = filtered.filter(item => item.department === filters.department || item.departmentId?._id === filters.department);
       }
+      if (filters.shift !== 'All') {
+         filtered = filtered.filter(item => item.shift === filters.shift || item.shiftId?._id === filters.shift);
+      }
+      if (filters.status !== 'All') {
+         filtered = filtered.filter(item => item.status === filters.status);
+      }
+      
+      setFilteredData(filtered);
     } catch (err) {
       console.error('Failed to fetch daily attendance', err);
     } finally {
@@ -32,11 +70,11 @@ export default function DailyAttendance() {
   };
 
   const handleStatusChange = (value, key) => {
-    const newData = [...data];
+    const newData = [...filteredData];
     const index = newData.findIndex(item => key === item.key);
     if (index > -1) {
       newData[index].status = value;
-      setData(newData);
+      setFilteredData(newData);
     }
   };
 
@@ -104,15 +142,15 @@ export default function DailyAttendance() {
       <div className="flex space-x-6 mb-6">
         <div>
           <Text type="secondary" className="text-xs">Total Employees: </Text>
-          <Text strong>1250</Text>
+          <Text strong>{filteredData.length}</Text>
         </div>
         <div>
           <Text type="secondary" className="text-xs">Present: </Text>
-          <Text className="text-green-600 font-bold">1065</Text>
+          <Text className="text-green-600 font-bold">{filteredData.filter(d => d.status === 'Present').length}</Text>
         </div>
         <div>
           <Text type="secondary" className="text-xs">Absent: </Text>
-          <Text className="text-red-500 font-bold">85</Text>
+          <Text className="text-red-500 font-bold">{filteredData.filter(d => d.status === 'Absent').length}</Text>
         </div>
         <div>
           <Text type="secondary" className="text-xs">Late: </Text>
@@ -132,29 +170,41 @@ export default function DailyAttendance() {
         <Row gutter={[12, 12]} align="bottom">
           <Col span={6}>
             <Text className="text-xs">Date</Text>
-            <DatePicker size="small" className="w-full" />
+            <DatePicker value={filters.date} onChange={d => setFilters({...filters, date: d})} size="small" className="w-full" />
           </Col>
           <Col span={4}>
             <Text className="text-xs">Department</Text>
-            <Select defaultValue="All" size="small" className="w-full"><Option value="All">All</Option></Select>
+            <Select value={filters.department} onChange={v => setFilters({...filters, department: v})} size="small" className="w-full">
+              <Option value="All">All</Option>
+              {departments.map(d => <Option key={d._id} value={d.name || d.departmentName}>{d.name || d.departmentName}</Option>)}
+            </Select>
           </Col>
           <Col span={4}>
             <Text className="text-xs">Shift Name</Text>
-            <Select defaultValue="All" size="small" className="w-full"><Option value="All">All</Option></Select>
+            <Select value={filters.shift} onChange={v => setFilters({...filters, shift: v})} size="small" className="w-full">
+              <Option value="All">All</Option>
+              {shifts.map(s => <Option key={s._id} value={s.name || s.shiftName}>{s.name || s.shiftName}</Option>)}
+            </Select>
           </Col>
           <Col span={4}>
             <Text className="text-xs">Status</Text>
-            <Select defaultValue="All" size="small" className="w-full"><Option value="All">All</Option></Select>
+            <Select value={filters.status} onChange={v => setFilters({...filters, status: v})} size="small" className="w-full">
+              <Option value="All">All</Option>
+              <Option value="Present">Present</Option>
+              <Option value="Absent">Absent</Option>
+              <Option value="Leave">Leave</Option>
+              <Option value="Half Day">Half Day</Option>
+            </Select>
           </Col>
           <Col span={6} className="text-right">
-            <Button type="primary" icon={<FilterOutlined />}>Apply Filter</Button>
+            <Button type="primary" icon={<FilterOutlined />} onClick={handleApplyFilter}>Apply Filter</Button>
           </Col>
         </Row>
       </Card>
 
       <Table
         columns={columns}
-        dataSource={data}
+        dataSource={filteredData}
         size="small"
         bordered
         pagination={{ pageSize: 15 }}

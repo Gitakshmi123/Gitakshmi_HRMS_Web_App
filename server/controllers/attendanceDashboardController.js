@@ -220,7 +220,10 @@ exports.getMusterRoll = async (req, res) => {
       empAttendances.forEach(att => {
         const d = new Date(att.date).getDate();
         if (att.status === 'present') {
-           row[`day${d}`] = 'P';
+           if (att.isWFH) row[`day${d}`] = 'WFH';
+           else if (att.isOnDuty) row[`day${d}`] = 'OD';
+           else row[`day${d}`] = 'P';
+           
            presentCount++;
            
            if (att.logs && att.logs.length > 0) {
@@ -234,12 +237,16 @@ exports.getMusterRoll = async (req, res) => {
                row[`out${d}`] = new Date(lastLog.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
              }
            }
+        } else if (att.status === 'half_day') {
+           row[`day${d}`] = att.leaveType ? att.leaveType : 'HD';
         } else if (att.status === 'leave') {
-           row[`day${d}`] = 'L';
+           row[`day${d}`] = att.leaveType || 'L';
         } else if (att.status === 'weekly_off') {
            row[`day${d}`] = 'WO';
         } else if (att.status === 'holiday') {
            row[`day${d}`] = 'H';
+        } else if (att.status === 'absent') {
+           row[`day${d}`] = 'A';
         }
       });
 

@@ -39,6 +39,8 @@ export default function MusterRoll() {
         return (
           <div className={`text-xs ${colorClass} ${bgClass} py-1 cursor-pointer hover:bg-gray-100`}>
             <Select 
+              showSearch
+              filterOption={(input, option) => option.value.toLowerCase().includes(input.toLowerCase())}
               value={text || '-'} 
               size="small" 
               bordered={false} 
@@ -226,7 +228,11 @@ export default function MusterRoll() {
       if (val === 'LWP') lwpCount++;
 
       // Offs & Holidays
-      if (val === 'WO') woCount++;
+      if (val === 'WO') {
+        const dayOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][(i + 4) % 7];
+        if (dayOfWeek === 'Sat') woCount += 0.5;
+        else woCount++;
+      }
       if (val === 'H') hCount++;
       if (val === 'OH') ohCount++;
       
@@ -372,12 +378,12 @@ export default function MusterRoll() {
       <Card size="small" className="mb-4 bg-gray-50 border border-gray-200 shadow-sm">
         <Text strong className="text-xs mb-2 block">Basic Filters</Text>
         <Row gutter={[12, 12]}>
-          <Col span={4}><Text className="text-xs">Company Name</Text><Select defaultValue="All" size="small" className="w-full"><Option value="All">All</Option></Select></Col>
-          <Col span={4}><Text className="text-xs">Branch</Text><Select defaultValue="All" size="small" className="w-full"><Option value="All">All</Option></Select></Col>
-          <Col span={4}><Text className="text-xs">Department</Text><Select defaultValue="All" size="small" className="w-full"><Option value="All">All</Option></Select></Col>
-          <Col span={4}><Text className="text-xs">Designation</Text><Select defaultValue="All" size="small" className="w-full"><Option value="All">All</Option></Select></Col>
-          <Col span={4}><Text className="text-xs">Grade</Text><Select defaultValue="All" size="small" className="w-full"><Option value="All">All</Option></Select></Col>
-          <Col span={4}><Text className="text-xs">Employee Type</Text><Select defaultValue="All" size="small" className="w-full"><Option value="All">All</Option></Select></Col>
+          <Col span={4}><Text className="text-xs">Company Name</Text><Select showSearch filterOption={(input, option) => (option?.children ?? '').toLowerCase().includes(input.toLowerCase())} defaultValue="All" size="small" className="w-full"><Option value="All">All</Option></Select></Col>
+          <Col span={4}><Text className="text-xs">Branch</Text><Select showSearch filterOption={(input, option) => (option?.children ?? '').toLowerCase().includes(input.toLowerCase())} defaultValue="All" size="small" className="w-full"><Option value="All">All</Option></Select></Col>
+          <Col span={4}><Text className="text-xs">Department</Text><Select showSearch filterOption={(input, option) => (option?.children ?? '').toLowerCase().includes(input.toLowerCase())} defaultValue="All" size="small" className="w-full"><Option value="All">All</Option></Select></Col>
+          <Col span={4}><Text className="text-xs">Designation</Text><Select showSearch filterOption={(input, option) => (option?.children ?? '').toLowerCase().includes(input.toLowerCase())} defaultValue="All" size="small" className="w-full"><Option value="All">All</Option></Select></Col>
+          <Col span={4}><Text className="text-xs">Grade</Text><Select showSearch filterOption={(input, option) => (option?.children ?? '').toLowerCase().includes(input.toLowerCase())} defaultValue="All" size="small" className="w-full"><Option value="All">All</Option></Select></Col>
+          <Col span={4}><Text className="text-xs">Employee Type</Text><Select showSearch filterOption={(input, option) => (option?.children ?? '').toLowerCase().includes(input.toLowerCase())} defaultValue="All" size="small" className="w-full"><Option value="All">All</Option></Select></Col>
         </Row>
         
         <Divider className="my-3" />
@@ -388,10 +394,10 @@ export default function MusterRoll() {
 
         {showAdvanced && (
           <Row gutter={[12, 12]} className="mt-3">
-            <Col span={4}><Text className="text-xs">Shift Name</Text><Select defaultValue="All" size="small" className="w-full"><Option value="All">All</Option></Select></Col>
-            <Col span={4}><Text className="text-xs">Location</Text><Select defaultValue="All" size="small" className="w-full"><Option value="All">All</Option></Select></Col>
-            <Col span={4}><Text className="text-xs">Cost Center</Text><Select defaultValue="All" size="small" className="w-full"><Option value="All">All</Option></Select></Col>
-            <Col span={4}><Text className="text-xs">Employee Status</Text><Select defaultValue="Active" size="small" className="w-full"><Option value="Active">Active</Option></Select></Col>
+            <Col span={4}><Text className="text-xs">Shift Name</Text><Select showSearch filterOption={(input, option) => (option?.children ?? '').toLowerCase().includes(input.toLowerCase())} defaultValue="All" size="small" className="w-full"><Option value="All">All</Option></Select></Col>
+            <Col span={4}><Text className="text-xs">Location</Text><Select showSearch filterOption={(input, option) => (option?.children ?? '').toLowerCase().includes(input.toLowerCase())} defaultValue="All" size="small" className="w-full"><Option value="All">All</Option></Select></Col>
+            <Col span={4}><Text className="text-xs">Cost Center</Text><Select showSearch filterOption={(input, option) => (option?.children ?? '').toLowerCase().includes(input.toLowerCase())} defaultValue="All" size="small" className="w-full"><Option value="All">All</Option></Select></Col>
+            <Col span={4}><Text className="text-xs">Employee Status</Text><Select showSearch filterOption={(input, option) => (option?.children ?? '').toLowerCase().includes(input.toLowerCase())} defaultValue="Active" size="small" className="w-full"><Option value="Active">Active</Option></Select></Col>
             <Col span={8}><Text className="text-xs">Date Range</Text><RangePicker size="small" className="w-full" /></Col>
           </Row>
         )}

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Row, Col, Typography, Table, Button, Select, DatePicker, Space, Divider } from 'antd';
+import { Card, Row, Col, Typography, Table, Button, Select, DatePicker, Space, Divider, Input, AutoComplete } from 'antd';
 import { DownloadOutlined, UploadOutlined, FilterOutlined, DownOutlined } from '@ant-design/icons';
 import api from '../../../utils/api';
 
@@ -38,6 +38,8 @@ export default function AttendanceSheet() {
         return (
           <div className={`text-xs ${colorClass} ${bgClass} py-1 cursor-pointer hover:bg-gray-100`}>
             <Select 
+              showSearch
+              filterOption={(input, option) => option.value.toLowerCase().includes(input.toLowerCase())}
               value={text || '-'} 
               size="small" 
               bordered={false} 
@@ -156,11 +158,44 @@ export default function AttendanceSheet() {
   ];
 
   const [dataSource, setDataSource] = useState([]);
+  const [filteredDataSource, setFilteredDataSource] = useState([]);
   const [loading, setLoading] = useState(false);
+  
+  const [departments, setDepartments] = useState([]);
+  const [branches, setBranches] = useState([]);
+  const [designations, setDesignations] = useState([]);
+  const [shifts, setShifts] = useState([]);
+  
+  const [filters, setFilters] = useState({
+    company: 'All',
+    branch: 'All',
+    department: 'All',
+    designation: 'All',
+    employeeType: 'All',
+    shift: 'All'
+  });
 
   React.useEffect(() => {
     fetchMusterRoll();
+    fetchMasters();
   }, []);
+
+  const fetchMasters = async () => {
+    try {
+      const [deptRes, branchRes, desigRes, shiftRes] = await Promise.all([
+        api.get('/hierarchy/departments').catch(() => null),
+        api.get('/hierarchy/branches').catch(() => null),
+        api.get('/hierarchy/designations').catch(() => null),
+        api.get('/shift-master').catch(() => null)
+      ]);
+      if (deptRes?.data?.success) setDepartments(deptRes.data.data);
+      if (branchRes?.data?.success) setBranches(branchRes.data.data);
+      if (desigRes?.data?.success) setDesignations(desigRes.data.data);
+      if (shiftRes?.data?.success) setShifts(shiftRes.data.data);
+    } catch (err) {
+      console.error('Failed to fetch masters', err);
+    }
+  };
 
   const fetchMusterRoll = async () => {
     try {
@@ -169,12 +204,32 @@ export default function AttendanceSheet() {
       if(res.data && res.data.success && Array.isArray(res.data.data) && res.data.data.length > 0) {
         const processedData = res.data.data.map(row => recalculateRow(row));
         setDataSource(processedData);
+        setFilteredDataSource(processedData);
       }
     } catch (err) {
       console.error('Failed to fetch attendance sheet', err);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleApplyFilter = () => {
+    let filtered = [...dataSource];
+    
+    if (filters.department !== 'All') {
+      filtered = filtered.filter(item => item.departmentId?._id === filters.department || item.department === filters.department);
+    }
+    if (filters.branch !== 'All') {
+      filtered = filtered.filter(item => item.branchId?._id === filters.branch || item.branch === filters.branch);
+    }
+    if (filters.designation !== 'All') {
+      filtered = filtered.filter(item => item.designationId?._id === filters.designation || item.designation === filters.designation);
+    }
+    if (filters.shift !== 'All') {
+      filtered = filtered.filter(item => item.shiftId?._id === filters.shift || item.shift === filters.shift);
+    }
+
+    setFilteredDataSource(filtered);
   };
 
   const recalculateRow = (row) => {
@@ -223,7 +278,11 @@ export default function AttendanceSheet() {
       if (val === 'LWP') lwpCount++;
 
       // Offs & Holidays
-      if (val === 'WO') woCount++;
+      if (val === 'WO') {
+        const dayOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][(i + 4) % 7];
+        if (dayOfWeek === 'Sat') woCount += 0.5;
+        else woCount++;
+      }
       if (val === 'H') hCount++;
       if (val === 'OH') ohCount++;
       
@@ -387,7 +446,7 @@ export default function AttendanceSheet() {
             <input type="file" accept=".xlsx, .xls" style={{display: 'none'}} onChange={handleImport} />
             <Button icon={<UploadOutlined />} className="text-green-600 border-green-600" onClick={(e) => e.target.previousElementSibling.click()}>Import Attendance</Button>
           </label>
-          <Button type="primary" icon={<FilterOutlined />}>Apply Filter</Button>
+          <Button type="primary" icon={<FilterOutlined />} onClick={handleApplyFilter}>Apply Filter</Button>
           <Button onClick={handleSave} loading={loading} type="primary" className="bg-green-600">Save Changes</Button>
           <Button type="primary" icon={<DownloadOutlined />} className="bg-blue-600" onClick={handleExport}>Export</Button>
         </Space>
@@ -397,12 +456,51 @@ export default function AttendanceSheet() {
       <Card size="small" className="mb-4 bg-gray-50 border border-gray-200 shadow-sm">
         <Text strong className="text-xs mb-2 block">Basic Filters</Text>
         <Row gutter={[12, 12]}>
-          <Col span={4}><Text className="text-xs">Company Name</Text><Select defaultValue="All" size="small" className="w-full"><Option value="All">All</Option></Select></Col>
-          <Col span={4}><Text className="text-xs">Branch</Text><Select defaultValue="All" size="small" className="w-full"><Option value="All">All</Option></Select></Col>
-          <Col span={4}><Text className="text-xs">Department</Text><Select defaultValue="All" size="small" className="w-full"><Option value="All">All</Option></Select></Col>
-          <Col span={4}><Text className="text-xs">Designation</Text><Select defaultValue="All" size="small" className="w-full"><Option value="All">All</Option></Select></Col>
-          <Col span={4}><Text className="text-xs">Grade</Text><Select defaultValue="All" size="small" className="w-full"><Option value="All">All</Option></Select></Col>
-          <Col span={4}><Text className="text-xs">Employee Type</Text><Select defaultValue="All" size="small" className="w-full"><Option value="All">All</Option></Select></Col>
+          <Col span={4}>
+            <Text className="text-xs">Company Name</Text>
+            <Select 
+              showSearch filterOption={(input, option) => (option?.children ?? '').toLowerCase().includes(input.toLowerCase())}
+              value={filters.company} onChange={(v) => setFilters({...filters, company: v})} size="small" className="w-full">
+              <Option value="All">All</Option>
+            </Select>
+          </Col>
+          <Col span={4}>
+            <Text className="text-xs">Branch</Text>
+            <Select 
+              showSearch filterOption={(input, option) => (option?.children ?? '').toLowerCase().includes(input.toLowerCase())}
+              value={filters.branch} onChange={(v) => setFilters({...filters, branch: v})} size="small" className="w-full">
+              <Option value="All">All</Option>
+              {branches.map(b => <Option key={b._id} value={b.name || b.branchName || b.city}>{b.name || b.branchName || b.city}</Option>)}
+            </Select>
+          </Col>
+          <Col span={4}>
+            <Text className="text-xs">Department</Text>
+            <Select 
+              showSearch filterOption={(input, option) => (option?.children ?? '').toLowerCase().includes(input.toLowerCase())}
+              value={filters.department} onChange={(v) => setFilters({...filters, department: v})} size="small" className="w-full">
+              <Option value="All">All</Option>
+              {departments.map(d => <Option key={d._id} value={d.name || d.departmentName}>{d.name || d.departmentName}</Option>)}
+            </Select>
+          </Col>
+          <Col span={4}>
+            <Text className="text-xs">Designation</Text>
+            <Select 
+              showSearch filterOption={(input, option) => (option?.children ?? '').toLowerCase().includes(input.toLowerCase())}
+              value={filters.designation} onChange={(v) => setFilters({...filters, designation: v})} size="small" className="w-full">
+              <Option value="All">All</Option>
+              {designations.map(d => <Option key={d._id} value={d.name || d.designationName || d.title}>{d.name || d.designationName || d.title}</Option>)}
+            </Select>
+          </Col>
+          <Col span={4}>
+            <Text className="text-xs">Employee Type</Text>
+            <Select 
+              showSearch filterOption={(input, option) => (option?.children ?? '').toLowerCase().includes(input.toLowerCase())}
+              value={filters.employeeType} onChange={(v) => setFilters({...filters, employeeType: v})} size="small" className="w-full">
+              <Option value="All">All</Option>
+              <Option value="Permanent">Permanent</Option>
+              <Option value="Contract">Contract</Option>
+            </Select>
+          </Col>
         </Row>
         
         <Divider className="my-3" />
@@ -413,7 +511,13 @@ export default function AttendanceSheet() {
 
         {showAdvanced && (
           <Row gutter={[12, 12]} className="mt-3">
-            <Col span={4}><Text className="text-xs">Shift Name</Text><Select defaultValue="All" size="small" className="w-full"><Option value="All">All</Option></Select></Col>
+            <Col span={4}>
+              <Text className="text-xs">Shift Name</Text>
+              <Select value={filters.shift} onChange={(v) => setFilters({...filters, shift: v})} size="small" className="w-full">
+                <Option value="All">All</Option>
+                {shifts.map(s => <Option key={s._id} value={s.name || s.shiftName}>{s.name || s.shiftName}</Option>)}
+              </Select>
+            </Col>
             <Col span={4}><Text className="text-xs">Location</Text><Select defaultValue="All" size="small" className="w-full"><Option value="All">All</Option></Select></Col>
             <Col span={4}><Text className="text-xs">Cost Center</Text><Select defaultValue="All" size="small" className="w-full"><Option value="All">All</Option></Select></Col>
             <Col span={4}><Text className="text-xs">Employee Status</Text><Select defaultValue="Active" size="small" className="w-full"><Option value="Active">Active</Option></Select></Col>
@@ -426,7 +530,7 @@ export default function AttendanceSheet() {
       <div className="border border-gray-200 rounded-md">
         <Table
           columns={columns}
-          dataSource={dataSource}
+          dataSource={filteredDataSource}
           scroll={{ x: 2500, y: 500 }}
           pagination={false}
           size="small"

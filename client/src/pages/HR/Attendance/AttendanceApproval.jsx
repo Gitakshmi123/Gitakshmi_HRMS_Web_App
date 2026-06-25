@@ -7,14 +7,68 @@ const { Option } = Select;
 
 export default function AttendanceApproval() {
   const [activeTab, setActiveTab] = useState('Pending');
+  const [data, setData] = useState([]);
+  const [filteredData, setFilteredData] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [employees, setEmployees] = useState([]);
+  const [filters, setFilters] = useState({
+    fromDate: null,
+    toDate: null,
+    employee: 'All'
+  });
+
+  React.useEffect(() => {
+    fetchRequests();
+    fetchEmployees();
+  }, []);
+
+  const fetchEmployees = async () => {
+    try {
+      const res = await api.get('/employee');
+      if (res.data?.success && Array.isArray(res.data.data)) {
+        setEmployees(res.data.data);
+      }
+    } catch (err) {}
+  };
+
+  const fetchRequests = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get('/hr/regularization'); // Using the same endpoint for HR approval view
+      if (res.data && res.data.success) {
+        setData(res.data.data || []);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    handleFilter();
+  }, [data, activeTab, filters]);
+
+  const handleFilter = () => {
+    let filtered = [...data];
+    if (activeTab === 'Pending') filtered = filtered.filter(item => item.status === 'Pending' || item.status === 'PENDING');
+    else if (activeTab === 'Approved') filtered = filtered.filter(item => item.status === 'Approved' || item.status === 'APPROVED');
+    else if (activeTab === 'Rejected') filtered = filtered.filter(item => item.status === 'Rejected' || item.status === 'REJECTED');
+    
+    if (filters.employee !== 'All') {
+      filtered = filtered.filter(item => item.employee?._id === filters.employee || item.employee === filters.employee);
+    }
+    
+    setFilteredData(filtered);
+  };
 
   const columns = [
     { title: 'Sr. No.', dataIndex: 'srNo', width: 60 },
-    { title: 'Req. ID', dataIndex: 'reqId', width: 100 },
-    { title: 'Emp. Code', dataIndex: 'empCode', width: 90 },
-    { title: 'Employee Name', dataIndex: 'name', width: 150 },
-    { title: 'Date', dataIndex: 'date', width: 100 },
-    { title: 'Request Type', dataIndex: 'reqType', width: 140 },
+    { title: 'Req. ID', dataIndex: '_id', width: 100, render: id => id?.substring(0,8).toUpperCase() },
+    { title: 'Emp. Code', dataIndex: ['employee', 'empCode'], width: 90 },
+    { title: 'Employee Name', dataIndex: ['employee', 'name'], width: 150 },
+    { title: 'Date', dataIndex: 'date', width: 100, render: d => d ? new Date(d).toLocaleDateString() : '-' },
+    { title: 'Request Type', dataIndex: 'requestType', width: 140 },
     { 
       title: 'Status', 
       dataIndex: 'status', 
@@ -34,11 +88,7 @@ export default function AttendanceApproval() {
     },
   ];
 
-  const dataSource = [
-    { key: '1', srNo: 1, reqId: 'RQ2026001', empCode: 'E00123', name: 'Rahul Kumar', date: '07-06-2026', reqType: 'In Time Correction', status: 'Pending' },
-    { key: '2', srNo: 2, reqId: 'RQ2026002', empCode: 'E00124', name: 'Priya Sharma', date: '08-06-2026', reqType: 'Out Time Correction', status: 'Pending' },
-    { key: '3', srNo: 3, reqId: 'RQ2026003', empCode: 'E00125', name: 'Amit Patel', date: '09-06-2026', reqType: 'Full Day Present', status: 'Pending' },
-    { key: '4', srNo: 4, reqId: 'RQ2026004', empCode: 'E00126', name: 'Neha Jain', date: '10-06-2026', reqType: 'In/Out Correction', status: 'Pending' },
+    },
   ];
 
   return (
@@ -66,15 +116,18 @@ export default function AttendanceApproval() {
         <Row gutter={[12, 12]} align="bottom">
           <Col span={6}>
             <Text className="text-xs">From Date</Text>
-            <DatePicker size="small" className="w-full" />
+            <DatePicker value={filters.fromDate} onChange={d => setFilters({...filters, fromDate: d})} size="small" className="w-full" />
           </Col>
           <Col span={6}>
             <Text className="text-xs">To Date</Text>
-            <DatePicker size="small" className="w-full" />
+            <DatePicker value={filters.toDate} onChange={d => setFilters({...filters, toDate: d})} size="small" className="w-full" />
           </Col>
           <Col span={6}>
             <Text className="text-xs">Employee</Text>
-            <Select defaultValue="All" size="small" className="w-full"><Option value="All">All</Option></Select>
+            <Select value={filters.employee} onChange={v => setFilters({...filters, employee: v})} size="small" className="w-full">
+              <Option value="All">All</Option>
+              {employees.map(e => <Option key={e._id} value={e._id}>{e.name || (e.firstName + ' ' + e.lastName)} ({e.empCode || e.employeeCode})</Option>)}
+            </Select>
           </Col>
           <Col span={6} className="text-right">
             <Button type="primary" icon={<FilterOutlined />}>Apply Filter</Button>
@@ -83,8 +136,10 @@ export default function AttendanceApproval() {
       </Card>
 
       <Table
+        loading={loading}
         columns={columns}
-        dataSource={activeTab === 'Pending' ? dataSource : []}
+        dataSource={filteredData}
+        rowKey="_id"
         size="small"
         bordered
         pagination={{ pageSize: 15 }}
