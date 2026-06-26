@@ -102,7 +102,8 @@ async function createSmtpTransport(config) {
       pass: config.pass,
     },
     tls: {
-      servername: originalHost
+      servername: originalHost,
+      rejectUnauthorized: false
     },
     dnsTimeout: 10000,
     connectionTimeout: 15000,
