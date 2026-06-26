@@ -46,8 +46,8 @@ const IdentityDetailsTab = React.memo(function IdentityDetailsTab({
   setPhysicalDisabilityOrSickness,
   physicalDisabilityDetails,
   setPhysicalDisabilityDetails,
-  email,
-  setEmail,
+  personalEmail,
+  setPersonalEmail,
   contactNo,
   setContactNo,
   customFields = [],
@@ -203,12 +203,12 @@ const IdentityDetailsTab = React.memo(function IdentityDetailsTab({
           <TabularField label="PERSONAL EMAIL" required>
             <input
               type="email"
-              value={email}
-              onChange={(e) => setEmail?.(e.target.value)}
+              value={personalEmail}
+              onChange={(e) => setPersonalEmail?.(e.target.value)}
               placeholder="name@gmail.com"
-              className={`w-full h-[40px] px-3 bg-transparent outline-none text-sm font-medium text-slate-700 dark:text-slate-200 placeholder:text-slate-400 ${errors.email ? 'border-b-2 border-rose-400' : ''}`}
+              className={`w-full h-[40px] px-3 bg-transparent outline-none text-sm font-medium text-slate-700 dark:text-slate-200 placeholder:text-slate-400 ${errors.personalEmail ? 'border-b-2 border-rose-400' : ''}`}
             />
-            {errors.email && <p className="text-[10px] font-medium text-rose-500 mt-1">{errors.email}</p>}
+            {errors.personalEmail && <p className="text-[10px] font-medium text-rose-500 mt-1">{errors.personalEmail}</p>}
           </TabularField>
         </TabularRow>
 

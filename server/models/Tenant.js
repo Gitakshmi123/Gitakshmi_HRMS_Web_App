@@ -44,6 +44,9 @@ const TenantSchema = new mongoose.Schema({
   organizationId: { type: String, trim: true },
   databaseName: { type: String, trim: true },
   companyCode: { type: String, trim: true },
+  dmsTenantCode: { type: String, trim: true, default: null }, // Mapping code for DMS Integration
+  dmsCompanyId: { type: String, trim: true, default: null },  // DMS Company _id linked to this HRMS tenant
+
   modules: { type: [String], default: [] },
   productEmployeeLimits: { type: mongoose.Schema.Types.Mixed, default: {} },
   meta: { type: mongoose.Schema.Types.Mixed, default: {} },

@@ -483,6 +483,34 @@ class RecruitmentService {
             console.error('Failed to notify HR/managers of new job requisition:', emailGroupErr.message);
         }
 
+        // 8. Notify DMS about the new position
+        try {
+            const Tenant = mongoose.models['Tenant'] || mongoose.model('Tenant');
+            const tenantRecord = await Tenant.findById(tenantId).lean();
+            if (tenantRecord && tenantRecord.dmsCompanyId) {
+                const axios = require('axios');
+                const dmsUrl = process.env.DMS_URL;
+                const dmsToken = process.env.DMS_SECURE_TOKEN;
+                if (dmsUrl && dmsToken) {
+                    await axios.post(
+                        `${dmsUrl}/api/v1/hrms/hiring/positions`,
+                        {
+                            companyId: tenantRecord.dmsCompanyId,
+                            positionId: saved.jobOpeningId || String(saved._id),
+                            positionName: saved.jobTitle
+                        },
+                        {
+                            headers: { 'x-hrms-secure-token': dmsToken },
+                            timeout: 10000
+                        }
+                    );
+                    console.log(`[DMS Sync] ✅ Position folder ready for: ${saved.jobOpeningId}`);
+                }
+            }
+        } catch (dmsErr) {
+            console.error('[DMS Sync] Failed to notify DMS about new position:', dmsErr.message);
+        }
+
         return saved;
     }
 

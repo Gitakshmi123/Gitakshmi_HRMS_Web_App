@@ -137,13 +137,26 @@ async function uploadDocToDMS({
   // ── 3. POST to DMS upload endpoint ────────────────────────────────
   let dmsResponse;
 
+  let dmsTenantCode = '';
+  if (tenantConnection && tenantConnection.name) {
+    const Tenant = require('../models/Tenant');
+    const tenantConfig = await Tenant.findOne({ databaseName: tenantConnection.name }).lean();
+    dmsTenantCode = tenantConfig?.dmsTenantCode || tenantConfig?.companyCode || tenantConfig?.companyName || '';
+  }
+
+  const headers = {
+    ...form.getHeaders(),
+    'X-HRMS-SECURE-TOKEN': config.token,
+    'Accept': 'application/json',
+  };
+  
+  if (dmsTenantCode) {
+    headers['x-dms-tenant-code'] = dmsTenantCode;
+  }
+
   try {
     dmsResponse = await axios.post(config.uploadEndpoint, form, {
-      headers: {
-        ...form.getHeaders(),                        // sets Content-Type: multipart/form-data; boundary=...
-        'X-HRMS-SECURE-TOKEN' : config.token,        // shared secret for DMS auth
-        'Accept'              : 'application/json',
-      },
+      headers,
       maxContentLength : Infinity,   // let FormData determine body size
       maxBodyLength    : Infinity,
       timeout          : config.timeout,

@@ -94,6 +94,7 @@ export default function EmployeeForm({
   const [dob, setDob] = useState(employee?.dob ? new Date(employee.dob).toISOString().slice(0, 10) : '');
   const [contactNo, setContactNo] = useState(employee?.contactNo || '');
   const [email, setEmail] = useState(employee?.email || '');
+  const [personalEmail, setPersonalEmail] = useState(employee?.personalEmail || '');
   // Passwords are stored hashed in DB; existing password cannot be read back for display.
   // For edit flow we only allow setting a NEW password.
   const [password, setPassword] = useState('');
@@ -494,6 +495,7 @@ export default function EmployeeForm({
       if (employee.dob) setDob(dayjs(employee.dob).format('YYYY-MM-DD'));
       if (employee.contactNo) setContactNo(employee.contactNo);
       if (employee.email) setEmail(employee.email);
+      if (employee.personalEmail) setPersonalEmail(employee.personalEmail);
       if (employee.maritalStatus) setMaritalStatus(employee.maritalStatus);
       if (employee.bloodGroup) setBloodGroup(employee.bloodGroup);
       if (employee.nationality) setNationality(employee.nationality);
@@ -1173,6 +1175,7 @@ export default function EmployeeForm({
       if (!lastName || lastName.length < 3) e.lastName = 'Last name is required (min 3 chars)';
       if (!gender) e.gender = 'Gender is required';
       if (!dob) e.dob = 'Date of birth required';
+      if (!personalEmail || !/\S+@\S+\.\S+/.test(personalEmail)) e.personalEmail = 'Valid Personal Email is required';
       else {
         const birth = new Date(dob); const age = Math.floor((Date.now() - birth.getTime()) / (1000 * 60 * 60 * 24 * 365.25));
         if (age < 18) e.dob = 'Employee must be at least 18 years old';
@@ -1490,6 +1493,7 @@ export default function EmployeeForm({
         dob: dob || undefined,
         contactNo: contactNo || undefined,
         email: email || undefined,
+        personalEmail: personalEmail || undefined,
         password: password || undefined,
         maritalStatus: maritalStatus || undefined,
         bloodGroup: bloodGroup || undefined,
@@ -1729,6 +1733,7 @@ export default function EmployeeForm({
         dob: dob || undefined,
         contactNo: contactNo || undefined,
         email: email || undefined,
+        personalEmail: personalEmail || undefined,
         password: password || undefined,
         maritalStatus: maritalStatus || undefined,
         bloodGroup: bloodGroup || undefined,
@@ -1958,8 +1963,8 @@ export default function EmployeeForm({
                       setPhysicalDisabilityOrSickness={setPhysicalDisabilityOrSickness}
                       physicalDisabilityDetails={physicalDisabilityDetails}
                       setPhysicalDisabilityDetails={setPhysicalDisabilityDetails}
-                      email={email}
-                      setEmail={setEmail}
+                      personalEmail={personalEmail}
+                      setPersonalEmail={setPersonalEmail}
                       contactNo={contactNo}
                       setContactNo={setContactNo}
                       customFields={customFields}
@@ -2730,7 +2735,7 @@ export default function EmployeeForm({
                     <ShieldCheck className="w-4 h-4 text-indigo-500" /> Account Setup
                   </div>
                   <TabularRow columns={2}>
-                    <TabularField label="LOGIN EMAIL ID" required>
+                    <TabularField label="OFFICIAL EMAIL ID (LOGIN EMAIL)" required>
                       <input
                         type="email"
                         value={email}

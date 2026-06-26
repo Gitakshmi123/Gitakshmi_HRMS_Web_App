@@ -42,17 +42,30 @@ export default function CareerBlockOpenings({
     };
 
     return (
-        <section id="open-positions-section" className={`${isMobile ? 'py-10 px-4' : 'py-20 px-4 sm:px-8 lg:px-12'} bg-white w-full max-w-[1800px] mx-auto`}>
+        <section id="open-positions-section" className={`w-full ${isMobile ? 'py-14 px-4' : 'py-24 px-8'}`}
+            style={{ background: '#F8FAFF' }}>
+            <div className="max-w-6xl mx-auto">
 
-            {/* Section Header */}
-            <div className={`flex items-center justify-between ${isMobile ? 'mb-6' : 'mb-12'} px-2`}>
-                <h2 className={`${isMobile ? 'text-2xl' : 'text-4xl'} font-black text-gray-900 tracking-tight`}>{title}</h2>
-                {!openingsLocked && (
-                    <div className="bg-blue-50 px-3 py-1.5 rounded-full">
-                        <span className={`${isMobile ? 'text-[10px]' : 'text-sm'} font-black text-blue-600 uppercase tracking-widest`}>{safeJobs.length} Jobs</span>
+                {/* Section Header */}
+                <div className={`flex items-end justify-between ${isMobile ? 'mb-8' : 'mb-14'}`}>
+                    <div>
+                        <div className="inline-flex items-center gap-2 bg-indigo-50 border border-indigo-100 rounded-full px-3.5 py-1.5 mb-3">
+                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                            <span className="text-[11px] font-bold text-indigo-600 tracking-widest uppercase">Now Hiring</span>
+                        </div>
+                        <h2 className={`${isMobile ? 'text-2xl' : 'text-4xl lg:text-5xl'} font-black text-gray-900 tracking-tight leading-tight`}>
+                            {title}
+                        </h2>
                     </div>
-                )}
-            </div>
+                    {!openingsLocked && (
+                        <div className="shrink-0 ml-4 flex items-center gap-2 bg-white border border-gray-100 rounded-2xl px-4 py-2 shadow-sm">
+                            <div className="w-2 h-2 rounded-full bg-green-500" />
+                            <span className={`${isMobile ? 'text-xs' : 'text-sm'} font-black text-gray-900`}>{safeJobs.length}</span>
+                            <span className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-gray-400`}>Open Roles</span>
+                        </div>
+                    )}
+                </div>
+
 
             {openingsLocked ? (
                 <div className="rounded-[2rem] border-2 border-dashed border-gray-200 bg-gray-50/80 px-6 py-16 text-center sm:px-12">
@@ -71,32 +84,35 @@ export default function CareerBlockOpenings({
                     </Link>
                 </div>
             ) : loading ? (
-                <div className={`grid ${getGridClass()} gap-${gap}`}>
+                <div className={`grid ${getGridClass()} gap-6`}>
                     {[1, 2, 3].map(i => (
-                        <div key={i} className="h-96 bg-gray-50 rounded-3xl animate-pulse border border-gray-100"></div>
+                        <div key={i} className="h-80 bg-white rounded-3xl animate-pulse border border-gray-100 shadow-sm" />
                     ))}
                 </div>
             ) : safeJobs.length === 0 ? (
-                <div className="text-center py-20 bg-gray-50 rounded-[3rem] border-2 border-dashed border-gray-200">
-                    <p className="text-gray-400 font-bold text-lg">No open positions found matching your search.</p>
+                <div className="text-center py-20 bg-white rounded-3xl border border-gray-100 shadow-sm">
+                    <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                        <Lock size={24} className="text-indigo-400" />
+                    </div>
+                    <p className="text-gray-500 font-semibold text-base">No open positions found matching your search.</p>
+                    <p className="text-gray-400 text-sm mt-1">Try adjusting your search terms.</p>
                 </div>
             ) : (
-                <div className={`grid ${getGridClass()} gap-${gap}`}>
+                <div className={`grid ${getGridClass()} gap-6`}>
                     {safeJobs.map((job, idx) => {
                         const jobId = safeId(job?._id || job?.id);
                         const jobKey = jobId || `job-${idx}-${job?.jobTitle || 'opening'}`;
-
                         return (
-                        <div key={jobKey} className="h-full">
-                            <JobCard
-                                job={job}
-                                config={content} // Pass the entire content object as config
-                                isApplied={myApplications.has(jobId)}
-                                onApply={onApply}
-                                onViewDetails={(j) => setSelectedJob(j)}
-                                previewMode={previewMode}
-                            />
-                        </div>
+                            <div key={jobKey} className="h-full">
+                                <JobCard
+                                    job={job}
+                                    config={content}
+                                    isApplied={myApplications.has(jobId)}
+                                    onApply={onApply}
+                                    onViewDetails={(j) => setSelectedJob(j)}
+                                    previewMode={previewMode}
+                                />
+                            </div>
                         );
                     })}
                 </div>
@@ -111,6 +127,7 @@ export default function CareerBlockOpenings({
                     isApplied={selectedJob ? myApplications.has(safeId(selectedJob._id || selectedJob.id)) : false}
                 />
             )}
+            </div>
         </section>
     );
 }
