@@ -88,9 +88,6 @@ export default function AttendanceApproval() {
     },
   ];
 
-    },
-  ];
-
   return (
     <div className="p-4 bg-white min-h-screen">
       <div className="flex justify-between items-center mb-4">
