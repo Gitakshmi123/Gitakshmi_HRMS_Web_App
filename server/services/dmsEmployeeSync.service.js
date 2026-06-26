@@ -152,12 +152,25 @@ async function syncEmployeeToDMS(employeeData, tenantConnection) {
   console.info(`[DMS-SYNC] ⬆️  Syncing employee ${hrmsId} (${payload.name}) to DMS...`);
 
   try {
+    let dmsTenantCode = '';
+    if (tenantConnection && tenantConnection.name) {
+      const Tenant = require('../models/Tenant');
+      const tenantConfig = await Tenant.findOne({ databaseName: tenantConnection.name }).lean();
+      dmsTenantCode = tenantConfig?.dmsTenantCode || tenantConfig?.companyCode || tenantConfig?.companyName || '';
+    }
+
+    const headers = {
+      'X-HRMS-SECURE-TOKEN': cfg.token,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+    
+    if (dmsTenantCode) {
+      headers['x-dms-tenant-code'] = dmsTenantCode;
+    }
+
     const { data } = await axios.post(cfg.syncEmployeeUrl, payload, {
-      headers: {
-        'X-HRMS-SECURE-TOKEN' : cfg.token,
-        'Content-Type'        : 'application/json',
-        'Accept'              : 'application/json',
-      },
+      headers,
       timeout: cfg.timeout,
     });
 
@@ -238,6 +251,13 @@ async function bulkSyncAllEmployeesToDMS(tenantConnection, options = {}) {
 
   console.info(`[DMS-SYNC] Total employees to sync: ${total} in ${totalBatches} batch(es)`);
 
+  let dmsTenantCode = '';
+  if (tenantConnection && tenantConnection.name) {
+    const Tenant = require('../models/Tenant');
+    const tenantConfig = await Tenant.findOne({ databaseName: tenantConnection.name }).lean();
+    dmsTenantCode = tenantConfig?.dmsTenantCode || tenantConfig?.companyCode || tenantConfig?.companyName || '';
+  }
+
   for (let batchNum = 0; batchNum < totalBatches; batchNum++) {
     const employees = await Employee.find(filter)
       .skip(batchNum * batchSize)
@@ -251,12 +271,17 @@ async function bulkSyncAllEmployeesToDMS(tenantConnection, options = {}) {
     const batch = employees.map(buildDmsPayload);
 
     try {
+      const headers = {
+        'X-HRMS-SECURE-TOKEN': cfg.token,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+      if (dmsTenantCode) {
+        headers['x-dms-tenant-code'] = dmsTenantCode;
+      }
+
       const { data } = await axios.post(cfg.bulkSyncEmployeeUrl, { employees: batch }, {
-        headers: {
-          'X-HRMS-SECURE-TOKEN' : cfg.token,
-          'Content-Type'        : 'application/json',
-          'Accept'              : 'application/json',
-        },
+        headers,
         timeout: cfg.timeout,
       });
 

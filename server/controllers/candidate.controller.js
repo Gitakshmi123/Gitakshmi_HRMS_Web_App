@@ -877,7 +877,7 @@ exports.getCandidateDashboard = async (req, res) => {
             for (let app of finalApplications) {
                 const reqId = app.requirementId?._id || app.requirementId;
                 if (reqId) {
-                    const docReq = await CandidateDocumentRequest.findOne({ candidateId: id, jobId: reqId, status: { $in: ['Pending', 'Revision_Requested'] } });
+                    const docReq = await CandidateDocumentRequest.findOne({ candidateId: id, jobId: reqId }).sort({ createdAt: -1 });
                     if (docReq) {
                         app.documentRequestToken = docReq.token;
                         app.documentRequestStatus = docReq.status;

@@ -256,7 +256,7 @@ export default function SalaryBreakupStep({
                     if (extractedCategory) setCategory(extractedCategory);
                     if (extractedTotalCTC > 0) {
                         setAnnualCTC(extractedTotalCTC.toString());
-                        showToast('success', 'CTC Extracted', `Extracted Annual CTC: ₹${extractedTotalCTC.toLocaleString('en-IN')}`);
+                        showToast('success', 'CTC Extracted', `Extracted Annual CTC: ₹${Number(extractedTotalCTC || 0).toLocaleString('en-IN')}`);
                     }
                 } catch (err) {
                     console.error('Excel parse error:', err);
@@ -455,7 +455,7 @@ export default function SalaryBreakupStep({
                                         <p className="text-[10px] font-bold text-slate-700 dark:text-slate-300 mt-0.5"> गुजरात Rules</p>
                                     </div>
                                 </div>
-                                <p className="text-xs font-black text-indigo-600 dark:text-indigo-400">₹{activeMinWage.monthlyAmount.toLocaleString('en-IN')}/mo</p>
+                                <p className="text-xs font-black text-indigo-600 dark:text-indigo-400">₹{activeMinWage.monthlyAmount?.toLocaleString('en-IN')}/mo</p>
                             </div>
                         )}
                     </div>
@@ -472,15 +472,15 @@ export default function SalaryBreakupStep({
                                     </div>
                                     <div className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded text-[7px] font-black uppercase">Net Pay</div>
                                 </div>
-                                <p className="text-3xl font-black tracking-tight">₹{breakup.totals.takeHomeMonthly.toLocaleString('en-IN')}</p>
+                                <p className="text-3xl font-black tracking-tight">₹{breakup.totals.takeHomeMonthly?.toLocaleString('en-IN')}</p>
                                 <div className="grid grid-cols-2 gap-4 pt-1">
                                     <div>
                                         <p className="text-[7px] font-bold text-white/40 uppercase tracking-widest">Annual Net</p>
-                                        <p className="font-black text-xs">₹{breakup.totals.takeHomeYearly.toLocaleString('en-IN')}</p>
+                                        <p className="font-black text-xs">₹{breakup.totals.takeHomeYearly?.toLocaleString('en-IN')}</p>
                                     </div>
                                     <div className="text-right">
                                         <p className="text-[7px] font-bold text-white/40 uppercase tracking-widest">Deductions</p>
-                                        <p className="font-black text-xs text-rose-400">₹{breakup.totals.deductionMonthly.toLocaleString('en-IN')}</p>
+                                        <p className="font-black text-xs text-rose-400">₹{breakup.totals.deductionMonthly?.toLocaleString('en-IN')}</p>
                                     </div>
                                 </div>
                             </div>
@@ -542,8 +542,8 @@ export default function SalaryBreakupStep({
                                                         <span className="text-[7px] bg-indigo-600 text-white px-1.5 py-0.5 rounded-full font-black uppercase ml-1.5 tracking-tighter">MW Picked</span>
                                                     )}
                                                 </td>
-                                                <td className="px-6 py-2.5 text-right font-black text-slate-800 dark:text-white">₹{comp.monthly.toLocaleString('en-IN')}</td>
-                                                <td className="px-6 py-2.5 text-right font-bold text-slate-400">₹{comp.yearly.toLocaleString('en-IN')}</td>
+                                                <td className="px-6 py-2.5 text-right font-black text-slate-800 dark:text-white">₹{comp.monthly?.toLocaleString('en-IN')}</td>
+                                                <td className="px-6 py-2.5 text-right font-bold text-slate-400">₹{comp.yearly?.toLocaleString('en-IN')}</td>
                                             </tr>
                                         ))}
 
@@ -553,15 +553,15 @@ export default function SalaryBreakupStep({
                                                 <td className="px-6 py-2.5 text-slate-500 italic">
                                                     {comp.name} <span className="text-[7px] font-black uppercase opacity-60">(Employer Cost)</span>
                                                 </td>
-                                                <td className="px-6 py-2.5 text-right font-bold text-slate-700 dark:text-slate-300">₹{comp.monthly.toLocaleString('en-IN')}</td>
-                                                <td className="px-6 py-2.5 text-right font-bold text-slate-400">₹{comp.yearly.toLocaleString('en-IN')}</td>
+                                                <td className="px-6 py-2.5 text-right font-bold text-slate-700 dark:text-slate-300">₹{comp.monthly?.toLocaleString('en-IN')}</td>
+                                                <td className="px-6 py-2.5 text-right font-bold text-slate-400">₹{comp.yearly?.toLocaleString('en-IN')}</td>
                                             </tr>
                                         ))}
 
                                         <tr className="bg-slate-900 text-white font-black">
                                             <td className="px-6 py-3 uppercase tracking-wider text-[9px]">Gross A (Cost to Company A)</td>
-                                            <td className="px-6 py-3 text-right text-sm">₹{breakup.totals.grossA_Monthly.toLocaleString('en-IN')}</td>
-                                            <td className="px-6 py-3 text-right opacity-60">₹{breakup.totals.grossA_Yearly.toLocaleString('en-IN')}</td>
+                                            <td className="px-6 py-3 text-right text-sm">₹{breakup.totals.grossA_Monthly?.toLocaleString('en-IN')}</td>
+                                            <td className="px-6 py-3 text-right opacity-60">₹{breakup.totals.grossA_Yearly?.toLocaleString('en-IN')}</td>
                                         </tr>
 
                                         {/* Section B: Retirals */}
@@ -573,22 +573,22 @@ export default function SalaryBreakupStep({
                                         {breakup.retirementBenefits && breakup.retirementBenefits.map(comp => (
                                             <tr key={comp.code} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
                                                 <td className="px-6 py-2.5 font-bold text-slate-700 dark:text-slate-300">{comp.name}</td>
-                                                <td className="px-6 py-2.5 text-right font-black text-slate-800 dark:text-white">₹{comp.monthly.toLocaleString('en-IN')}</td>
-                                                <td className="px-6 py-2.5 text-right font-bold text-slate-400">₹{comp.yearly.toLocaleString('en-IN')}</td>
+                                                <td className="px-6 py-2.5 text-right font-black text-slate-800 dark:text-white">₹{comp.monthly?.toLocaleString('en-IN')}</td>
+                                                <td className="px-6 py-2.5 text-right font-bold text-slate-400">₹{comp.yearly?.toLocaleString('en-IN')}</td>
                                             </tr>
                                         ))}
 
                                         <tr className="bg-amber-500 text-white font-black">
                                             <td className="px-6 py-3 uppercase tracking-wider text-[9px]">Gross B (Retirals)</td>
-                                            <td className="px-6 py-3 text-right text-sm">₹{breakup.totals.grossB_Monthly.toLocaleString('en-IN')}</td>
-                                            <td className="px-6 py-3 text-right opacity-60">₹{breakup.totals.grossB_Yearly.toLocaleString('en-IN')}</td>
+                                            <td className="px-6 py-3 text-right text-sm">₹{breakup.totals.grossB_Monthly?.toLocaleString('en-IN')}</td>
+                                            <td className="px-6 py-3 text-right opacity-60">₹{breakup.totals.grossB_Yearly?.toLocaleString('en-IN')}</td>
                                         </tr>
 
                                         {/* Total CTC */}
                                         <tr className="bg-indigo-700 text-white font-black border-t-4 border-white dark:border-slate-900">
                                             <td className="px-6 py-4 uppercase tracking-widest text-[10px]">Total Annual CTC (A + B)</td>
                                             <td className="px-6 py-4 text-right opacity-65 text-sm">₹{Math.round(breakup.totals.totalCTC / 12).toLocaleString('en-IN')}</td>
-                                            <td className="px-6 py-4 text-right text-lg">₹{breakup.totals.totalCTC.toLocaleString('en-IN')}</td>
+                                            <td className="px-6 py-4 text-right text-lg">₹{breakup.totals.totalCTC?.toLocaleString('en-IN')}</td>
                                         </tr>
 
                                         {/* Section C: Deductions */}
@@ -600,8 +600,8 @@ export default function SalaryBreakupStep({
                                         {breakup.deductions.map(comp => (
                                             <tr key={comp.code} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
                                                 <td className="px-6 py-2.5 text-slate-500 italic">{comp.name}</td>
-                                                <td className="px-6 py-2.5 text-right font-black text-rose-600 dark:text-rose-500">-₹{comp.monthly.toLocaleString('en-IN')}</td>
-                                                <td className="px-6 py-2.5 text-right font-bold text-slate-400">₹{comp.yearly.toLocaleString('en-IN')}</td>
+                                                <td className="px-6 py-2.5 text-right font-black text-rose-600 dark:text-rose-500">-₹{comp.monthly?.toLocaleString('en-IN')}</td>
+                                                <td className="px-6 py-2.5 text-right font-bold text-slate-400">₹{comp.yearly?.toLocaleString('en-IN')}</td>
                                             </tr>
                                         ))}
 
@@ -611,7 +611,7 @@ export default function SalaryBreakupStep({
                                                 <p className="uppercase tracking-widest text-[11px] leading-none">Net Take-Home Pay</p>
                                                 <span className="text-[8px] font-bold opacity-60 uppercase tracking-wide">Approx. credit after all deductions</span>
                                             </td>
-                                            <td className="px-6 py-5 text-right text-2xl tracking-tight">₹{breakup.totals.takeHomeMonthly.toLocaleString('en-IN')}</td>
+                                            <td className="px-6 py-5 text-right text-2xl tracking-tight">₹{breakup.totals.takeHomeMonthly?.toLocaleString('en-IN')}</td>
                                             <td className="px-6 py-5 text-right opacity-40 italic">/mo</td>
                                         </tr>
                                     </tbody>
