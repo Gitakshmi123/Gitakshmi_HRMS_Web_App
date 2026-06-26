@@ -163,6 +163,36 @@ export default function MusterRoll() {
   const [dataSource, setDataSource] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  const metrics = React.useMemo(() => {
+    if (!dataSource || dataSource.length === 0) {
+      return { totalEmployees: 0, avgPresent: '0.0', avgLeave: '0.0', avgWO: '0.0', leaveSummary: [
+        { key: 1, type: 'CL (Casual Leave)', ob: 0, availed: 0, balance: 0 },
+        { key: 2, type: 'SL (Sick Leave)', ob: 0, availed: 0, balance: 0 },
+        { key: 3, type: 'PL (Privilege Leave)', ob: 0, availed: 0, balance: 0 },
+      ]};
+    }
+    const totalEmp = dataSource.length;
+    const totalPresent = dataSource.reduce((sum, r) => sum + (r.totalPresentDays || 0), 0);
+    const totalLeave = dataSource.reduce((sum, r) => sum + (r.totalLeaves || 0), 0);
+    const totalWO = dataSource.reduce((sum, r) => sum + ((r.wo || 0) + (r.h || 0) + (r.oh || 0)), 0);
+
+    const clAvailed = dataSource.reduce((sum, r) => sum + (r.cl || 0), 0);
+    const slAvailed = dataSource.reduce((sum, r) => sum + (r.sl || 0), 0);
+    const plAvailed = dataSource.reduce((sum, r) => sum + (r.pl || 0), 0);
+
+    return {
+      totalEmployees: totalEmp,
+      avgPresent: (totalPresent / totalEmp).toFixed(1),
+      avgLeave: (totalLeave / totalEmp).toFixed(1),
+      avgWO: (totalWO / totalEmp).toFixed(1),
+      leaveSummary: [
+        { key: 1, type: 'CL (Casual Leave)', ob: totalEmp * 12, availed: clAvailed, balance: (totalEmp * 12) - clAvailed },
+        { key: 2, type: 'SL (Sick Leave)', ob: totalEmp * 10, availed: slAvailed, balance: (totalEmp * 10) - slAvailed },
+        { key: 3, type: 'PL (Privilege Leave)', ob: totalEmp * 15, availed: plAvailed, balance: (totalEmp * 15) - plAvailed },
+      ]
+    };
+  }, [dataSource]);
+
   useEffect(() => {
     fetchMusterRoll();
   }, []);
@@ -435,21 +465,21 @@ export default function MusterRoll() {
             <Row>
               <Col span={6} className="text-center">
                 <Text type="secondary" className="text-xs block">Total Employees</Text>
-                <Title level={3} className="m-0">125</Title>
+                <Title level={3} className="m-0">{metrics.totalEmployees}</Title>
               </Col>
               <Col span={6} className="text-center">
                 <Text type="secondary" className="text-xs block">Avg Present Days</Text>
-                <Title level={3} className="text-green-500 m-0">22.4</Title>
+                <Title level={3} className="text-green-500 m-0">{metrics.avgPresent}</Title>
                 <Text type="secondary" className="text-[10px]">Per Employee</Text>
               </Col>
               <Col span={6} className="text-center">
                 <Text type="secondary" className="text-xs block">Avg Leave Days</Text>
-                <Title level={3} className="text-orange-500 m-0">1.7</Title>
+                <Title level={3} className="text-orange-500 m-0">{metrics.avgLeave}</Title>
                 <Text type="secondary" className="text-[10px]">Per Employee</Text>
               </Col>
               <Col span={6} className="text-center">
                 <Text type="secondary" className="text-xs block">Avg WO Days</Text>
-                <Title level={3} className="text-gray-500 m-0">4.0</Title>
+                <Title level={3} className="text-gray-500 m-0">{metrics.avgWO}</Title>
                 <Text type="secondary" className="text-[10px]">Per Employee</Text>
               </Col>
             </Row>
@@ -461,11 +491,7 @@ export default function MusterRoll() {
             <Table 
               size="small"
               pagination={false}
-              dataSource={[
-                { key: 1, type: 'CL (Casual Leave)', ob: 12.0, availed: 1.5, balance: 10.5 },
-                { key: 2, type: 'SL (Sick Leave)', ob: 10.0, availed: 0.0, balance: 10.0 },
-                { key: 3, type: 'PL (Privilege Leave)', ob: 15.0, availed: 2.0, balance: 13.0 },
-              ]}
+              dataSource={metrics.leaveSummary}
               columns={[
                 { title: 'Leave Type', dataIndex: 'type', width: 120 },
                 { title: 'Opening Balance', dataIndex: 'ob', align: 'center' },

@@ -154,15 +154,15 @@ export default function DailyAttendance() {
         </div>
         <div>
           <Text type="secondary" className="text-xs">Late: </Text>
-          <Text className="text-orange-500 font-bold">42</Text>
+          <Text className="text-orange-500 font-bold">{filteredData.filter(d => d.actualIn && d.shiftIn && d.actualIn > d.shiftIn).length}</Text>
         </div>
         <div>
           <Text type="secondary" className="text-xs">Early Leave: </Text>
-          <Text className="text-orange-500 font-bold">35</Text>
+          <Text className="text-orange-500 font-bold">{filteredData.filter(d => d.actualOut && d.shiftOut && d.actualOut < d.shiftOut).length}</Text>
         </div>
         <div>
           <Text type="secondary" className="text-xs">Missing Punch: </Text>
-          <Text className="text-pink-500 font-bold">18</Text>
+          <Text className="text-pink-500 font-bold">{filteredData.filter(d => d.status === 'Present' && (!d.actualIn || !d.actualOut || d.actualIn === '--:--' || d.actualOut === '--:--')).length}</Text>
         </div>
       </div>
 

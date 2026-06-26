@@ -29,6 +29,7 @@ export default function AttendanceDashboard() {
   ]);
 
   const [dailyAttendance, setDailyAttendance] = useState([]);
+  const [regularizationRequests, setRegularizationRequests] = useState([]);
 
   useEffect(() => {
     const fetchKPIs = async () => {
@@ -60,8 +61,19 @@ export default function AttendanceDashboard() {
         console.error('Failed to fetch daily preview', err);
       }
     };
+    const fetchRegularization = async () => {
+      try {
+        const res = await api.get('/hr/regularization');
+        if (res.data.success) {
+          setRegularizationRequests(res.data.data.slice(0, 3));
+        }
+      } catch (err) {
+        console.error('Failed to fetch regularization preview', err);
+      }
+    };
     fetchKPIs();
     fetchDailyPreview();
+    fetchRegularization();
   }, []);
 
   // Quick Links Data
@@ -145,11 +157,13 @@ export default function AttendanceDashboard() {
             <Table 
               size="small"
               pagination={false}
-              dataSource={[
-                { key: 1, reqId: 'RQ2026001', name: 'Rahul Kumar', type: 'In Time Correction', status: 'Pending' },
-                { key: 2, reqId: 'RQ2026002', name: 'Priya Sharma', type: 'Out Time Correction', status: 'Pending' },
-                { key: 3, reqId: 'RQ2026003', name: 'Amit Patel', type: 'Full Day Present', status: 'Pending' },
-              ]}
+              dataSource={regularizationRequests.map((req, index) => ({
+                key: req._id || index,
+                reqId: req.reqId || `RQ-${index + 1}`,
+                name: req.employee ? `${req.employee.firstName || ''} ${req.employee.lastName || ''}`.trim() : 'Unknown',
+                type: req.type || 'Correction',
+                status: req.status || 'Pending'
+              }))}
               columns={[
                 { title: 'Req. ID', dataIndex: 'reqId' },
                 { title: 'Employee Name', dataIndex: 'name' },

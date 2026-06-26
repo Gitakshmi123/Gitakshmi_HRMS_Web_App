@@ -59,12 +59,18 @@ export default function AttendanceReports() {
           let absentCount = 0;
           let leaveCount = 0;
           
-          if (Array.isArray(emp.attendance)) {
-            emp.attendance.forEach(day => {
-              if (['P', 'HD', 'WFH', 'OD'].includes(day.status)) presentCount++;
-              if (day.status === 'A') absentCount++;
-              if (day.status === 'L') leaveCount++;
-            });
+          for (let i = 1; i <= 31; i++) {
+            const val = emp[`day${i}`];
+            if (val) {
+              if (['P', 'WFH', 'OD', 'BT'].includes(val)) presentCount++;
+              else if (['HD', 'AHD', 'LWPHD', 'ELHD', 'CLHD', 'SLHD'].includes(val)) presentCount += 0.5;
+              
+              if (['A', 'LWP'].includes(val)) absentCount++;
+              else if (['AHD', 'LWPHD'].includes(val)) absentCount += 0.5;
+              
+              if (['EL', 'CL', 'SL', 'PL', 'ML', 'MARL', 'STL', 'L', 'CO'].includes(val)) leaveCount++;
+              else if (['ELHD', 'CLHD', 'SLHD'].includes(val)) leaveCount += 0.5;
+            }
           }
 
           return {

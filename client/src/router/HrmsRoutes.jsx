@@ -125,6 +125,8 @@ const Payslips = lazy(() => import('../pages/HR/Payroll/Payslips'));
 const ProcessPayroll = lazy(() => import('../pages/HR/Payroll/ProcessPayroll'));
 const PayrollDashboard = lazy(() => import('../pages/HR/Payroll/PayrollDashboard'));
 const SalaryAssignmentExcel = lazy(() => import('../pages/HR/Payroll/SalaryAssignmentExcel'));
+const MinimumWageMaster = lazy(() => import('../pages/HR/Payroll/MinimumWageMaster'));
+const PayrollReport = lazy(() => import('../pages/HR/Payroll/PayrollReport'));
 
 // Employee Self-Service
 const ESSPayslips = lazy(() => import('../pages/ESS/Payslips'));
@@ -582,9 +584,11 @@ export default function HrmsRoutes() {
           <Route path="payroll/benefits/edit/:id" element={<NewBenefit />} />
           <Route path="payroll/salary-templates/new" element={<NewSalaryTemplate />} />
           <Route path="payroll/rules" element={<PayrollRules />} />
+          <Route path="payroll/minimum-wage" element={<MinimumWageMaster />} />
           <Route path="payroll/process" element={<ProcessPayroll />} />
           <Route path="payroll/run" element={<RunPayroll />} />
           <Route path="payroll/payslips" element={<Payslips />} />
+          <Route path="payroll/reports" element={<PayrollReport />} />
           <Route path="payroll/payslip-templates" element={<PayslipTemplates />} />
           <Route path="payroll/salary-assignment-excel" element={<SalaryAssignmentExcel />} />
 

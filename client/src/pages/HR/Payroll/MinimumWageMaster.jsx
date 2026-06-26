@@ -20,7 +20,6 @@ const MinimumWageMaster = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
-    const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedItem, setSelectedItem] = useState(null);
     const [form, setForm] = useState({
         state: '',
@@ -56,7 +55,6 @@ const MinimumWageMaster = () => {
             monthlyAmount: item.monthlyAmount,
             effectiveFrom: new Date(item.effectiveFrom).toISOString().split('T')[0]
         });
-        setIsModalOpen(true);
     };
 
     const handleDelete = async (id) => {
@@ -81,7 +79,6 @@ const MinimumWageMaster = () => {
                 await api.post('/payroll/minimum-wages', form);
                 showToast('success', 'Created', 'New minimum wage record added');
             }
-            setIsModalOpen(false);
             setSelectedItem(null);
             setForm({ state: '', category: 'UNSKILLED', monthlyAmount: '', effectiveFrom: new Date().toISOString().split('T')[0] });
             fetchData();
@@ -108,16 +105,99 @@ const MinimumWageMaster = () => {
                 <motion.button 
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => { setSelectedItem(null); setIsModalOpen(true); }}
+                    onClick={() => { 
+                        setSelectedItem(null); 
+                        setForm({ state: '', category: 'UNSKILLED', monthlyAmount: '', effectiveFrom: new Date().toISOString().split('T')[0] });
+                    }}
                     className="flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 dark:shadow-none font-black text-sm"
                 >
                     <Plus size={20} strokeWidth={3} />
-                    <span>ADD REGULATORY STATE</span>
+                    <span>NEW REGULATORY STATE</span>
                 </motion.button>
             </div>
 
-            {/* Content Card */}
-            <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-xl shadow-slate-200/40 dark:shadow-none border border-slate-100 dark:border-slate-800 overflow-hidden">
+            <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
+                {/* Form Area - Inline */}
+                <div className="xl:col-span-4">
+                    <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-xl shadow-slate-200/40 dark:shadow-none border border-slate-100 dark:border-slate-800 overflow-hidden sticky top-8">
+                        <div className="px-8 py-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
+                            <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">{selectedItem ? 'Update Compliance' : 'New Regulatory Record'}</h3>
+                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] mt-1 italic">Define statutory minimum wage limits</p>
+                        </div>
+                        <form onSubmit={handleSubmit} className="p-8 space-y-6">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-1">State Name</label>
+                                <input 
+                                    type="text" 
+                                    required
+                                    className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-black focus:ring-4 focus:ring-indigo-100 dark:focus:ring-indigo-900/20 focus:border-indigo-500 outline-none transition-all uppercase"
+                                    placeholder="e.g. GUJARAT"
+                                    value={form.state}
+                                    onChange={(e) => setForm({ ...form, state: e.target.value })}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-1">Category</label>
+                                <select 
+                                    className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-black focus:ring-4 focus:ring-indigo-100 dark:focus:ring-indigo-900/20 focus:border-indigo-500 outline-none transition-all appearance-none"
+                                    value={form.category}
+                                    onChange={(e) => setForm({ ...form, category: e.target.value })}
+                                >
+                                    {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                                </select>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-1">Monthly (Basic)</label>
+                                <div className="relative group">
+                                    <div className="absolute inset-0 bg-emerald-100 dark:bg-emerald-900/20 rounded-3xl blur-2xl opacity-0 group-focus-within:opacity-100 transition-opacity" />
+                                    <div className="relative flex items-center">
+                                        <span className="absolute left-5 text-slate-300 dark:text-slate-600 text-2xl font-black">₹</span>
+                                        <input 
+                                            type="number" 
+                                            required
+                                            className="w-full pl-12 pr-5 py-5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl text-2xl font-black focus:ring-4 focus:ring-emerald-100 dark:focus:ring-emerald-900/20 focus:border-emerald-500 outline-none transition-all tracking-tighter"
+                                            placeholder="0"
+                                            value={form.monthlyAmount}
+                                            onChange={(e) => setForm({ ...form, monthlyAmount: e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-1">Effective Date</label>
+                                <input 
+                                    type="date" 
+                                    required
+                                    className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-black focus:ring-4 focus:ring-indigo-100 dark:focus:ring-indigo-900/20 focus:border-indigo-500 outline-none transition-all"
+                                    value={form.effectiveFrom}
+                                    onChange={(e) => setForm({ ...form, effectiveFrom: e.target.value })}
+                                />
+                            </div>
+                            <div className="pt-2 flex gap-3">
+                                {selectedItem && (
+                                    <button 
+                                        type="button"
+                                        onClick={() => { setSelectedItem(null); setForm({ state: '', category: 'UNSKILLED', monthlyAmount: '', effectiveFrom: new Date().toISOString().split('T')[0] }); }}
+                                        className="flex-1 py-4 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 font-black text-[10px] uppercase tracking-[0.2em] transition-all"
+                                    >
+                                        CANCEL
+                                    </button>
+                                )}
+                                <button 
+                                    type="submit"
+                                    disabled={saving}
+                                    className="flex-[2] py-4 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-black text-[10px] uppercase tracking-[0.2em] transition-all shadow-xl shadow-indigo-100 dark:shadow-none flex items-center justify-center gap-2"
+                                >
+                                    {saving ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} strokeWidth={2.5} />}
+                                    <span>{selectedItem ? 'UPDATE' : 'SAVE'} COMPLIANCE</span>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                {/* Content Card (Table) */}
+                <div className="xl:col-span-8 bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-xl shadow-slate-200/40 dark:shadow-none border border-slate-100 dark:border-slate-800 overflow-hidden">
                 <div className="p-6 border-b border-slate-50 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-800/30">
                     <div className="relative max-w-md group">
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={20} />
@@ -226,109 +306,7 @@ const MinimumWageMaster = () => {
                 </div>
             </div>
 
-            {/* Modal Overlay */}
-            <AnimatePresence>
-                {isModalOpen && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                        <motion.div 
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            onClick={() => setIsModalOpen(false)}
-                            className="absolute inset-0 bg-slate-950/60 backdrop-blur-md"
-                        />
-                        <motion.div 
-                            initial={{ scale: 0.9, opacity: 0, y: 20 }}
-                            animate={{ scale: 1, opacity: 1, y: 0 }}
-                            exit={{ scale: 0.9, opacity: 0, y: 20 }}
-                            className="relative bg-white dark:bg-slate-900 rounded-[3rem] shadow-2xl w-full max-w-lg overflow-hidden border border-white dark:border-slate-800"
-                        >
-                            <div className="px-10 py-8 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/50">
-                                <div>
-                                    <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">{selectedItem ? 'Update Compliance' : 'New Regulatory Record'}</h3>
-                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] mt-1 italic">Define statutory minimum wage limits</p>
-                                </div>
-                                <button onClick={() => setIsModalOpen(false)} className="w-10 h-10 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center text-slate-400 hover:text-rose-500 transition-all shadow-sm">
-                                    <X size={20} />
-                                </button>
-                            </div>
-
-                            <form onSubmit={handleSubmit} className="p-10 space-y-8">
-                                <div className="grid grid-cols-2 gap-8">
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-1">State Name</label>
-                                        <input 
-                                            type="text" 
-                                            required
-                                            className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-black focus:ring-4 focus:ring-indigo-100 dark:focus:ring-indigo-900/20 focus:border-indigo-500 outline-none transition-all uppercase"
-                                            placeholder="e.g. GUJARAT"
-                                            value={form.state}
-                                            onChange={(e) => setForm({ ...form, state: e.target.value })}
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-1">Category</label>
-                                        <select 
-                                            className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-black focus:ring-4 focus:ring-indigo-100 dark:focus:ring-indigo-900/20 focus:border-indigo-500 outline-none transition-all appearance-none"
-                                            value={form.category}
-                                            onChange={(e) => setForm({ ...form, category: e.target.value })}
-                                        >
-                                            {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-                                        </select>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-1">Monthly Minimum Wage (Basic)</label>
-                                    <div className="relative group">
-                                        <div className="absolute inset-0 bg-emerald-100 dark:bg-emerald-900/20 rounded-3xl blur-2xl opacity-0 group-focus-within:opacity-100 transition-opacity" />
-                                        <div className="relative">
-                                            <span className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-600 text-3xl font-black">₹</span>
-                                            <input 
-                                                type="number" 
-                                                required
-                                                className="w-full pl-14 pr-6 py-6 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-3xl text-4xl font-black focus:ring-4 focus:ring-emerald-100 dark:focus:ring-emerald-900/20 focus:border-emerald-500 outline-none transition-all tracking-tighter"
-                                                placeholder="0"
-                                                value={form.monthlyAmount}
-                                                onChange={(e) => setForm({ ...form, monthlyAmount: e.target.value })}
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] ml-1">Effective Date</label>
-                                    <input 
-                                        type="date" 
-                                        required
-                                        className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-black focus:ring-4 focus:ring-indigo-100 dark:focus:ring-indigo-900/20 focus:border-indigo-500 outline-none transition-all"
-                                        value={form.effectiveFrom}
-                                        onChange={(e) => setForm({ ...form, effectiveFrom: e.target.value })}
-                                    />
-                                </div>
-
-                                <div className="pt-4 flex gap-4">
-                                    <button 
-                                        type="button"
-                                        onClick={() => setIsModalOpen(false)}
-                                        className="flex-1 px-8 py-4 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-700 font-black text-xs uppercase tracking-[0.2em] transition-all"
-                                    >
-                                        DISCARD
-                                    </button>
-                                    <button 
-                                        type="submit"
-                                        disabled={saving}
-                                        className="flex-[2] px-8 py-4 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 font-black text-xs uppercase tracking-[0.2em] transition-all shadow-xl shadow-indigo-100 dark:shadow-none flex items-center justify-center gap-2"
-                                    >
-                                        {saving ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} strokeWidth={2.5} />}
-                                        <span>{selectedItem ? 'UPDATE RECORD' : 'SAVE COMPLIANCE'}</span>
-                                    </button>
-                                </div>
-                            </form>
-                        </motion.div>
-                    </div>
-                )}
-            </AnimatePresence>
+            </div>
         </div>
     );
 };

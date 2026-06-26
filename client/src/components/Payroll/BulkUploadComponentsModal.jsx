@@ -39,16 +39,14 @@ const FIELD_MAPPINGS = {
   }
 };
 
-export default function BulkUploadComponentsModal({ isOpen, onClose, onRefresh, activeTab }) {
+export default function BulkUploadComponentsModal({ onRefresh, defaultCategory = 'EARNING' }) {
   const [file, setFile] = useState(null);
   const [data, setData] = useState([]);
   const [headers, setHeaders] = useState([]);
-  const [category, setCategory] = useState(activeTab?.toUpperCase().replace(/S$/, '') || 'EARNING');
+  const [category, setCategory] = useState(defaultCategory);
   const [loading, setLoading] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-
-  if (!isOpen) return null;
 
   const processFile = (selectedFile) => {
     if (!selectedFile) return;
@@ -310,8 +308,7 @@ export default function BulkUploadComponentsModal({ isOpen, onClose, onRefresh, 
         if (errors.length > 0) {
           console.warn('Bulk Upload Errors:', errors);
         }
-        onRefresh();
-        onClose();
+        if (onRefresh) onRefresh();
       }
     } catch (err) {
       showToast('error', 'Error', err.response?.data?.error || 'Bulk upload failed');
@@ -321,17 +318,14 @@ export default function BulkUploadComponentsModal({ isOpen, onClose, onRefresh, 
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
-      <div className="bg-white dark:bg-slate-900 w-full max-w-4xl max-h-[90vh] rounded-3xl shadow-2xl border border-white/20 overflow-hidden flex flex-col">
+    <div className="animate-in fade-in duration-300">
+      <div className="bg-white dark:bg-slate-900 w-full rounded-[2.5rem] shadow-xl shadow-slate-200/40 dark:shadow-none border border-slate-100 dark:border-slate-800 overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-gradient-to-r from-slate-50 to-white dark:from-slate-800/50 dark:to-slate-900">
+        <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
           <div>
             <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Bulk Upload Components</h2>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Upload Excel to add multiple components at once</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Upload Excel to add multiple components at once</p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
-            <X size={20} className="text-slate-400" />
-          </button>
         </div>
 
         {/* Content */}
@@ -461,19 +455,13 @@ export default function BulkUploadComponentsModal({ isOpen, onClose, onRefresh, 
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20 flex justify-end gap-3">
-          <button
-            onClick={onClose}
-            className="px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-700 transition-colors"
-          >
-            Cancel
-          </button>
+        <div className="p-8 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20 flex justify-end gap-4">
           <button
             onClick={handleUpload}
             disabled={loading || data.length === 0 || parsing}
-            className="flex items-center gap-2 px-8 py-2.5 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:shadow-xl hover:shadow-slate-900/20 transition-all disabled:opacity-50 disabled:shadow-none"
+            className="flex items-center justify-center gap-2 px-10 py-4 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 dark:shadow-none disabled:opacity-50 disabled:shadow-none"
           >
-            {loading ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} strokeWidth={3} />}
+            {loading ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} strokeWidth={3} />}
             {loading ? 'Processing...' : 'Start Import'}
           </button>
         </div>

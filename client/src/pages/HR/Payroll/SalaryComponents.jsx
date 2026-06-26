@@ -58,6 +58,7 @@ export default function SalaryComponents() {
         { key: 'deductions', label: 'Deductions', icon: <TrendingDown size={14} /> },
         { key: 'benefits', label: 'Benefits', icon: <Gift size={14} /> },
         { key: 'minWage', label: 'Min Wage Master', icon: <Shield size={14} /> },
+        { key: 'bulkUpload', label: 'Bulk Upload', icon: <FileSpreadsheet size={14} /> },
         { key: 'corrections', label: 'Corrections', icon: <Layers size={14} /> },
     ];
 
@@ -152,6 +153,7 @@ export default function SalaryComponents() {
             case 'corrections': return [];
             case 'benefits': return benefits;
             case 'minWage': return [];
+            case 'bulkUpload': return [];
             default: return [];
         }
     };
@@ -258,9 +260,9 @@ export default function SalaryComponents() {
                         <RefreshCw size={14} strokeWidth={2.5} className={loading ? 'animate-spin' : ''} />
                     </button>
 
-                    {/* Bulk Upload */}
+                    {/* Bulk Upload Tab Button Alternative (now handled in tabs, can be removed from header if preferred, but leaving here as a shortcut) */}
                     <button
-                        onClick={() => setIsBulkUploadOpen(true)}
+                        onClick={() => { setActiveTab('bulkUpload'); setSearchParams({ tab: 'bulkUpload' }); }}
                         disabled={loading || !canCreate}
                         className="w-9 h-9 flex items-center justify-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-emerald-600 transition shadow-sm"
                         title="Bulk Upload Excel"
@@ -341,6 +343,11 @@ export default function SalaryComponents() {
             <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                 {activeTab === 'minWage' ? (
                     <MinimumWageMaster />
+                ) : activeTab === 'bulkUpload' ? (
+                    <BulkUploadComponentsModal
+                        onRefresh={currentRefresh}
+                        defaultCategory={initialTab === 'earnings' ? 'EARNING' : initialTab === 'deductions' ? 'DEDUCTION' : 'BENEFIT'}
+                    />
                 ) : loading ? (
                     <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-12 flex flex-col items-center justify-center gap-3 shadow-sm">
                         <div className="w-8 h-8 border-4 border-[#4F46E5] border-t-transparent rounded-full animate-spin" />
@@ -358,14 +365,6 @@ export default function SalaryComponents() {
                     />
                 )}
             </div>
-
-            {/* ── Modals ────────────────────────────────────────── */}
-            <BulkUploadComponentsModal
-                isOpen={isBulkUploadOpen}
-                onClose={() => setIsBulkUploadOpen(false)}
-                onRefresh={currentRefresh}
-                activeTab={activeTab}
-            />
         </div>
     );
 }
