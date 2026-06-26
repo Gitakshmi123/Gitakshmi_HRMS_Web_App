@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Building2,
   Globe,
@@ -22,7 +22,11 @@ import {
   Lock,
   Zap,
   Users,
-  Fingerprint
+  Fingerprint,
+  Copy,
+  Check,
+  Link2,
+  Save
 } from 'lucide-react';
 import { normalizeEnabledModules } from '../../utils/moduleConfig';
 import { PSA_MODULE_CODES } from '../../constants/psaModuleCatalog';
@@ -33,6 +37,35 @@ export default function CompanyView({ company, onClose }) {
   const activeModuleCount = PSA_MODULE_CODES.filter((code) => normalizedModules?.[code] === true).length;
 
   const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
+
+  // DMS Integration state
+  const [copied, setCopied] = useState(false);
+  const [dmsIdInput, setDmsIdInput] = useState(company.dmsCompanyId || '');
+  const [dmsSaving, setDmsSaving] = useState(false);
+  const [dmsSaved, setDmsSaved] = useState(false);
+
+  const handleCopyId = (id) => {
+    if (!id) return;
+    navigator.clipboard.writeText(id).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const handleSaveDmsId = async () => {
+    if (!dmsIdInput.trim()) return;
+    try {
+      setDmsSaving(true);
+      const api = (await import('../../utils/api')).default;
+      await api.put(`/tenants/${company._id || company.tenantId}/dms-company-id`, { dmsCompanyId: dmsIdInput.trim() });
+      setDmsSaved(true);
+      setTimeout(() => setDmsSaved(false), 3000);
+    } catch (err) {
+      alert('Failed to save DMS Company ID: ' + (err?.response?.data?.message || err.message));
+    } finally {
+      setDmsSaving(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 font-outfit">

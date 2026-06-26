@@ -415,6 +415,7 @@ export default function HrmsRoutes() {
         <Route path="social-media" element={<Navigate to="/hr/settings/social-media" replace />} />
         <Route path="settings" element={<Navigate to="/hr/settings/company" replace />} />
         <Route path="settings/company" element={<CompanySettings />} />
+        <Route path="settings/dms-integration" element={<CompanySettings forceTab="dms" />} />
         <Route path="settings/email-templates" element={<EmailTemplates />} />
         <Route path="settings/social-media" element={<ProtectedModule module="socialMediaIntegration" permissionKey="socialMedia.dashboard"><SocialMediaPage /></ProtectedModule>} />
         <Route

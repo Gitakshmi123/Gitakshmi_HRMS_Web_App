@@ -14,6 +14,7 @@ const NotificationSchema = require('../models/Notification');
 const ApplicationSchema = require('../models/Application');
 const CandidateSchema = require('../models/Candidate');
 const AuditLogSchema = require('../models/AuditLog');
+const { notifyDmsApplicantAndDocuments } = require('../services/dmsCandidateSync');
 
 /**
  * resolveTenantDBForToken
@@ -760,12 +761,10 @@ exports.getPrefilledDetails = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Invalid onboarding document token.' });
         }
 
-        if (request.status === 'Approved') {
-            return res.status(400).json({ success: false, message: 'Document request has already been completed and approved.' });
-        }
-
-        if (request.expiresAt < new Date()) {
-            return res.status(400).json({ success: false, message: 'This secure document link has expired.' });
+        if (!['Submitted', 'Approved'].includes(request.status)) {
+            if (request.expiresAt && request.expiresAt < new Date()) {
+                return res.status(400).json({ success: false, message: 'This secure document link has expired.' });
+            }
         }
 
         const externalRecord = await ExternalEmployeeRecord.findOne({ candidateId: request.candidateId, jobId: request.jobId });
@@ -1039,6 +1038,24 @@ exports.submitCandidateProfile = async (req, res) => {
             'Onboarding Profile Submitted',
             `${candidateName} has submitted their onboarding details. Please review.`
         );
+
+        // Sync with DMS (Create candidate folder and upload ALL documents)
+        // Enrich externalRecord with applicantId so offer/joining letters can be found
+        const tenantDbName = db.name || (db.client && db.name);
+        (async () => {
+            try {
+                // Fetch applicantId if not already set on the record
+                if (!externalRecord.applicantId) {
+                    const applicant = await db.collection('applicants').findOne({ candidateId: request.candidateId });
+                    if (applicant) {
+                        externalRecord.applicantId = applicant._id;
+                    }
+                }
+                await notifyDmsApplicantAndDocuments(externalRecord, request, tenantDbName);
+            } catch (err) {
+                console.error('[DMS_SYNC_ERROR] Async DMS candidate sync failed:', err);
+            }
+        })();
 
         res.json({ success: true, message: 'Onboarding profile details submitted successfully.', data: externalRecord });
     } catch (err) {

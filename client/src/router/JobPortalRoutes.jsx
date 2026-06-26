@@ -87,6 +87,7 @@ import api from '../utils/api';
 function CandidateDocumentUploadWrapper() {
   const { token } = useParams();
   const [employeeData, setEmployeeData] = React.useState(null);
+  const [metaData, setMetaData] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState('');
 
@@ -94,7 +95,8 @@ function CandidateDocumentUploadWrapper() {
     const fetchDraft = async () => {
       try {
         const res = await api.get(`/public/candidate-documents/token/${token}`);
-        const r = res.data?.data?.record || {};
+        const data = res.data?.data || {};
+        const r = data.record || {};
         
         // Map nested ExternalEmployeeRecord back to Employee flat structure for the form
         const mappedEmployee = {
@@ -116,6 +118,7 @@ function CandidateDocumentUploadWrapper() {
           _id: r._id,
         };
         
+        setMetaData(data);
         setEmployeeData(mappedEmployee);
       } catch (err) {
         console.error(err);
@@ -144,6 +147,32 @@ function CandidateDocumentUploadWrapper() {
         <div className="bg-white p-12 rounded-[2.5rem] border border-gray-100 text-center max-w-lg shadow-lg">
           <h3 className="text-2xl font-bold text-rose-600 mb-2">Access Denied</h3>
           <p className="text-slate-500 font-medium">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (employeeData?.status === 'Submitted' || employeeData?.status === 'Approved' || metaData?.request?.status === 'Submitted' || metaData?.request?.status === 'Approved') {
+    return (
+      <div className="min-h-screen bg-[#F5F7FA] flex items-center justify-center p-4 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-blue-50 via-white to-indigo-50">
+        <div className="max-w-lg w-full bg-white/80 backdrop-blur-xl rounded-[24px] p-8 text-center shadow-2xl animate-in zoom-in-95 duration-700 border border-white">
+          <div className="w-16 h-16 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-6 text-white shadow-xl shadow-emerald-500/20 rotate-3 transform transition-transform hover:rotate-0">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+          </div>
+          <h1 className="text-2xl font-black text-slate-900 mb-1 tracking-tight uppercase">Thank You!</h1>
+          <p className="text-[8px] font-black text-emerald-600 uppercase tracking-[0.2em] mb-4">Submission Successful</p>
+          <h3 className="text-base font-bold text-slate-800 mb-4 leading-tight">Your onboarding details for the position of <span className="text-indigo-600 whitespace-nowrap">{metaData?.job?.designation || metaData?.job?.title || 'the applied role'}</span> have been submitted successfully.</h3>
+          <p className="text-slate-500 text-[13px] font-medium leading-relaxed mb-8 opacity-70">
+            We have received your details. Our HR team is now verifying your documents and profile. 
+            You will be notified via email regarding the next steps.
+          </p>
+          <div className="pt-6 border-t border-slate-100 flex flex-col items-center gap-2">
+            <div className="flex items-center gap-2">
+              <div className="w-1 h-1 bg-emerald-500 rounded-full animate-pulse" />
+              <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em]">Secure Portal</p>
+            </div>
+            <p className="text-[7px] font-bold text-slate-300 uppercase tracking-[0.1em]">Candidate: {metaData?.candidate?.name || ''}</p>
+          </div>
         </div>
       </div>
     );

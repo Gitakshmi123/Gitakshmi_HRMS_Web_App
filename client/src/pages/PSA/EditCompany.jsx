@@ -30,7 +30,8 @@ import {
     Landmark,
     FileSignature,
     BadgeCheck,
-    BadgeCent
+    BadgeCent,
+    Link2
 } from 'lucide-react';
 import companiesService from '../../services/companiesService';
 import { API_ROOT } from '../../utils/api';
@@ -84,7 +85,9 @@ export default function EditCompany() {
         timezone: 'Asia/Kolkata',
         currency: 'INR',
         fyStartMonth: 'April',
-        industry: ''
+        industry: '',
+        // DMS INTEGRATION
+        dmsCompanyId: ''
     });
 
     const [logoPreview, setLogoPreview] = useState(null);
@@ -147,6 +150,8 @@ export default function EditCompany() {
                 currency: data.meta?.currency || 'INR',
                 fyStartMonth: data.meta?.fyStartMonth || 'April',
                 industry: data.meta?.industry || '',
+                // DMS INTEGRATION — stored directly on Tenant record
+                dmsCompanyId: data.dmsCompanyId || '',
                 userLimit: data.userLimit !== undefined && data.userLimit !== null ? String(data.userLimit) : '',
                 enabledModules: normalizeEnabledModules(data.enabledModules, data.modules),
                 status: data.status || 'active'
@@ -328,7 +333,9 @@ export default function EditCompany() {
                             logo: logoUrl || undefined,
                             primaryEmail: formData.email,
                             email: formData.email
-                        }
+                        },
+                        // DMS Integration — save directly on Tenant
+                        dmsCompanyId: formData.dmsCompanyId ? formData.dmsCompanyId.trim() : null
                     };
 
                     if (formData.password) {
@@ -992,6 +999,52 @@ export default function EditCompany() {
                                             </div>
                                         </div>
                                     </div>
+
+                                    {/* ── DMS INTEGRATION SECTION ── */}
+                                    <div>
+                                        <h3 className="text-xs font-bold text-slate-400 mb-4 border-b border-slate-100 pb-2 uppercase tracking-widest flex items-center gap-2">
+                                            <Link2 size={13} className="text-indigo-500" />
+                                            6. DMS Integration
+                                        </h3>
+                                        <div className="bg-gradient-to-r from-indigo-50/60 to-violet-50/40 border border-indigo-100 rounded-2xl p-5">
+                                            <div className="flex flex-col md:flex-row md:items-start gap-5">
+                                                <div className="flex-1 space-y-1.5">
+                                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-2 ml-1">
+                                                        <Link2 size={13} className="text-indigo-600" /> DMS COMPANY ID
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        name="dmsCompanyId"
+                                                        placeholder="e.g. 6859abc123def456789012  (24-char DMS _id)"
+                                                        value={formData.dmsCompanyId}
+                                                        onChange={handleInputChange}
+                                                        className="w-full h-10 px-4 rounded-xl bg-white border border-indigo-200 focus:bg-white focus:border-indigo-500 transition-all text-[13px] font-mono text-slate-600 shadow-sm placeholder:font-sans"
+                                                    />
+                                                    <p className="text-[10px] text-slate-400 ml-1">
+                                                        📋 Go to <strong>DMS Panel → Super Admin → Companies</strong>, open the desired company, copy its <code className="bg-white px-1 py-0.5 rounded border border-slate-200">_id</code> and paste it here.
+                                                    </p>
+                                                </div>
+                                                <div className="md:w-60 bg-white rounded-xl border border-indigo-100 p-4 shadow-sm shrink-0">
+                                                    <p className="text-[9px] font-black text-indigo-600 uppercase tracking-widest mb-3">🔗 How it works</p>
+                                                    <ol className="list-decimal list-inside space-y-1.5 text-[10px] text-slate-500">
+                                                        <li>Open <strong>DMS Panel → Companies</strong></li>
+                                                        <li>Click on the company you want to link</li>
+                                                        <li>Copy the <strong>_id</strong> from the URL or details</li>
+                                                        <li>Paste it in the field on the left</li>
+                                                        <li>Click <strong>Save Changes</strong></li>
+                                                        <li>✅ HRMS & DMS are now linked!</li>
+                                                    </ol>
+                                                </div>
+                                            </div>
+                                            {formData.dmsCompanyId && (
+                                                <div className="mt-3 flex items-center gap-2 text-[11px] font-semibold text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                                                    <Link2 size={13} />
+                                                    DMS Linked ✓ — Company ID: <code className="font-mono">{formData.dmsCompanyId}</code>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
 
                                 <div className="flex items-center justify-end pt-4 border-t border-slate-50 mt-4">
                                     {errors.submit && (

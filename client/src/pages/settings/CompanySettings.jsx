@@ -15,7 +15,7 @@ import { notification } from '../../utils/antdGlobal';
 import api from '../../utils/api';
 import CustomSelect from '../../components/shared/CustomSelect';
 import usePagePermissions from '../../hooks/usePagePermissions';
-import { DatabaseZap, Lock } from 'lucide-react';
+import { DatabaseZap, Lock, Link2, CheckCircle2, AlertCircle } from 'lucide-react';
 
 const CompanySettings = ({ forceTab }) => {
     const location = useLocation();
@@ -34,8 +34,16 @@ const CompanySettings = ({ forceTab }) => {
     const [documentTypes, setDocumentTypes] = useState([]);
     const [tenantProfile, setTenantProfile] = useState(null);
 
+    // DMS Integration state
+    const [dmsCompanyId, setDmsCompanyId] = useState('');
+    const [dmsCompanyIdInput, setDmsCompanyIdInput] = useState('');
+    const [dmsSaving, setDmsSaving] = useState(false);
+    const [dmsLoaded, setDmsLoaded] = useState(false);
+    const [dmsStatus, setDmsStatus] = useState(null); // 'saved' | 'error'
+
     // UI State
     const [activeTab, setActiveTab] = useState(
+        forceTab === 'dms' ? 'dms' :
         forceTab === 'company' ? 'global' : 
         forceTab === 'sequences' ? 'docs' :
         location.pathname.includes('sequences') ? 'docs' : 'global'
@@ -58,6 +66,7 @@ const CompanySettings = ({ forceTab }) => {
     useEffect(() => {
         loadConfiguration();
         loadTenantProfile();
+        loadDmsIntegration();
     }, []);
 
     const loadTenantProfile = async () => {
@@ -66,6 +75,46 @@ const CompanySettings = ({ forceTab }) => {
             setTenantProfile(res.data || null);
         } catch (err) {
             console.error('Failed to load company profile:', err);
+        }
+    };
+
+    const loadDmsIntegration = async () => {
+        try {
+            const res = await api.get('/tenants/dms-integration');
+            if (res.data?.success) {
+                setDmsCompanyId(res.data.dmsCompanyId || '');
+                setDmsCompanyIdInput(res.data.dmsCompanyId || '');
+                setDmsLoaded(true);
+            }
+        } catch (err) {
+            console.error('Failed to load DMS integration:', err);
+            setDmsLoaded(true);
+        }
+    };
+
+    const handleSaveDmsIntegration = async () => {
+        try {
+            setDmsSaving(true);
+            setDmsStatus(null);
+            const res = await api.put('/tenants/dms-integration', { dmsCompanyId: dmsCompanyIdInput });
+            if (res.data?.success) {
+                setDmsCompanyId(dmsCompanyIdInput);
+                setDmsStatus('saved');
+                notification.success({
+                    message: 'DMS Integration Saved',
+                    description: 'DMS Company ID has been linked successfully.',
+                    duration: 3
+                });
+            }
+        } catch (err) {
+            setDmsStatus('error');
+            notification.error({
+                message: 'Save Failed',
+                description: err.response?.data?.message || 'Could not save DMS Company ID.',
+                duration: 4
+            });
+        } finally {
+            setDmsSaving(false);
         }
     };
 
@@ -237,6 +286,20 @@ const CompanySettings = ({ forceTab }) => {
 
             {activeTab === 'global' && (
                 <div className="space-y-4">
+                    {/* DMS Integration Quick Link Banner */}
+                    <div
+                        className="flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition"
+                        style={{ background: dmsCompanyId ? '#f0fdf4' : '#fff7ed', borderColor: dmsCompanyId ? '#86efac' : '#fed7aa' }}
+                        onClick={() => setActiveTab('dms')}
+                    >
+                        <Link2 size={18} style={{ color: dmsCompanyId ? '#16a34a' : '#ea580c' }} />
+                        <span className="text-sm font-semibold" style={{ color: dmsCompanyId ? '#16a34a' : '#ea580c' }}>
+                            {dmsCompanyId
+                                ? `DMS Linked ✓ — Company ID: ${dmsCompanyId}`
+                                : 'DMS Not Linked — Click to configure DMS Integration'}
+                        </span>
+                    </div>
+
                     <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
                         <div className="flex flex-col gap-3 px-[5px] mb-3 lg:flex-row lg:items-center lg:justify-between">
                             <h2 className="text-xl font-semibold">Company Profile Overview</h2>
@@ -455,6 +518,93 @@ const CompanySettings = ({ forceTab }) => {
                             </div>
                         </div>
                     ))}
+                </div>
+            )}
+
+            {/* ── DMS INTEGRATION TAB ── */}
+            {activeTab === 'dms' && (
+                <div className="space-y-4">
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="p-2.5 rounded-xl bg-indigo-50 border border-indigo-100">
+                                <Link2 size={22} className="text-indigo-600" />
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-semibold text-slate-800">DMS Integration</h2>
+                                <p className="text-sm text-slate-500">Link this company to the Document Management System</p>
+                            </div>
+                        </div>
+
+                        {/* Current Status */}
+                        <div className={`flex items-center gap-3 p-4 rounded-xl mb-6 ${dmsCompanyId ? 'bg-green-50 border border-green-200' : 'bg-amber-50 border border-amber-200'}`}>
+                            {dmsCompanyId
+                                ? <CheckCircle2 size={20} className="text-green-600 shrink-0" />
+                                : <AlertCircle size={20} className="text-amber-600 shrink-0" />
+                            }
+                            <div>
+                                <p className={`text-sm font-semibold ${dmsCompanyId ? 'text-green-700' : 'text-amber-700'}`}>
+                                    {dmsCompanyId ? 'DMS Linked ✓' : 'DMS Not Linked'}
+                                </p>
+                                <p className="text-xs text-slate-500 mt-0.5">
+                                    {dmsCompanyId
+                                        ? `Current DMS Company ID: ${dmsCompanyId}`
+                                        : 'Without a DMS Company ID, candidate documents will not sync to DMS.'}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Input Field */}
+                        <div className="mb-4">
+                            <label className="block text-sm font-semibold text-slate-700 mb-2">
+                                DMS Company ID
+                                <span className="ml-2 text-xs font-normal text-slate-400">(DMS Admin Console → Companies → Copy _id)</span>
+                            </label>
+                            <input
+                                type="text"
+                                className="w-full p-3 border border-slate-300 rounded-xl text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400 outline-none transition"
+                                placeholder="e.g. 6859abc123def456789012"
+                                value={dmsCompanyIdInput}
+                                onChange={(e) => setDmsCompanyIdInput(e.target.value.trim())}
+                            />
+                            <p className="text-xs text-slate-400 mt-1.5">
+                                📋 Go to <strong>DMS Panel → Super Admin → Companies</strong>, open the desired company, copy its <code className="bg-slate-100 px-1 py-0.5 rounded">_id</code> and paste it here.
+                            </p>
+                        </div>
+
+                        {/* Save Button */}
+                        <div className="flex items-center gap-3">
+                            <button
+                                className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-sm font-semibold hover:bg-indigo-700 transition disabled:opacity-50 flex items-center gap-2"
+                                onClick={handleSaveDmsIntegration}
+                                disabled={dmsSaving || !dmsCompanyIdInput.trim()}
+                            >
+                                <Link2 size={16} />
+                                {dmsSaving ? 'Saving...' : 'Save DMS Link'}
+                            </button>
+                            {dmsStatus === 'saved' && (
+                                <span className="flex items-center gap-1.5 text-green-600 text-sm font-semibold">
+                                    <CheckCircle2 size={16} /> Saved successfully!
+                                </span>
+                            )}
+                            {dmsStatus === 'error' && (
+                                <span className="flex items-center gap-1.5 text-rose-600 text-sm font-semibold">
+                                    <AlertCircle size={16} /> Save failed. Try again.
+                                </span>
+                            )}
+                        </div>
+
+                        {/* How it works box */}
+                        <div className="mt-6 bg-slate-50 rounded-xl p-4 border border-slate-100">
+                            <p className="text-xs font-bold text-slate-600 uppercase tracking-wide mb-2">🔗 How it works</p>
+                            <ol className="list-decimal list-inside space-y-1.5 text-xs text-slate-500">
+                                <li>Open <strong>DMS Panel → Super Admin → Companies</strong></li>
+                                <li>Click on the company you want to link with this HRMS account</li>
+                                <li>Copy the <strong>_id</strong> from the URL or company details (24-character string)</li>
+                                <li>Paste it in the field above and click <strong>"Save DMS Link"</strong></li>
+                                <li>✅ Done! Candidate documents will now automatically sync into the linked DMS company's folder.</li>
+                            </ol>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

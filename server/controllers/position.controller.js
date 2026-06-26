@@ -1,9 +1,90 @@
 const CompanyIdConfigController = require('./companyIdConfig.controller');
+const axios = require('axios');
 
 const isDuplicatePositionIdError = (error) => (
     error?.code === 11000
     && (error?.keyPattern?.positionId || error?.keyValue?.positionId)
 );
+
+/**
+ * Resolve the DMS company ID for a given HRMS tenant.
+ *
+ * MULTI-COMPANY SUPPORT:
+ * Each HRMS Company record has a `dmsCompanyId` field that maps it to the
+ * corresponding DMS company. This ensures:
+ *   - Gitakshmi HRMS Company → Gitakshmi DMS Company
+ *   - ABC Corp HRMS Company  → ABC Corp DMS Company
+ *
+ * Fallback: DMS_DEFAULT_COMPANY_ID env var (for backward compatibility)
+ */
+async function resolveDmsCompanyIdForTenant(tenantDB) {
+    try {
+        const Company = tenantDB.model('Company');
+        const company = await Company.findOne({}).select('name dmsCompanyId').lean();
+        if (company?.dmsCompanyId) {
+            return company.dmsCompanyId;
+        }
+        return process.env.DMS_DEFAULT_COMPANY_ID || process.env.DMS_COMPANY_ID || null;
+    } catch (err) {
+        console.warn('[DMS Sync] Could not resolve dmsCompanyId:', err.message);
+        return process.env.DMS_DEFAULT_COMPANY_ID || process.env.DMS_COMPANY_ID || null;
+    }
+}
+
+/**
+ * Notify DMS to create a folder for a newly created hiring position.
+ * Fire-and-forget — uses company-specific dmsCompanyId for multi-company support.
+ */
+async function notifyDmsCreatePositionFolder(position, tenantDB) {
+    try {
+        const dmsUrl = process.env.DMS_URL;
+        const dmsToken = process.env.DMS_SECURE_TOKEN;
+        const dmsCompanyId = tenantDB
+            ? await resolveDmsCompanyIdForTenant(tenantDB)
+            : (process.env.DMS_DEFAULT_COMPANY_ID || process.env.DMS_COMPANY_ID);
+        
+        if (!dmsUrl || !dmsToken) {
+            console.warn('[DMS Sync] DMS_URL or DMS_SECURE_TOKEN not configured. Skipping position folder creation.');
+            return;
+        }
+
+        if (!dmsCompanyId) {
+            console.warn('[DMS Sync] No DMS company ID found. Set dmsCompanyId on company or DMS_DEFAULT_COMPANY_ID in .env');
+            return;
+        }
+
+        const payload = {
+            companyId: dmsCompanyId,
+            positionId: position.positionId || String(position._id),
+            positionName: position.jobTitle || position.designation || position.positionId,
+            metadata: {
+                department: position.department || '',
+                hrmsPositionId: String(position._id),
+                tenant: String(position.tenant || ''),
+            }
+        };
+
+        console.log(`[DMS Sync] Creating folder for position: ${payload.positionId} - "${payload.positionName}" → DMS company: ${dmsCompanyId}`);
+
+        const response = await axios.post(
+            `${dmsUrl}/api/v1/hrms/hiring/positions`,
+            payload,
+            {
+                headers: {
+                    'x-hrms-secure-token': dmsToken,
+                    'Content-Type': 'application/json'
+                },
+                timeout: parseInt(process.env.DMS_TIMEOUT_MS || '30000')
+            }
+        );
+
+        console.log(`[DMS Sync] Position folder created successfully. Folder ID: ${response.data?.data?.positionFolderId}`);
+    } catch (err) {
+        // Non-fatal: log but don't block HRMS
+        const errMsg = err?.response?.data?.message || err?.response?.data?.error || err.message;
+        console.error(`[DMS Sync] Failed to create position folder in DMS: ${errMsg}`);
+    }
+}
 
 exports.createPosition = async (req, res) => {
     const traceId = `pos_create_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
@@ -50,6 +131,9 @@ exports.createPosition = async (req, res) => {
             throw new Error(`Unable to generate a unique Position ID after retries. Last generated: ${lastGeneratedId || 'none'}`);
         }
 
+        // 🔗 Notify DMS to create a folder for this position (non-blocking, multi-company aware)
+        notifyDmsCreatePositionFolder(position, req.tenantDB).catch(() => {});
+
         res.status(201).json({
             success: true,
             data: position,
@@ -73,6 +157,7 @@ exports.createPosition = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
 
 exports.getPositions = async (req, res) => {
     try {
