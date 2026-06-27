@@ -55,7 +55,8 @@ class EmailService {
             },
             lookup: customLookup,
             debug: false,
-            logger: false
+            logger: false,
+            tls: { rejectUnauthorized: false }
         };
 
         // If explicitly using gmail service, nodemailer handles the host/port internally
@@ -149,7 +150,8 @@ class EmailService {
                 },
                 lookup: customLookup,
                 debug: false,
-                logger: false
+                logger: false,
+                tls: { rejectUnauthorized: false }
             };
 
             if (host.includes('gmail.com') && !secure) {
