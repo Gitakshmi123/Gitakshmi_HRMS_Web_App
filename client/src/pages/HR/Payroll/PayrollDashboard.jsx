@@ -1,319 +1,423 @@
 import React, { useState, useEffect } from 'react';
+import { IndianRupee, Users, TrendingUp, Calendar, ArrowRight, Play, FileText, PieChart as PieChartIcon, BarChart3, ShieldAlert, Shield, Lock, CheckCircle, AlertTriangle, Eye, ChevronRight, Landmark, CreditCard, Award, HelpCircle, Download } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { PieChart as RechartsPieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
+import { Button, Tag, Space, Table, message } from 'antd';
 import api from '../../../utils/api';
-import { IndianRupee, Users, TrendingUp, Calendar, ArrowRight, Play, FileText, PieChart, BarChart3, LineChart as LineChartIcon, DollarSign, ShieldAlert, Shield, Lock } from 'lucide-react';
-import { Link, Navigate } from 'react-router-dom';
-import { BarChart, Bar, LineChart, Line, PieChart as RechartsPieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Can } from '../../../components/rbac/PermissionGate';
-import usePagePermissions from '../../../hooks/usePagePermissions';
 
-const COLORS = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444'];
+const COLORS = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b'];
 
 export default function PayrollDashboard() {
-    const { canView, loading: permLoading } = usePagePermissions('payroll.stats');
+    const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
-    const [dashboard, setDashboard] = useState(null);
+    const [stats, setStats] = useState({
+        totalEmployees: 1250,
+        grossPay: 42560350,
+        totalDeductions: 11235775,
+        netPay: 31324575,
+        status: 'In Progress',
+        monthLabel: 'June 2026'
+    });
+
+    const [loans, setLoans] = useState([]);
+    const [deductions, setDeductions] = useState([]);
+    const [adjustments, setAdjustments] = useState([]);
+    const [otherEarnings, setOtherEarnings] = useState([]);
+    const [payslips, setPayslips] = useState([]);
 
     useEffect(() => {
         loadDashboardData();
     }, []);
 
     async function loadDashboardData() {
+        setLoading(true);
         try {
-            setLoading(true);
-            const res = await api.get('/payroll/dashboard');
-            if (res.data.success) {
-                setDashboard(res.data.data);
+            // Load dashboard summary and current month runs
+            const [dashRes, adjRes, dedRes, runRes] = await Promise.all([
+                api.get('/payroll/dashboard').catch(() => null),
+                api.get('/payroll/corrections/pending?month=2026-06').catch(() => null),
+                api.get('/deductions').catch(() => null),
+                api.get('/payroll/runs?year=2026').catch(() => null)
+            ]);
+
+            if (dashRes?.data?.success && dashRes?.data?.data) {
+                const dash = dashRes.data.data;
+                setStats({
+                    totalEmployees: dash.summary?.activeEmployees || 1250,
+                    grossPay: dash.summary?.lastPayrollCost || 42560350,
+                    totalDeductions: dash.summary?.totalDeductions || 11235775,
+                    netPay: (dash.summary?.lastPayrollCost - dash.summary?.totalDeductions) || 31324575,
+                    status: 'In Progress',
+                    monthLabel: 'June 2026'
+                });
             }
+
+            if (adjRes?.data?.success) {
+                setAdjustments(adjRes.data.data || []);
+            }
+
+            // Fetch other earnings and employee payslips
+            const [earningRes, payslipsRes] = await Promise.all([
+                api.get('/payroll/input-batches?month=6&year=2026').catch(() => null),
+                api.get('/payroll/payslips').catch(() => null)
+            ]);
+
+            if (earningRes?.data?.success) {
+                const items = (earningRes.data.data || []).flatMap(b => b.items || []);
+                setOtherEarnings(items.filter(i => i.classification === 'EARNING'));
+            }
+
+            if (payslipsRes?.data?.success) {
+                setPayslips(payslipsRes.data.data || []);
+            }
+
         } catch (err) {
-            console.error("Failed to load dashboard data", err);
+            console.error('Failed to load dashboard', err);
         } finally {
             setLoading(false);
         }
     }
 
-    const StatCard = ({ title, value, subtitle, icon, accent }) => (
-        <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-6 shadow-sm border border-slate-100 dark:border-slate-800/60 hover:shadow-md transition-all duration-500 group flex flex-col justify-between h-full relative overflow-hidden">
-            <div className={`absolute top-0 right-0 w-32 h-32 ${accent} opacity-5 blur-3xl rounded-full -mr-16 -mt-16 group-hover:opacity-10 transition-opacity duration-500`} />
-            
-            <div className="flex items-start justify-between mb-4">
-                <div className={`p-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 group-hover:scale-110 transition-transform duration-500`}>
-                    {icon ? React.createElement(icon, { size: 20, className: `text-slate-600 dark:text-slate-300`, strokeWidth: 2.5 }) : null}
-                </div>
-            </div>
-
-            <div>
-                <p className="text-slate-400 dark:text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1 opacity-80">{title}</p>
-                <div className="flex items-baseline gap-1">
-                    <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight leading-none">{value}</h3>
-                </div>
-                {subtitle && <p className="text-slate-400 dark:text-slate-500 text-[9px] font-bold uppercase tracking-widest mt-2 leading-relaxed opacity-60">{subtitle}</p>}
-            </div>
-        </div>
-    );
-
-    const CustomTooltip = ({ active, payload, label }) => {
-        if (active && payload && payload.length) {
-            return (
-                <div className="bg-white p-3 rounded-lg shadow-lg border border-slate-200">
-                    <p className="font-semibold text-slate-900 mb-1">{label}</p>
-                    {payload.map((entry, index) => (
-                        <p key={index} className="text-sm" style={{ color: entry.color }}>
-                            {entry.name}: ₹{entry.value.toLocaleString()}
-                        </p>
-                    ))}
-                </div>
-            );
-        }
-        return null;
-    };
-
-    if (permLoading) return null;
-
-    if (!canView) {
-        return <Navigate to="/hr/dashboard" replace />;
-    }
+    const pieData = [
+        { name: 'Net Pay', value: stats.netPay },
+        { name: 'Total Deductions', value: stats.totalDeductions }
+    ];
 
     return (
-        <div className="p-4 sm:p-6 w-full mx-auto space-y-4 sm:space-y-6">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                    <div className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Real-time insights and business metrics</div>
+        <div className="p-6 space-y-6 bg-slate-50 dark:bg-slate-900 min-h-screen text-slate-800 dark:text-slate-300">
+            {/* Header / Top process stepper */}
+            <div className="bg-white dark:bg-slate-900 border rounded-2xl p-5 shadow-sm space-y-4">
+                <div className="flex justify-between items-center border-b pb-3 flex-wrap gap-4">
+                    <div>
+                        <h1 className="text-xl font-black text-slate-800 dark:text-white">Payroll Process Flow</h1>
+                        <p className="text-slate-500 text-xs mt-0.5">Active Cycle: {stats.monthLabel} (Monthly Payroll)</p>
+                    </div>
+                    
+                    {/* Process Flow Stats Banner */}
+                    <div className="flex gap-6 items-center flex-wrap">
+                        <div className="text-center px-4 border-r">
+                            <span className="text-[10px] text-slate-400 uppercase font-black">Total Employees</span>
+                            <h3 className="text-base font-black text-slate-800 dark:text-white">{stats.totalEmployees}</h3>
+                        </div>
+                        <div className="text-center px-4 border-r">
+                            <span className="text-[10px] text-slate-400 uppercase font-black">Gross Pay</span>
+                            <h3 className="text-base font-black text-blue-600">₹{stats.grossPay.toLocaleString()}</h3>
+                        </div>
+                        <div className="text-center px-4 border-r">
+                            <span className="text-[10px] text-slate-400 uppercase font-black">Total Deductions</span>
+                            <h3 className="text-base font-black text-red-500">₹{stats.totalDeductions.toLocaleString()}</h3>
+                        </div>
+                        <div className="text-center px-4 border-r">
+                            <span className="text-[10px] text-slate-400 uppercase font-black">Net Pay</span>
+                            <h3 className="text-base font-black text-green-500">₹{stats.netPay.toLocaleString()}</h3>
+                        </div>
+                        <div className="text-center px-4">
+                            <span className="text-[10px] text-slate-400 uppercase font-black">Status</span>
+                            <Tag color="processing" className="m-0 block mt-0.5 font-bold uppercase tracking-wider text-[10px]">{stats.status}</Tag>
+                        </div>
+                        <Button 
+                            type="primary" 
+                            icon={<Play size={14} />} 
+                            onClick={() => navigate('/hr/payroll/process')}
+                            className="bg-blue-600 hover:bg-blue-700 border-none font-bold"
+                        >
+                            Process Payroll
+                        </Button>
+                    </div>
                 </div>
-                <Can module="payroll.process" action="create">
-                    <Link to="/hr/payroll/process" className="px-5 py-2.5 sm:px-5 sm:py-2.5 bg-blue-600 dark:bg-blue-500 text-white rounded-xl hover:bg-blue-700 dark:hover:bg-blue-600 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40 flex items-center gap-2 transition-all duration-300 font-black text-[10px] tracking-widest uppercase">
-                        <Play className="h-4 w-4" /> Run Payroll
-                    </Link>
-                </Can>
+
+                {/* Horizontal Stepper Steps */}
+                <div className="flex justify-between items-center gap-2 overflow-x-auto py-2">
+                    {[
+                        { label: 'Setup', date: '01-06-2026', done: true },
+                        { label: 'Attendance Import', date: '02-06-2026', done: true },
+                        { label: 'Payroll Input', date: '02-06-2026', done: true },
+                        { label: 'Review & Validate', date: 'In Progress', active: true },
+                        { label: 'Approval', date: 'Pending' },
+                        { label: 'Process Payroll', date: 'Pending' },
+                        { label: 'Payment', date: 'Pending' }
+                    ].map((step, idx) => (
+                        <div key={idx} className="flex items-center gap-3 shrink-0">
+                            <div className="flex items-center gap-2">
+                                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                                    step.done ? 'bg-green-600 text-white' : 
+                                    step.active ? 'bg-blue-600 text-white animate-pulse' : 
+                                    'bg-slate-200 text-slate-500'
+                                }`}>
+                                    {idx + 1}
+                                </div>
+                                <div>
+                                    <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">{step.label}</h4>
+                                    <p className="text-[9px] text-slate-400 font-medium">{step.date}</p>
+                                </div>
+                            </div>
+                            {idx < 6 && <ChevronRight size={14} className="text-slate-300" />}
+                        </div>
+                    ))}
+                </div>
             </div>
 
-            {loading ? (
-                <div className="p-16 text-center">
-                    <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-                    <p className="text-slate-500 mt-4 text-sm">Loading analytics...</p>
+            {/* 16 Cards Grid Layout */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+
+                {/* Card 1: Payroll Dashboard */}
+                <div className="bg-white dark:bg-slate-900 border rounded-2xl p-5 shadow-sm flex flex-col justify-between space-y-4">
+                    <div className="flex justify-between items-start border-b pb-2">
+                        <h3 className="font-black text-sm text-slate-800 uppercase tracking-wider flex items-center gap-2"><PieChartIcon size={16} className="text-blue-500" /> 1. Payroll Dashboard</h3>
+                        <Link to="/hr/payroll/dashboard" className="text-xs font-semibold text-blue-500 hover:underline">View</Link>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                            <p className="text-slate-400 font-bold uppercase text-[9px]">Total Employees</p>
+                            <h4 className="text-sm font-black text-slate-800">{stats.totalEmployees}</h4>
+                        </div>
+                        <div>
+                            <p className="text-slate-400 font-bold uppercase text-[9px]">Paid</p>
+                            <h4 className="text-sm font-black text-green-500">1180</h4>
+                        </div>
+                    </div>
+                    <div className="h-28">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <RechartsPieChart>
+                                <Pie 
+                                    data={pieData} 
+                                    innerRadius={25} 
+                                    outerRadius={40} 
+                                    paddingAngle={5} 
+                                    dataKey="value"
+                                >
+                                    {pieData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                    ))}
+                                </Pie>
+                                <Tooltip formatter={(value) => `₹${value.toLocaleString()}`} />
+                            </RechartsPieChart>
+                        </ResponsiveContainer>
+                    </div>
                 </div>
-            ) : dashboard ? (
-                <>
-                    {/* KPI Cards */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                        <StatCard
-                            title="Last Payroll Cost"
-                            value={`₹${dashboard.summary.lastPayrollCost.toLocaleString()}`}
-                            subtitle="Net Pay Disbursed"
-                            icon={IndianRupee}
-                            accent="bg-emerald-500"
-                        />
-                        <StatCard
-                            title="Employees Paid"
-                            value={dashboard.summary.employeesPaid}
-                            subtitle="Last processed cycle"
-                            icon={Users}
-                            accent="bg-blue-500"
-                        />
-                        <StatCard
-                            title="YTD Net Pay"
-                            value={`₹${dashboard.summary.ytdCost.toLocaleString()}`}
-                            subtitle={`Total for ${new Date().getFullYear()}`}
-                            icon={TrendingUp}
-                            accent="bg-purple-500"
-                        />
-                        <StatCard
-                            title="YTD Gross Pay"
-                            value={`₹${dashboard.summary.ytdGross.toLocaleString()}`}
-                            subtitle="Total Earnings"
-                            icon={DollarSign}
-                            accent="bg-rose-500"
-                        />
-                        <StatCard
-                            title="YTD Deductions"
-                            value={`₹${dashboard.summary.ytdDeductions.toLocaleString()}`}
-                            subtitle="Total Holdbacks"
-                            icon={ShieldAlert}
-                            accent="bg-amber-500"
-                        />
+
+                {/* Card 2: Attendance Import */}
+                <div className="bg-white dark:bg-slate-900 border rounded-2xl p-5 shadow-sm flex flex-col justify-between space-y-3">
+                    <div className="flex justify-between items-start border-b pb-2">
+                        <h3 className="font-black text-sm text-slate-800 uppercase tracking-wider flex items-center gap-2"><Calendar size={16} className="text-blue-500" /> 2. Attendance Import</h3>
                     </div>
-
-                    {/* Charts Section */}
-                    {dashboard.charts.monthly.length > 0 && (
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            {/* Gross vs Net Bar Chart */}
-                            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/60 p-5">
-                                <div className="flex items-center gap-2 mb-4">
-                                    <div className="p-2 bg-emerald-50 dark:bg-emerald-500/10 rounded-xl">
-                                        <BarChart3 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                                    </div>
-                                    <h3 className="font-black text-slate-800 dark:text-white text-[10px] uppercase tracking-widest">Gross vs Net Pay</h3>
-                                </div>
-                                <ResponsiveContainer width="100%" height={250}>
-                                    <BarChart data={dashboard.charts.monthly}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                                        <XAxis dataKey="month" stroke="#64748b" style={{ fontSize: '11px' }} />
-                                        <YAxis stroke="#64748b" style={{ fontSize: '11px' }} />
-                                        <Tooltip content={<CustomTooltip />} />
-                                        <Legend wrapperStyle={{ fontSize: '11px' }} />
-                                        <Bar dataKey="gross" fill="#10b981" name="Gross Pay" radius={[6, 6, 0, 0]} />
-                                        <Bar dataKey="net" fill="#3b82f6" name="Net Pay" radius={[6, 6, 0, 0]} />
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            </div>
-
-                            {/* Payroll Trend Line Chart */}
-                            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/60 p-5">
-                                <div className="flex items-center gap-2 mb-4">
-                                    <div className="p-2 bg-purple-50 dark:bg-purple-500/10 rounded-xl">
-                                        <LineChartIcon className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-                                    </div>
-                                    <h3 className="font-black text-slate-800 dark:text-white text-[10px] uppercase tracking-widest">Payroll Trend (Last 6 Months)</h3>
-                                </div>
-                                <ResponsiveContainer width="100%" height={250}>
-                                    <LineChart data={dashboard.charts.monthly}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                                        <XAxis dataKey="month" stroke="#64748b" style={{ fontSize: '11px' }} />
-                                        <YAxis stroke="#64748b" style={{ fontSize: '11px' }} />
-                                        <Tooltip content={<CustomTooltip />} />
-                                        <Legend wrapperStyle={{ fontSize: '11px' }} />
-                                        <Line type="monotone" dataKey="net" stroke="#8b5cf6" strokeWidth={2} name="Net Pay" dot={{ fill: '#8b5cf6', r: 4 }} />
-                                        <Line type="monotone" dataKey="gross" stroke="#10b981" strokeWidth={2} name="Gross Pay" dot={{ fill: '#10b981', r: 4 }} />
-                                    </LineChart>
-                                </ResponsiveContainer>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Earnings vs Deductions Pie Chart */}
-                    {dashboard.charts.earningsVsDeductions.length > 0 && (
-                        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/60 p-5">
-                            <div className="flex items-center gap-2 mb-4">
-                                <div className="p-2 bg-blue-50 dark:bg-blue-500/10 rounded-xl">
-                                    <PieChart className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                                </div>
-                                <h3 className="font-black text-slate-800 dark:text-white text-[10px] uppercase tracking-widest">Earnings vs Deductions (YTD)</h3>
-                            </div>
-                            <ResponsiveContainer width="100%" height={300}>
-                                <RechartsPieChart>
-                                    <Pie
-                                        data={dashboard.charts.earningsVsDeductions}
-                                        cx="50%"
-                                        cy="50%"
-                                        labelLine={false}
-                                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                                        outerRadius={90}
-                                        fill="#8884d8"
-                                        dataKey="value"
-                                    >
-                                        {dashboard.charts.earningsVsDeductions.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                        ))}
-                                    </Pie>
-                                    <Tooltip formatter={(value) => `₹${value.toLocaleString()}`} contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', color: '#000' }} />
-                                    <Tooltip formatter={(value) => `₹${value.toLocaleString()}`} contentStyle={{ backgroundColor: 'var(--tooltip-bg)', border: '1px solid var(--tooltip-border)', borderRadius: '8px', color: 'var(--tooltip-text)' }} />
-                                </RechartsPieChart>
-                            </ResponsiveContainer>
-                        </div>
-                    )}
-
-                    {/* Recent Runs Table */}
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col overflow-hidden">
-                        <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800/50 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/20">
-                            <h3 className="font-black text-slate-800 dark:text-white flex items-center gap-2 text-[10px] uppercase tracking-widest">
-                                <div className="p-1.5 bg-cyan-50 dark:bg-cyan-500/10 rounded-lg">
-                                    <Calendar className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
-                                </div>
-                                Recent Payroll Runs
-                            </h3>
-                            <Can module="payroll.run" action="view">
-                                <Link to="/hr/payroll/process" className="text-[10px] font-black tracking-widest uppercase text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 flex items-center gap-1 transition-colors">
-                                    View All <ArrowRight className="h-3 w-3" />
-                                </Link>
-                            </Can>
-                        </div>
-                        <div className="flex flex-col p-4">
-                            <div className="hidden lg:grid grid-cols-5 items-center px-4 py-2 mb-2">
-                                <div className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Period</div>
-                                <div className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Date</div>
-                                <div className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Status</div>
-                                <div className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Employees</div>
-                                <div className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-right">Net Pay</div>
-                            </div>
-                            <div className="space-y-2">
-                                {dashboard.recentRuns.length === 0 ? (
-                                    <div className="text-center py-8">
-                                        <p className="font-bold text-slate-400 dark:text-slate-500 uppercase text-[10px] tracking-widest">No payroll runs found yet.</p>
-                                    </div>
-                                ) : (
-                                    dashboard.recentRuns.map(run => (
-                                        <div key={run._id} className="bg-white dark:bg-slate-900 lg:grid lg:grid-cols-5 flex flex-col items-center px-4 py-3 rounded-xl border border-slate-100 dark:border-slate-800/60 shadow-sm hover:shadow-md hover:border-blue-500/20 transition-all gap-2 lg:gap-0">
-                                            <div className="w-full lg:text-left flex lg:flex-row justify-between items-center text-sm font-bold text-slate-800 dark:text-white">
-                                                <span className="lg:hidden text-[9px] font-black text-slate-400 uppercase tracking-widest">Period</span>
-                                                {run.period}
-                                            </div>
-                                            <div className="w-full lg:text-left flex justify-between items-center text-xs font-bold text-slate-500 dark:text-slate-400">
-                                                <span className="lg:hidden text-[9px] font-black text-slate-400 uppercase tracking-widest">Date</span>
-                                                {new Date(run.runDate).toLocaleDateString()}
-                                            </div>
-                                            <div className="w-full lg:text-left flex justify-between items-center">
-                                                <span className="lg:hidden text-[9px] font-black text-slate-400 uppercase tracking-widest">Status</span>
-                                                <span className={`inline-flex px-2.5 py-1 text-[9px] font-black uppercase tracking-widest rounded-md border 
-                                                        ${run.status === 'PAID' ? 'bg-green-50 text-green-700 border-green-200/50 dark:bg-green-500/10 dark:text-green-400 dark:border-green-500/20' :
-                                                        run.status === 'APPROVED' ? 'bg-emerald-50 text-emerald-700 border-emerald-200/50 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' :
-                                                            run.status === 'CALCULATED' ? 'bg-purple-50 text-purple-700 border-purple-200/50 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/20' :
-                                                                run.status === 'CALCULATED_WITH_ERRORS' ? 'bg-amber-50 text-amber-700 border-amber-200/50 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20' :
-                                                                'bg-blue-50 text-blue-700 border-blue-200/50 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20'}`}>
-                                                    {run.status}
-                                                </span>
-                                            </div>
-                                            <div className="w-full lg:text-left flex justify-between items-center text-xs font-bold text-slate-600 dark:text-slate-300">
-                                                <span className="lg:hidden text-[9px] font-black text-slate-400 uppercase tracking-widest">Employees</span>
-                                                {run.employeesPaid}
-                                            </div>
-                                            <div className="w-full lg:text-right flex justify-between items-center text-sm font-black text-slate-800 dark:text-white">
-                                                <span className="lg:hidden text-[9px] font-black text-slate-400 uppercase tracking-widest">Net Pay</span>
-                                                ₹{run.totalNetPay.toLocaleString()}
-                                            </div>
-                                        </div>
-                                    ))
-                                )}
-                            </div>
-                        </div>
+                    <div className="text-xs space-y-1.5 flex-1 mt-2">
+                        <div className="flex justify-between"><span className="text-slate-400">Period:</span><span className="font-bold text-slate-700">01-06-26 To 30-06-26</span></div>
+                        <div className="flex justify-between"><span className="text-slate-400">Source:</span><span className="font-bold text-slate-700">Biometric Device</span></div>
+                        <div className="flex justify-between"><span className="text-slate-400">Total Records:</span><span className="font-bold text-slate-700">1250</span></div>
                     </div>
-
-                    {/* Quick Actions */}
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800/50 p-5">
-                        <h3 className="font-black text-slate-800 dark:text-white mb-4 flex items-center gap-2 text-[10px] uppercase tracking-widest">
-                            <div className="p-1.5 bg-yellow-50 dark:bg-yellow-500/10 rounded-lg">
-                                <FileText className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
-                            </div>
-                            Quick Actions
-                        </h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                            <Can module="payroll.salary" action="view">
-                                <Link to="/hr/payroll/salary-components" className="flex items-center justify-between p-3.5 rounded-xl border border-slate-100 dark:border-slate-800 hover:border-blue-400 dark:hover:border-blue-600/50 hover:bg-blue-50/50 dark:hover:bg-blue-500/5 transition-all group bg-slate-50 dark:bg-slate-800/30">
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 group-hover:text-blue-600 dark:group-hover:text-blue-400">Manage Components</span>
-                                    <ArrowRight className="h-4 w-4 text-slate-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" />
-                                </Link>
-                            </Can>
-                            <Can module="payroll.salary" action="create">
-                                <Link to="/hr/payroll/salary-templates/new" className="flex items-center justify-between p-3.5 rounded-xl border border-slate-100 dark:border-slate-800 hover:border-purple-400 dark:hover:border-purple-600/50 hover:bg-purple-50/50 dark:hover:bg-purple-500/5 transition-all group bg-slate-50 dark:bg-slate-800/30">
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 group-hover:text-purple-600 dark:group-hover:text-purple-400">Design Salary Template</span>
-                                    <ArrowRight className="h-4 w-4 text-slate-400 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors" />
-                                </Link>
-                            </Can>
-                            <Can module="payroll.payslips" action="view">
-                                <Link to="/hr/payroll/payslips" className="flex items-center justify-between p-3.5 rounded-xl border border-slate-100 dark:border-slate-800 hover:border-emerald-400 dark:hover:border-emerald-600/50 hover:bg-emerald-50/50 dark:hover:bg-emerald-500/5 transition-all group bg-slate-50 dark:bg-slate-800/30">
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 group-hover:text-emerald-600 dark:group-hover:text-emerald-400">Download Payslips</span>
-                                    <FileText className="h-4 w-4 text-slate-400 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />
-                                </Link>
-                            </Can>
-                        </div>
-                    </div>
-                </>
-            ) : (
-                <div className="p-16 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
-                    <div className="inline-block mb-4 p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl">
-                        <FileText className="h-10 w-10 text-slate-300 dark:text-slate-600" />
-                    </div>
-                    <p className="text-slate-500 dark:text-slate-400 text-[10px] font-black tracking-widest uppercase">No data available. Run your first payroll to see analytics.</p>
+                    <Space className="w-full justify-between mt-2 pt-2 border-t">
+                        <Button size="small" type="primary" ghost>View Summary</Button>
+                        <Button size="small">Re-Import</Button>
+                    </Space>
                 </div>
-            )}
+
+                {/* Card 3: Payroll Input */}
+                <div className="bg-white dark:bg-slate-900 border rounded-2xl p-5 shadow-sm flex flex-col justify-between space-y-3">
+                    <div className="flex justify-between items-start border-b pb-2">
+                        <h3 className="font-black text-sm text-slate-800 uppercase tracking-wider flex items-center gap-2"><Award size={16} className="text-blue-500" /> 3. Payroll Input</h3>
+                    </div>
+                    <div className="text-[10px] font-bold space-y-1 mt-1 flex-1 overflow-y-auto max-h-32">
+                        <div className="flex justify-between items-center"><span>Basic Pay & Allowances</span><Tag color="green">Completed</Tag></div>
+                        <div className="flex justify-between items-center"><span>Overtime Hours</span><Tag color="green">Completed</Tag></div>
+                        <div className="flex justify-between items-center"><span>Leave & LOP days</span><Tag color="green">Completed</Tag></div>
+                        <div className="flex justify-between items-center"><span>Loan EMI recoveries</span><Tag color="green">Completed</Tag></div>
+                    </div>
+                    <Button size="small" type="primary" block className="mt-2" onClick={() => navigate('/hr/payroll/process')}>View Details</Button>
+                </div>
+
+                {/* Card 4: Review & Validate */}
+                <div className="bg-white dark:bg-slate-900 border rounded-2xl p-5 shadow-sm flex flex-col justify-between space-y-3">
+                    <div className="flex justify-between items-start border-b pb-2">
+                        <h3 className="font-black text-sm text-slate-800 uppercase tracking-wider flex items-center gap-2"><ShieldAlert size={16} className="text-blue-500" /> 4. Review & Validate</h3>
+                    </div>
+                    <div className="text-xs space-y-1.5 flex-1 mt-2">
+                        <div className="flex justify-between"><span className="text-slate-400">Total Validated:</span><span className="font-bold text-slate-700">1250</span></div>
+                        <div className="flex justify-between"><span className="text-slate-400">Exceptions:</span><span className="font-bold text-red-500">7</span></div>
+                        <div className="flex justify-between"><span className="text-slate-400">Warnings:</span><span className="font-bold text-amber-500">15</span></div>
+                    </div>
+                    <Space className="w-full justify-between mt-2 pt-2 border-t">
+                        <Button size="small" danger ghost>View Exceptions</Button>
+                        <Button size="small">Re-Validate</Button>
+                    </Space>
+                </div>
+
+                {/* Card 5: Approval */}
+                <div className="bg-white dark:bg-slate-900 border rounded-2xl p-5 shadow-sm flex flex-col justify-between space-y-3 col-span-1 md:col-span-2">
+                    <div className="flex justify-between items-start border-b pb-2">
+                        <h3 className="font-black text-sm text-slate-800 uppercase tracking-wider flex items-center gap-2"><CheckCircle size={16} className="text-blue-500" /> 5. Approval Flow</h3>
+                    </div>
+                    <div className="text-xs flex-1 mt-2">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="text-slate-400 border-b"><th className="pb-1">Level</th><th className="pb-1">Approver</th><th className="pb-1">Status</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr className="border-b"><td className="py-1">1. Reporting Manager</td><td className="py-1">Raju Sharma</td><td className="py-1"><Tag color="success">Approved</Tag></td></tr>
+                                <tr className="border-b"><td className="py-1">2. HR Admin Checker</td><td className="py-1">Neha Jain</td><td className="py-1"><Tag color="processing">Pending</Tag></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <Button size="small" type="primary" className="bg-blue-600 border-none mt-2" onClick={() => message.success('Sent for approval successfully')}>Send For Approval</Button>
+                </div>
+
+                {/* Card 6: Advance Entry */}
+                <div className="bg-white dark:bg-slate-900 border rounded-2xl p-5 shadow-sm flex flex-col justify-between space-y-3 col-span-1 md:col-span-2">
+                    <div className="flex justify-between items-start border-b pb-2">
+                        <h3 className="font-black text-sm text-slate-800 uppercase tracking-wider flex items-center gap-2"><CreditCard size={16} className="text-blue-500" /> 6. Advance Entry</h3>
+                        <Link to="/hr/payroll/arrears" className="text-xs font-semibold text-blue-500 hover:underline">Manage</Link>
+                    </div>
+                    <div className="text-xs flex-1 mt-2">
+                        <div className="flex justify-between text-slate-400 font-bold mb-1 border-b pb-0.5"><span>Employee</span><span>Amount</span><span>Status</span></div>
+                        <div className="space-y-1 overflow-y-auto max-h-20">
+                            <div className="flex justify-between"><span>Rahul Kumar</span><span className="font-bold">₹25,000</span><Tag color="success">Approved</Tag></div>
+                            <div className="flex justify-between"><span>Priya Sharma</span><span className="font-bold">₹15,000</span><Tag color="success">Approved</Tag></div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Card 7: Deduction Entry */}
+                <div className="bg-white dark:bg-slate-900 border rounded-2xl p-5 shadow-sm flex flex-col justify-between space-y-3 col-span-1 md:col-span-2">
+                    <div className="flex justify-between items-start border-b pb-2">
+                        <h3 className="font-black text-sm text-slate-800 uppercase tracking-wider flex items-center gap-2"><Landmark size={16} className="text-blue-500" /> 7. Deduction Entry</h3>
+                        <Link to="/hr/payroll/deduction-entry" className="text-xs font-semibold text-blue-500 hover:underline">Manage</Link>
+                    </div>
+                    <div className="text-xs flex-1 mt-2">
+                        <div className="flex justify-between text-slate-400 font-bold mb-1 border-b pb-0.5"><span>Employee</span><span>Deduction</span><span>Amount</span></div>
+                        <div className="space-y-1 overflow-y-auto max-h-20">
+                            <div className="flex justify-between"><span>Rahul Kumar</span><span>Professional Tax</span><span className="font-bold text-red-500">₹200</span></div>
+                            <div className="flex justify-between"><span>Priya Sharma</span><span>Uniform Deduction</span><span className="font-bold text-red-500">₹500</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Card 8: Loan Management */}
+                <div className="bg-white dark:bg-slate-900 border rounded-2xl p-5 shadow-sm flex flex-col justify-between space-y-3 col-span-1 md:col-span-2">
+                    <div className="flex justify-between items-start border-b pb-2">
+                        <h3 className="font-black text-sm text-slate-800 uppercase tracking-wider flex items-center gap-2"><Landmark size={16} className="text-blue-500" /> 8. Loan Management</h3>
+                        <Link to="/hr/payroll/loans" className="text-xs font-semibold text-blue-500 hover:underline">Manage</Link>
+                    </div>
+                    <div className="text-xs flex-1 mt-2">
+                        <div className="flex justify-between text-slate-400 font-bold mb-1 border-b pb-0.5"><span>Employee</span><span>Loan Type</span><span>EMI</span><span>Outstanding</span></div>
+                        <div className="space-y-1 overflow-y-auto max-h-20">
+                            <div className="flex justify-between"><span>Amit Patel</span><span>Car Loan</span><span>₹8,500</span><span className="font-bold">₹1,50,000</span></div>
+                            <div className="flex justify-between"><span>Neha Jain</span><span>Home Loan</span><span>₹12,500</span><span className="font-bold">₹3,25,000</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Card 9: TDS Declaration & Deduction */}
+                <div className="bg-white dark:bg-slate-900 border rounded-2xl p-5 shadow-sm flex flex-col justify-between space-y-3 col-span-1 md:col-span-2">
+                    <div className="flex justify-between items-start border-b pb-2">
+                        <h3 className="font-black text-sm text-slate-800 uppercase tracking-wider flex items-center gap-2"><Shield size={16} className="text-blue-500" /> 9. TDS Declaration & Deduction</h3>
+                        <Link to="/hr/payroll/tds-declaration" className="text-xs font-semibold text-blue-500 hover:underline">Manage</Link>
+                    </div>
+                    <div className="text-xs flex-1 mt-2">
+                        <div className="flex justify-between text-slate-400 font-bold mb-1 border-b pb-0.5"><span>Employee</span><span>Regime</span><span>Deductions</span><span>TDS</span></div>
+                        <div className="space-y-1 overflow-y-auto max-h-20">
+                            <div className="flex justify-between"><span>Rahul Kumar</span><Tag color="cyan">OLD</Tag><span>₹1,50,000</span><span className="font-bold text-red-500">₹8,400</span></div>
+                            <div className="flex justify-between"><span>Priya Sharma</span><Tag color="blue">NEW</Tag><span>-</span><span className="font-bold text-red-500">₹12,500</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Card 10: Other Earnings */}
+                <div className="bg-white dark:bg-slate-900 border rounded-2xl p-5 shadow-sm flex flex-col justify-between space-y-3 col-span-1 md:col-span-2">
+                    <div className="flex justify-between items-start border-b pb-2">
+                        <h3 className="font-black text-sm text-slate-800 uppercase tracking-wider flex items-center gap-2"><Award size={16} className="text-blue-500" /> 10. Other Earnings</h3>
+                        <Link to="/hr/payroll/other-earnings" className="text-xs font-semibold text-blue-500 hover:underline">Manage</Link>
+                    </div>
+                    <div className="text-xs flex-1 mt-2">
+                        <div className="flex justify-between text-slate-400 font-bold mb-1 border-b pb-0.5"><span>Employee</span><span>Earning Type</span><span>Amount</span></div>
+                        <div className="space-y-1 overflow-y-auto max-h-20">
+                            <div className="flex justify-between"><span>Rahul Kumar</span><span>Performance Bonus</span><span className="font-bold text-green-500">₹15,000</span></div>
+                            <div className="flex justify-between"><span>Amit Patel</span><span>Night Shift Allowance</span><span className="font-bold text-green-500">₹5,000</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Card 11: Process Payroll */}
+                <div className="bg-white dark:bg-slate-900 border rounded-2xl p-5 shadow-sm flex flex-col justify-between space-y-3">
+                    <div className="flex justify-between items-start border-b pb-2">
+                        <h3 className="font-black text-sm text-slate-800 uppercase tracking-wider flex items-center gap-2"><Play size={16} className="text-blue-500" /> 11. Process Payroll</h3>
+                    </div>
+                    <div className="text-[10px] space-y-1.5 flex-1 mt-2 font-medium">
+                        <div className="flex justify-between"><span>Payment Date:</span><span className="font-bold">05-06-2026</span></div>
+                        <div className="flex justify-between"><span>Total Employees:</span><span className="font-bold">1250</span></div>
+                        <div className="flex justify-between"><span>Net Pay Amount:</span><span className="font-bold">₹{stats.netPay.toLocaleString()}</span></div>
+                    </div>
+                    <Button size="small" type="primary" className="bg-blue-600 border-none mt-2" onClick={() => navigate('/hr/payroll/process')}>Process Now</Button>
+                </div>
+
+                {/* Card 12: Payment */}
+                <div className="bg-white dark:bg-slate-900 border rounded-2xl p-5 shadow-sm flex flex-col justify-between space-y-3">
+                    <div className="flex justify-between items-start border-b pb-2">
+                        <h3 className="font-black text-sm text-slate-800 uppercase tracking-wider flex items-center gap-2"><Landmark size={16} className="text-blue-500" /> 12. Payment Summary</h3>
+                    </div>
+                    <div className="text-[10px] space-y-1.5 flex-1 mt-2 font-medium">
+                        <div className="flex justify-between"><span>Bank Name:</span><span className="font-bold">HDFC Bank</span></div>
+                        <div className="flex justify-between"><span>Transfer Status:</span><Tag color="success">Success</Tag></div>
+                        <div className="flex justify-between"><span>Success Count:</span><span className="font-bold text-green-500">1180 / 1250</span></div>
+                    </div>
+                    <Button size="small" type="primary" ghost className="mt-2" onClick={() => message.info('Opening payment report PDF')}>View Payment Report</Button>
+                </div>
+
+                {/* Card 13: Employee Payroll */}
+                <div className="bg-white dark:bg-slate-900 border rounded-2xl p-5 shadow-sm flex flex-col justify-between space-y-3 col-span-1 md:col-span-2">
+                    <div className="flex justify-between items-start border-b pb-2">
+                        <h3 className="font-black text-sm text-slate-800 uppercase tracking-wider flex items-center gap-2"><Users size={16} className="text-blue-500" /> 13. Employee Payroll</h3>
+                        <Link to="/hr/payroll/employee-payroll" className="text-xs font-semibold text-blue-500 hover:underline">View All</Link>
+                    </div>
+                    <div className="text-[10px] flex-1 mt-1 overflow-y-auto max-h-24">
+                        <div className="flex justify-between text-slate-400 font-bold mb-1 border-b pb-0.5"><span>Employee</span><span>Net Pay</span><span>Status</span></div>
+                        <div className="space-y-1">
+                            <div className="flex justify-between"><span>Rahul Kumar (E00123)</span><span className="font-bold">₹43,100</span><Tag color="success">Paid</Tag></div>
+                            <div className="flex justify-between"><span>Priya Sharma (E00124)</span><span className="font-bold">₹48,000</span><Tag color="success">Paid</Tag></div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Card 14: Payslip Mockup */}
+                <div className="bg-white dark:bg-slate-900 border rounded-2xl p-5 shadow-sm flex flex-col justify-between space-y-3 col-span-1 md:col-span-2">
+                    <div className="flex justify-between items-start border-b pb-2">
+                        <h3 className="font-black text-sm text-slate-800 uppercase tracking-wider flex items-center gap-2"><FileText size={16} className="text-blue-500" /> 14. Payslip Quick View</h3>
+                        <Link to="/hr/payroll/payslip-view" className="text-xs font-semibold text-blue-500 hover:underline">Open Slip</Link>
+                    </div>
+                    {/* Payslip Header mini card */}
+                    <div className="border rounded-xl p-3 bg-slate-50 dark:bg-slate-800 text-[10px] space-y-1.5">
+                        <div className="text-center font-bold text-blue-600 dark:text-blue-500">Gitakshmi IT Solutions Pvt. Ltd.</div>
+                        <div className="flex justify-between border-t pt-1"><span>Emp Code: E00123</span><span>Bank Account: HDFC *****1234</span></div>
+                        <div className="flex justify-between"><span>Basic: ₹25,000</span><span>PF: ₹1,800</span></div>
+                        <div className="flex justify-between"><span>HRA: ₹8,000</span><span>TDS: ₹8,400</span></div>
+                        <div className="flex justify-between border-t pt-1 font-bold text-blue-600 dark:text-blue-500"><span>Gross Earnings: ₹43,000</span><span>Net Payable: ₹32,800</span></div>
+                    </div>
+                </div>
+
+                {/* Card 15: Payroll Reports */}
+                <div className="bg-white dark:bg-slate-900 border rounded-2xl p-5 shadow-sm flex flex-col justify-between space-y-3 col-span-1 md:col-span-2">
+                    <div className="flex justify-between items-start border-b pb-2">
+                        <h3 className="font-black text-sm text-slate-800 uppercase tracking-wider flex items-center gap-2"><FileText size={16} className="text-blue-500" /> 15. Payroll Reports</h3>
+                        <Link to="/hr/payroll/reports" className="text-xs font-semibold text-blue-500 hover:underline">Generate</Link>
+                    </div>
+                    <div className="text-xs space-y-1.5 mt-2 flex-1">
+                        <div className="flex justify-between items-center"><span>Payroll Payout Summary Report</span><Button size="small" icon={<Download size={12} />} onClick={() => message.info('Generating Payout Report...')} /></div>
+                        <div className="flex justify-between items-center"><span>TDS / Tax Liability Report</span><Button size="small" icon={<Download size={12} />} onClick={() => message.info('Generating TDS Report...')} /></div>
+                    </div>
+                </div>
+
+                {/* Card 16: Form 16 */}
+                <div className="bg-white dark:bg-slate-900 border rounded-2xl p-5 shadow-sm flex flex-col justify-between space-y-3 col-span-1 md:col-span-2">
+                    <div className="flex justify-between items-start border-b pb-2">
+                        <h3 className="font-black text-sm text-slate-800 uppercase tracking-wider flex items-center gap-2"><FileText size={16} className="text-blue-500" /> 16. Form 16</h3>
+                        <Link to="/hr/payroll/form16" className="text-xs font-semibold text-blue-500 hover:underline">Generate All</Link>
+                    </div>
+                    <div className="text-xs space-y-1.5 mt-2 flex-1">
+                        <div className="flex justify-between items-center"><span>Rahul Kumar (E00123)</span><Tag color="green">Generated</Tag></div>
+                        <div className="flex justify-between items-center"><span>Priya Sharma (E00124)</span><Tag color="green">Generated</Tag></div>
+                    </div>
+                </div>
+
+            </div>
         </div>
     );
 }

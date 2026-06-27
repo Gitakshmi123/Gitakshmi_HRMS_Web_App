@@ -311,6 +311,7 @@ export default function HRSidebar({
 
       // Unify variants for both sidebar display and grouping logic
       if (rawModName === 'overview') return; // Handled manually
+      if (rawModName === 'payroll' || rawModName === 'payroll system') return; // Custom handled manually
       if (rawModName === 'leave master') return; // Explicitly hidden/deleted per user request
       if (rawModName === 'support' || rawModName === 'ticket inbox' || rawModName === 'tickets') {
         if (rawModName !== 'emp service') hasSupportModule = true;
@@ -394,6 +395,41 @@ export default function HRSidebar({
       if (!allowedByPerm || !allowedByModule) return;
       const to = buildPath(pathPrefix, route);
       const matchPaths = matchRoutes.map((matchRoute) => buildPath(pathPrefix, matchRoute));
+
+      if (moduleName === 'Payroll') {
+        const subItems = [
+          { label: 'Payroll Dashboard', to: buildPath(pathPrefix, 'payroll/dashboard'), permissionKey: 'payroll.stats' },
+          { label: 'Payroll Process', to: buildPath(pathPrefix, 'payroll/process'), permissionKey: 'payroll.process' },
+          { label: 'Employee Payroll', to: buildPath(pathPrefix, 'payroll/employee-payroll'), permissionKey: 'payroll.stats' },
+          { label: 'Payslip', to: buildPath(pathPrefix, 'payroll/payslip-view'), permissionKey: 'payroll.payslips' },
+          { label: 'Arrear / Onetime Payment', to: buildPath(pathPrefix, 'payroll/arrears'), permissionKey: 'payroll.process' },
+          { label: 'Reimbursement', to: buildPath(pathPrefix, 'payroll/reimbursements'), permissionKey: 'payroll.process' },
+          { label: 'Loan & Advance', to: buildPath(pathPrefix, 'payroll/loans'), permissionKey: 'payroll.process' },
+          { label: 'Deduction Entry', to: buildPath(pathPrefix, 'payroll/deduction-entry'), permissionKey: 'payroll.salary' },
+          { label: 'TDS Declaration', to: buildPath(pathPrefix, 'payroll/tds-declaration'), permissionKey: 'payroll.process' },
+          { label: 'Other Earnings', to: buildPath(pathPrefix, 'payroll/other-earnings'), permissionKey: 'payroll.process' },
+          { label: 'Payroll Reports', to: buildPath(pathPrefix, 'payroll/reports'), permissionKey: 'payroll.stats' },
+          { label: 'Form 16', to: buildPath(pathPrefix, 'payroll/form16'), permissionKey: 'payroll.stats' },
+          { label: 'Salary Revision', to: buildPath(pathPrefix, 'payroll/salary-revision'), permissionKey: 'payroll.compensation' }
+        ];
+
+        const filteredSubItems = subItems.filter(item => hasPermission(item.permissionKey, 'any')).map(item => ({
+          label: item.label,
+          to: item.to,
+          icon: ICONS.dashboard,
+          children: []
+        }));
+
+        sections.push({
+          id: `manual-payroll`,
+          title: MANAGEMENT_SECTION,
+          moduleName: 'Payroll',
+          icon: 'payrollDashboard',
+          items: filteredSubItems,
+          matchPaths: subItems.map(item => item.to)
+        });
+        return;
+      }
 
       sections.push({
         id: `manual-${moduleName.toLowerCase().replace(/\s+/g, '-')}`,

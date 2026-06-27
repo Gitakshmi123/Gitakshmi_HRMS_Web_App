@@ -127,6 +127,16 @@ const PayrollDashboard = lazy(() => import('../pages/HR/Payroll/PayrollDashboard
 const SalaryAssignmentExcel = lazy(() => import('../pages/HR/Payroll/SalaryAssignmentExcel'));
 const MinimumWageMaster = lazy(() => import('../pages/HR/Payroll/MinimumWageMaster'));
 const PayrollReport = lazy(() => import('../pages/HR/Payroll/PayrollReport'));
+const EmployeePayroll = lazy(() => import('../pages/HR/Payroll/Payslips'));
+const PayslipView = lazy(() => import('../pages/HR/Payroll/PayslipView'));
+const Arrears = lazy(() => import('../pages/HR/Payroll/Arrears'));
+const Reimbursements = lazy(() => import('../pages/HR/Payroll/Reimbursements'));
+const LoansAdvances = lazy(() => import('../pages/HR/Payroll/LoansAdvances'));
+const DeductionEntry = lazy(() => import('../pages/HR/Payroll/DeductionEntry'));
+const TdsDeclarations = lazy(() => import('../pages/HR/Payroll/TdsDeclarations'));
+const OtherEarnings = lazy(() => import('../pages/HR/Payroll/OtherEarnings'));
+const Form16 = lazy(() => import('../pages/HR/Payroll/Form16'));
+const SalaryRevision = lazy(() => import('../pages/HR/Compensation'));
 
 // Employee Self-Service
 const ESSPayslips = lazy(() => import('../pages/ESS/Payslips'));
@@ -592,6 +602,16 @@ export default function HrmsRoutes() {
           <Route path="payroll/reports" element={<PayrollReport />} />
           <Route path="payroll/payslip-templates" element={<PayslipTemplates />} />
           <Route path="payroll/salary-assignment-excel" element={<SalaryAssignmentExcel />} />
+          <Route path="payroll/employee-payroll" element={<EmployeePayroll />} />
+          <Route path="payroll/payslip-view" element={<PayslipView />} />
+          <Route path="payroll/arrears" element={<Arrears />} />
+          <Route path="payroll/reimbursements" element={<Reimbursements />} />
+          <Route path="payroll/loans" element={<LoansAdvances />} />
+          <Route path="payroll/deduction-entry" element={<DeductionEntry />} />
+          <Route path="payroll/tds-declaration" element={<TdsDeclarations />} />
+          <Route path="payroll/other-earnings" element={<OtherEarnings />} />
+          <Route path="payroll/form16" element={<Form16 />} />
+          <Route path="payroll/salary-revision" element={<SalaryRevision />} />
 
           {/* Payslip Builder */}
           <Route
