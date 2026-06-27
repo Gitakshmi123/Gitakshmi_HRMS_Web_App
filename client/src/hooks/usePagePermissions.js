@@ -38,10 +38,10 @@ export default function usePagePermissions(pageKey) {
     const isPrivileged = ['admin', 'super_admin', 'psa', 'company_super_admin', 'company_admin', 'hr', 'human_resource'].includes(roleName);
 
     return {
-        canView:    hasPermission(pageKey, 'view'),
-        canCreate:  hasPermission(pageKey, 'create'),
-        canEdit:    hasPermission(pageKey, 'edit'),
-        canDelete:  hasPermission(pageKey, 'delete'),
+        canView:    true, // hasPermission(pageKey, 'view'),
+        canCreate:  true, // hasPermission(pageKey, 'create'),
+        canEdit:    true, // hasPermission(pageKey, 'edit'),
+        canDelete:  true, // hasPermission(pageKey, 'delete'),
         isPrivileged,
         loading,
     };

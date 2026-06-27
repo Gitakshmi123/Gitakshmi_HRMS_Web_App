@@ -234,6 +234,35 @@ exports.assignSalaryExcel = async (req, res) => {
         }
 
         await compensation.save();
+
+        // 3.5 Create Canonical Salary Version for the Payroll Engine
+        const canonicalComponents = [
+            ...breakup.earnings.map(e => ({ name: e.name, code: e.code, monthlyAmount: e.monthly, annualAmount: e.yearly, type: 'EARNING', isTaxable: true, isProRata: true, enabled: true })),
+            ...breakup.deductions.map(d => ({ name: d.name, code: d.code, monthlyAmount: d.monthly, annualAmount: d.yearly, type: 'DEDUCTION', isTaxable: false, isProRata: false, enabled: true })),
+            ...(breakup.benefits || []).map(b => ({ name: b.name, code: b.code, monthlyAmount: b.monthly, annualAmount: b.yearly, type: 'BENEFIT', isTaxable: false, isProRata: false, enabled: true }))
+        ];
+
+        const effectiveDateObj = new Date(effectiveFrom);
+        const salaryVersion = await canonicalPayroll.createSalaryVersion(
+            req.tenantDB,
+            tenantId,
+            employeeId,
+            {
+                effectiveFrom: effectiveDateObj,
+                totalCTC: annualCTC,
+                monthlyCTC: breakup.totals.totalCTC / 12,
+                components: canonicalComponents,
+                salaryTemplateId: null,
+                source: 'EMPLOYEE_COMPENSATION',
+                sourceModel: 'EmployeeCompensation',
+                sourceRefId: compensation._id,
+                revisionType: compensation.isNew ? 'INITIAL' : 'REVISION',
+                reason: `Assigned via Salary Breakup Engine`,
+                closePrevious: true,
+                settings: {}
+            },
+            req.user.id || req.user._id
+        );
         
         // 4. Save SalaryAssignment record for history/tracking
         await SalaryAssignment.create({

@@ -336,12 +336,14 @@ function dedupeObjectIds(values = []) {
     const result = [];
 
     for (const value of values) {
-        const objectId = toObjectId(value);
-        if (!objectId) continue;
-        const key = String(objectId);
+        if (!value) continue;
+        const key = String(value);
         if (seen.has(key)) continue;
         seen.add(key);
-        result.push(objectId);
+        
+        // Return original value or ObjectId if possible
+        const objId = toObjectId(value);
+        result.push(objId || String(value));
     }
 
     return result;
