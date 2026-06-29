@@ -44,7 +44,7 @@ export default function Arrears() {
             const payload = {
                 employeeId: values.employeeId,
                 adjustmentMonth: currentMonthLabel,
-                adjustmentType: values.type, // 'ARREAR' or 'BONUS_CORRECTION' etc.
+                adjustmentType: 'MANUAL_ADJUSTMENT',
                 adjustmentAmount: values.type === 'DEBIT' ? -Math.abs(values.amount) : Math.abs(values.amount),
                 reason: values.reason,
                 metadata: {}
@@ -108,11 +108,14 @@ export default function Arrears() {
             title: 'Type',
             dataIndex: 'adjustmentType',
             key: 'adjustmentType',
-            render: (type) => (
-                <Tag color={type === 'DEBIT' ? 'red' : 'green'}>
-                    {type}
-                </Tag>
-            )
+            render: (type, record) => {
+                const isDebit = record.adjustmentAmount < 0;
+                return (
+                    <Tag color={isDebit ? 'red' : 'green'}>
+                        {isDebit ? 'DEBIT' : 'CREDIT'}
+                    </Tag>
+                );
+            }
         },
         {
             title: 'Amount',
@@ -230,7 +233,7 @@ export default function Arrears() {
                             placeholder="Select Employee"
                             optionFilterProp="children"
                             filterOption={(input, option) => (option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
-                            options={employees.map(e => ({ label: `${e.firstName} ${e.lastName} (${e.employeeId})`, value: e._id }))}
+                            options={employees.map(e => ({ label: `${e.firstName} ${e.lastName} (${e.employeeId?.startsWith('DRAFT-') ? 'Draft' : e.employeeId})`, value: e._id }))}
                         />
                     </Form.Item>
 

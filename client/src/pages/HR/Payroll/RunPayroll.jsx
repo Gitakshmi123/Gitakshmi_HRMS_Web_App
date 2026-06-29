@@ -115,7 +115,7 @@ const formatRunType = (runType) =>
   RUN_TYPE_OPTIONS.find((item) => item.value === runType)?.label || runType || 'Payroll Run';
 
 const employeeLabel = (employee) =>
-  `${[employee?.firstName, employee?.lastName].filter(Boolean).join(' ') || employee?.name || 'Employee'}${employee?.employeeId ? ` (${employee.employeeId})` : ''}`;
+  `${[employee?.firstName, employee?.lastName].filter(Boolean).join(' ') || employee?.name || 'Employee'}${employee?.employeeId ? ` (${employee.employeeId?.startsWith('DRAFT-') ? 'Draft' : employee.employeeId})` : ''}`;
 
 function StatusChip({ status }) {
   const palette = {

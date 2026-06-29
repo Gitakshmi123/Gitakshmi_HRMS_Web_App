@@ -127,7 +127,7 @@ const PayrollDashboard = lazy(() => import('../pages/HR/Payroll/PayrollDashboard
 const SalaryAssignmentExcel = lazy(() => import('../pages/HR/Payroll/SalaryAssignmentExcel'));
 const MinimumWageMaster = lazy(() => import('../pages/HR/Payroll/MinimumWageMaster'));
 const PayrollReport = lazy(() => import('../pages/HR/Payroll/PayrollReport'));
-const EmployeePayroll = lazy(() => import('../pages/HR/Payroll/Payslips'));
+const EmployeePayroll = lazy(() => import('../pages/HR/Payroll/SalaryAssignmentExcel'));
 const PayslipView = lazy(() => import('../pages/HR/Payroll/PayslipView'));
 const Arrears = lazy(() => import('../pages/HR/Payroll/Arrears'));
 const Reimbursements = lazy(() => import('../pages/HR/Payroll/Reimbursements'));

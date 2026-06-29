@@ -277,7 +277,7 @@ export default function OtherEarnings() {
                             placeholder="Select Employee"
                             optionFilterProp="children"
                             filterOption={(input, option) => (option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
-                            options={employees.map(e => ({ label: `${e.firstName} ${e.lastName} (${e.employeeId})`, value: e._id }))}
+                            options={employees.map(e => ({ label: `${e.firstName} ${e.lastName} (${e.employeeId?.startsWith('DRAFT-') ? 'Draft' : e.employeeId})`, value: e._id }))}
                         />
                     </Form.Item>
 

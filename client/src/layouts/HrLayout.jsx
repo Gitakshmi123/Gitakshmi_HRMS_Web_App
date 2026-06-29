@@ -259,7 +259,7 @@ export default function HRLayout() {
                     <span>Menu</span>
                   </button>
 
-                  <div className={`flex items-center gap-6 ${isMainDashboard ? 'w-full justify-end lg:justify-start' : ''}`}>
+                  <div className={`flex items-center gap-6 min-w-0 flex-1 ${isMainDashboard ? 'w-full justify-end lg:justify-start' : ''}`}>
                     {(pageTitle || isAccessWorkspace) && (
                       <div className="min-w-0">
                         <h1 className="truncate text-[1.85rem] font-black tracking-tight text-slate-900 leading-none antialiased">
@@ -267,11 +267,15 @@ export default function HRLayout() {
                         </h1>
                       </div>
                     )}
-                    <div id="hr-header-portal-target" className="flex-1 min-w-0"></div>
-                    {!isMainDashboard && tabsPlacement !== 'hidden' && sectionTabs.length > 0 && (
-                      <div className="-mb-1 flex-1">
-                        <SectionTabs tabs={sectionTabs} className="border-none mb-0 bg-transparent sticky-none p-0" />
-                      </div>
+                    {!isMainDashboard && tabsPlacement !== 'hidden' && sectionTabs.length > 0 ? (
+                      <>
+                        <div className="-mb-1 flex-1 min-w-0">
+                          <SectionTabs tabs={sectionTabs} className="border-none mb-0 bg-transparent sticky-none p-0" />
+                        </div>
+                        <div id="hr-header-portal-target" className="min-w-0"></div>
+                      </>
+                    ) : (
+                      <div id="hr-header-portal-target" className="flex-1 min-w-0"></div>
                     )}
                   </div>
                 </div>
@@ -358,6 +362,14 @@ export default function HRLayout() {
           background: rgba(148, 163, 184, 1);
         }
 
+        .no-scrollbar::-webkit-scrollbar {
+          display: none !important;
+        }
+        .no-scrollbar {
+          -ms-overflow-style: none !important;
+          scrollbar-width: none !important;
+        }
+
         :root {
           --hr-page-bg: ${appearance.pageBgColor};
           --hr-card-bg: ${appearance.pageCardColor};
@@ -408,7 +420,7 @@ export default function HRLayout() {
 
         .hr-panel aside .active,
         .hr-panel aside .active * {
-          color: var(--hr-sidebar-active) !important;
+          color: var(--hr-button-text) !important;
           font-weight: 800 !important;
         }
 
