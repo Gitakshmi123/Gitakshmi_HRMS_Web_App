@@ -1,6 +1,7 @@
 // Server root - forced restart 2026-06-08T13:25:00
-// const dns = require('dns');
-// dns.setServers(['8.8.8.8', '1.1.1.1']);
+const dns = require('dns');
+dns.setServers(['8.8.8.8', '1.1.1.1']);
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 
