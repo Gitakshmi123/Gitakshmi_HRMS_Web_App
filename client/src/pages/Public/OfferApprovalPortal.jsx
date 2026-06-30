@@ -205,9 +205,13 @@ const OfferApprovalPortal = () => {
                         <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Candidate Information</h2>
 
                         <div className="space-y-5">
-                            <DetailRow icon={Briefcase} label="Designation" value={candidate?.designation || candidate?.role} />
-                            <DetailRow icon={Building} label="Department" value={candidate?.department} />
-                            <DetailRow icon={IndianRupee} label="Offered CTC" value={formatMoney(candidate?.offeredCtc)} />
+                            <DetailRow icon={Building} label="Current Department" value={candidate?.currentDepartment} />
+                            <DetailRow icon={IndianRupee} label="Current CTC" value={formatMoney(candidate?.currentCTC)} />
+                            <DetailRow icon={IndianRupee} label="Offer CTC" value={formatMoney(candidate?.offerCtc || candidate?.offeredCtc)} />
+                            <DetailRow icon={IndianRupee} label="Percentage Increase" value={candidate?.percentageIncrease} />
+                            <DetailRow icon={Briefcase} label="Current Designation" value={candidate?.currentDesignation} />
+                            <DetailRow icon={Briefcase} label="Offer Designation" value={candidate?.offerDesignation || candidate?.designation || candidate?.role} />
+                            <DetailRow icon={Building} label="Department" value={candidate?.department || candidate?.offerDepartment} />
                             <DetailRow icon={IndianRupee} label="Monthly Take Home" value={formatMoney(candidate?.takeHomeMonthly)} />
                             <DetailRow icon={CalendarDays} label="Joining Date" value={formatDate(candidate?.joiningDate)} />
                             <DetailRow icon={MapPin} label="Work Location" value={candidate?.workLocation || candidate?.workMode} />

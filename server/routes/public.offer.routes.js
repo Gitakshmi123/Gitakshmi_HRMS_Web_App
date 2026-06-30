@@ -40,6 +40,32 @@ const valueFromMap = (source, key) => {
 
 const pickFirst = (...values) => values.find((value) => value !== undefined && value !== null && String(value).trim() !== '');
 
+const parseMoneyNumber = (value) => {
+    if (value === undefined || value === null || value === '') return null;
+    const numeric = Number(String(value).replace(/[^0-9.-]/g, ''));
+    return Number.isFinite(numeric) ? numeric : null;
+};
+
+const formatPercentageIncrease = (currentValue, offerValue) => {
+    const current = parseMoneyNumber(currentValue);
+    const offer = parseMoneyNumber(offerValue);
+    if (!current || !offer) return null;
+    const percentage = ((offer - current) / current) * 100;
+    return `${percentage.toFixed(2)}%`;
+};
+
+const displayName = (value) => {
+    if (!value) return null;
+    if (typeof value === 'string') return value;
+    return value.name || value.departmentName || value.title || value.label || null;
+};
+
+const customValue = (applicant, key) => (
+    applicant?.customData?.[key] ||
+    applicant?.metadata?.[key] ||
+    applicant?.aiParsedData?.[key]
+);
+
 const formatObjectId = (value) => value ? String(value) : null;
 
 const buildCandidateDetails = (applicant, letter) => {
@@ -62,6 +88,36 @@ const buildCandidateDetails = (applicant, letter) => {
         applicant?.expectedCTC,
         applicant?.currentCTC
     );
+    const currentCtc = pickFirst(
+        applicant?.currentCTC,
+        customValue(applicant, 'currentCTC'),
+        customValue(applicant, 'currentCtc'),
+        customValue(applicant, 'current_ctc')
+    );
+    const offerDepartment = pickFirst(
+        displayName(requirement?.department),
+        displayName(applicant?.offerDepartment),
+        customValue(applicant, 'offerDepartment'),
+        customValue(applicant, 'department'),
+        displayName(applicant?.department)
+    );
+    const currentDepartment = pickFirst(
+        displayName(applicant?.currentDepartment),
+        customValue(applicant, 'currentDepartment'),
+        customValue(applicant, 'current_department'),
+        displayName(applicant?.department)
+    );
+    const offerDesignation = pickFirst(
+        requirement?.jobTitle,
+        customValue(applicant, 'offerDesignation'),
+        customValue(applicant, 'offer_designation'),
+        applicant?.designation
+    );
+    const currentDesignation = pickFirst(
+        applicant?.currentDesignation,
+        customValue(applicant, 'currentDesignation'),
+        customValue(applicant, 'current_designation')
+    );
 
     return {
         id: formatObjectId(applicant?._id),
@@ -69,21 +125,26 @@ const buildCandidateDetails = (applicant, letter) => {
         name: applicant?.name || 'Candidate',
         email: applicant?.email || null,
         mobile: applicant?.mobile || null,
-        role: requirement?.jobTitle || applicant?.currentDesignation || 'Role',
-        designation: requirement?.jobTitle || applicant?.currentDesignation || null,
-        department: applicant?.department || requirement?.department || null,
+        role: offerDesignation || currentDesignation || 'Role',
+        designation: offerDesignation || currentDesignation || null,
+        currentDepartment,
+        department: offerDepartment,
+        offerDepartment,
         grade: applicant?.gradeSnapshot?.name || applicant?.grade || requirement?.grade || null,
         jobCategory: applicant?.jobCategory || requirement?.jobDetails?.jobType || null,
         workLocation: applicant?.workLocation || applicant?.location || null,
         workMode: requirement?.jobDetails?.workMode || null,
         offeredCtc,
+        offerCtc: offeredCtc,
+        percentageIncrease: formatPercentageIncrease(currentCtc, offeredCtc),
         ctcMonthly: pickFirst(salarySnapshot.monthlyCTC, salarySnapshot.ctcMonthly, valueFromMap(snapshotData, 'salary_ctc_monthly'), valueFromMap(generatedVariables, 'ctcMonthly')),
         takeHomeMonthly: pickFirst(salarySnapshot.breakdown?.netPay, salarySnapshot.summary?.netPay, salarySnapshot.takeHomeMonthly, valueFromMap(snapshotData, 'salary_take_home_monthly'), applicant?.takeHome),
         expectedCTC: applicant?.expectedCTC || null,
-        currentCTC: applicant?.currentCTC || null,
+        currentCTC: currentCtc || null,
         experience: applicant?.relevantExperience || applicant?.experience || null,
         currentCompany: applicant?.currentCompany || null,
-        currentDesignation: applicant?.currentDesignation || null,
+        currentDesignation: currentDesignation || null,
+        offerDesignation,
         noticePeriod: applicant?.noticePeriod ? 'Yes' : 'No',
         joiningDate: applicant?.joiningDate || valueFromMap(generatedVariables, 'joiningDate') || valueFromMap(snapshotData, 'joiningDate') || null,
         status: applicant?.status || null,

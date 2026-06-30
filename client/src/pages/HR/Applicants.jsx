@@ -5066,40 +5066,6 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
                                         </div>
 
                                         <div className="min-w-0">
-                                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Email Template</label>
-                                            <select
-                                                name="emailTemplateId"
-                                                value={offerData.emailTemplateId || ''}
-                                                onChange={handleOfferChange}
-                                                className="mt-1 block w-full border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 p-2 h-[42px]"
-                                            >
-                                                <option value="">-- Default Email Format --</option>
-                                                {emailTemplates.map(t => (
-                                                    <option key={t._id} value={t._id}>{t.name}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-
-                                        {offerData.emailTemplateId && (
-                                            (() => {
-                                                const selectedTpl = emailTemplates.find(t => t._id === offerData.emailTemplateId);
-                                                if (!selectedTpl) return null;
-                                                return (
-                                                    <div className="col-span-full mt-1 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-950/40 space-y-2 backdrop-blur-sm shadow-inner">
-                                                        <div className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Email Template Preview</div>
-                                                        <div className="text-sm font-bold text-slate-800 dark:text-slate-200">
-                                                            <span className="text-slate-400 font-medium mr-2">Subject:</span> {selectedTpl.subject}
-                                                        </div>
-                                                        <div 
-                                                            className="text-xs text-slate-650 dark:text-slate-350 border-t border-slate-200/50 dark:border-slate-800 pt-2 max-h-[160px] overflow-y-auto bg-slate-50/50 dark:bg-slate-950/20 p-2.5 rounded-lg border border-slate-100 dark:border-slate-900"
-                                                            dangerouslySetInnerHTML={{ __html: selectedTpl.bodyHtml }}
-                                                        />
-                                                    </div>
-                                                );
-                                            })()
-                                        )}
-
-                                        <div className="min-w-0">
                                             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Job Category <span className="text-red-500">*</span></label>
                                             <select
                                                 name="jobCategory"
