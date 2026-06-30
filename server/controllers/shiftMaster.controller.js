@@ -3,8 +3,9 @@ const ShiftPolicySchema = require('../models/ShiftPolicy');
 const AuditLogSchema = require('../models/AuditLog');
 
 const getModels = (req) => {
-    const db = req.tenantDB;
-    if (!db) throw new Error("Tenant database connection not available");
+    const mongoose = require('mongoose');
+    const db = req.tenantDB || mongoose.connection;
+    if (!db) throw new Error("Database connection not available");
     return {
         ShiftMaster: db.model('ShiftMaster', ShiftMasterSchema),
         ShiftPolicy: db.model('ShiftPolicy', ShiftPolicySchema),
@@ -67,11 +68,13 @@ exports.createShift = async (req, res) => {
             return res.status(400).json({ success: false, error: "Missing required core fields" });
         }
 
+        const validUserId = (req.user && require('mongoose').Types.ObjectId.isValid(req.user.id)) ? req.user.id : null;
+
         // 1. Create Shift Master
         const newShift = new ShiftMaster({
             ...shiftMaster,
             tenant: req.tenantId || req.user?.tenantId || req.user?.companyId || '60c72b2f9b1d8b0015a5a123',
-            createdBy: req.user ? req.user.id : null
+            createdBy: validUserId
         });
 
         await newShift.save();
@@ -86,7 +89,7 @@ exports.createShift = async (req, res) => {
                 version: 1,
                 isCurrent: true,
                 effectiveFrom: shiftMaster.validFrom || new Date(),
-                createdBy: req.user ? req.user.id : null
+                createdBy: validUserId
             });
             await newPolicy.save();
         }
@@ -98,7 +101,7 @@ exports.createShift = async (req, res) => {
                 entity: 'ShiftMaster',
                 entityId: newShift._id,
                 action: 'SHIFT_CREATED',
-                performedBy: req.user.id,
+                performedBy: validUserId,
                 changes: { before: null, after: newShift.toObject() },
                 meta: { shiftName: newShift.name }
             });
@@ -119,7 +122,105 @@ exports.createShift = async (req, res) => {
     }
 };
 
-// 4. UPDATE SHIFT MASTER
+// 4. BULK CREATE SHIFTS (From Excel)
+exports.bulkCreateShifts = async (req, res) => {
+    try {
+        const { ShiftMaster, ShiftPolicy, AuditLog } = getModels(req);
+        const { shifts } = req.body;
+
+        if (!Array.isArray(shifts) || shifts.length === 0) {
+            return res.status(400).json({ success: false, error: "No shifts provided for bulk creation" });
+        }
+
+        const tenantId = req.tenantId || req.user?.tenantId || req.user?.companyId || '60c72b2f9b1d8b0015a5a123';
+        const createdBy = (req.user && require('mongoose').Types.ObjectId.isValid(req.user.id)) ? req.user.id : null;
+
+        const createdShifts = [];
+
+        for (const shiftData of shifts) {
+            // 1. Create Shift Master
+            const newShift = new ShiftMaster({
+                ...shiftData,
+                tenant: tenantId,
+                createdBy
+            });
+            await newShift.save();
+
+            // 2. Auto-generate Policy based on Shift Type
+            const shiftType = newShift.type;
+            let defaultLateMarks = [{ conditionType: 'GREATER_THAN', minutes: 15, action: 'LATE_MARK' }];
+            let absentThreshold = 240; 
+            let isOtEligible = false;
+
+            if (shiftType === 'Support' || shiftType === '24x7 Support') {
+                defaultLateMarks = [{ conditionType: 'GREATER_THAN', minutes: 5, action: 'HALF_DAY' }];
+                isOtEligible = true;
+            } else if (shiftType === 'Short Shift') {
+                absentThreshold = 120;
+            } else if (shiftType === 'Flexible' || shiftType === 'Project Based') {
+                defaultLateMarks = [];
+            }
+
+            const newPolicy = new ShiftPolicy({
+                tenant: tenantId,
+                shiftMasterId: newShift._id,
+                version: 1,
+                isCurrent: true,
+                effectiveFrom: new Date(),
+                createdBy,
+                attendanceRules: {
+                    lateMarks: defaultLateMarks,
+                    earlyExit: [{ conditionType: 'GREATER_THAN', minutes: 10, action: 'LATE_MARK' }],
+                    absentThresholdMinutes: absentThreshold,
+                    punchWindow: {
+                        maxAdvancePunchInMinutes: parseInt(shift.maxAdvancePunchIn) || 120,
+                        maxLatePunchOutMinutes: parseInt(shift.maxLatePunchOut) || 120
+                    }
+                },
+                permissionEngine: { 
+                    allowedDurations: [15, 30, 60], 
+                    monthlyLimitCount: parseInt(shift.maxPermissions) || 2, 
+                    monthlyLimitMinutes: 120, 
+                    yearlyLimitCount: 24, 
+                    requiresApproval: true 
+                },
+                overtimeEngine: { 
+                    isEligible: shift.otEnabled !== undefined ? shift.otEnabled : isOtEligible, 
+                    minimumMinutesToQualify: 60, 
+                    maximumMinutesPerDay: 240, 
+                    normalMultiplier: 1.0, 
+                    holidayMultiplier: 2.0, 
+                    weeklyOffMultiplier: 2.0, 
+                    nightShiftMultiplier: 1.5, 
+                    requiresApproval: true 
+                }
+            });
+            await newPolicy.save();
+
+            createdShifts.push(newShift);
+        }
+
+        // 3. Audit Log for Bulk Action
+        if (req.user) {
+            const auditLog = new AuditLog({
+                tenant: tenantId,
+                entity: 'ShiftMaster',
+                entityId: createdShifts[0]._id, // Tagging first shift just for reference
+                action: 'BULK_SHIFTS_CREATED',
+                performedBy: createdBy,
+                details: `Bulk created ${createdShifts.length} shifts via Excel`
+            });
+            await auditLog.save();
+        }
+
+        res.status(201).json({ success: true, count: createdShifts.length, message: `Successfully created ${createdShifts.length} shifts` });
+    } catch (error) {
+        console.error("Bulk create shifts error:", error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// 5. UPDATE SHIFT MASTER
 exports.updateShift = async (req, res) => {
     try {
         const { ShiftMaster, AuditLog } = getModels(req);
@@ -148,7 +249,7 @@ exports.updateShift = async (req, res) => {
                 entity: 'ShiftMaster',
                 entityId: shift._id,
                 action: 'SHIFT_UPDATED',
-                performedBy: req.user.id,
+                performedBy: (req.user && require('mongoose').Types.ObjectId.isValid(req.user.id)) ? req.user.id : null,
                 changes: { before, after: shift.toObject() },
                 meta: { shiftName: shift.name }
             });
@@ -173,8 +274,7 @@ exports.deleteShift = async (req, res) => {
         }
 
         const before = shift.toObject();
-        shift.status = 'Inactive';
-        await shift.save();
+        await ShiftMaster.deleteOne({ _id: id });
 
         if (req.user) {
             const auditLog = new AuditLog({
@@ -182,7 +282,7 @@ exports.deleteShift = async (req, res) => {
                 entity: 'ShiftMaster',
                 entityId: shift._id,
                 action: 'SHIFT_DELETED',
-                performedBy: req.user.id,
+                performedBy: (req.user && require('mongoose').Types.ObjectId.isValid(req.user.id)) ? req.user.id : null,
                 changes: { before, after: shift.toObject() },
                 meta: { shiftName: shift.name }
             });
@@ -202,9 +302,22 @@ exports.savePolicy = async (req, res) => {
         const { shiftId } = req.params;
         const payload = req.body;
 
-        const shift = await ShiftMaster.findOne({ _id: shiftId, tenant: req.tenantId });
+        console.log(`[savePolicy] Searching for shift with ID: ${shiftId}, tenant: ${req.tenantId}`);
+
+        let shift;
+        try {
+            shift = await ShiftMaster.findById(shiftId);
+        } catch (e) {
+            return res.status(400).json({ success: false, error: `Invalid Shift ID format: ${shiftId}` });
+        }
+
         if (!shift) {
-            return res.status(404).json({ success: false, error: "Shift Master not found" });
+            console.log(`[savePolicy] Shift not found!`);
+            return res.status(404).json({ success: false, error: `Shift Master not found for ID: ${shiftId}` });
+        }
+
+        if (String(shift.tenant) !== String(req.tenantId)) {
+            return res.status(403).json({ success: false, error: `Tenant mismatch. Shift tenant: ${shift.tenant}, req tenant: ${req.tenantId}` });
         }
 
         // Get the current version to determine the next version number
@@ -217,13 +330,15 @@ exports.savePolicy = async (req, res) => {
             await currentPolicy.save();
         }
 
+        const validUserId = (req.user && require('mongoose').Types.ObjectId.isValid(req.user.id)) ? req.user.id : null;
+
         const newPolicy = new ShiftPolicy({
             ...payload,
             tenant: req.tenantId,
             shiftMasterId: shiftId,
             version: nextVersion,
             isCurrent: true,
-            createdBy: req.user ? req.user.id : null
+            createdBy: validUserId
         });
 
         await newPolicy.save();
@@ -234,7 +349,7 @@ exports.savePolicy = async (req, res) => {
                 entity: 'ShiftPolicy',
                 entityId: newPolicy._id,
                 action: 'POLICY_VERSION_CREATED',
-                performedBy: req.user.id,
+                performedBy: validUserId,
                 changes: { before: currentPolicy ? currentPolicy.toObject() : null, after: newPolicy.toObject() },
                 meta: { shiftId, version: nextVersion }
             });

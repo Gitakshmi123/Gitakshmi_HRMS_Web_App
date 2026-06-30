@@ -1,4 +1,4 @@
-// Restarted to apply AUTHZ_BYPASS and DEBUG_MODULE_ACCESS fixes.
+// Restarted to apply AUTHZ_BYPASS and file logging changes (V2).
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 
@@ -211,7 +211,7 @@ app.use((req, res, next) => {
         const start = Date.now();
         res.on('finish', () => {
             const duration = Date.now() - start;
-            // console.log(`[GLOBAL_API_LOG] ${req.method} ${req.path} | Status: ${res.statusCode} | Duration: ${duration}ms`);
+            console.log(`[GLOBAL_API_LOG] ${req.method} ${req.path} | Status: ${res.statusCode} | Duration: ${duration}ms`);
         });
     }
     next();
@@ -253,6 +253,8 @@ try {
     mongoose.model('Department', require('./models/Department'));
     mongoose.model('LeaveBalance', require('./models/LeaveBalance'));
     mongoose.model('LeavePolicy', require('./models/LeavePolicy'));
+    mongoose.model('HolidayGroup', require('./models/HolidayGroup'));
+    mongoose.model('LeaveType', require('./models/LeaveType'));
     mongoose.model('AuditLog', require('./models/AuditLog'));
     mongoose.model('BGVCase', require('./models/BGVCase'));
     mongoose.model('BGVCheck', require('./models/BGVCheck'));
@@ -308,6 +310,7 @@ const notificationRoutes = require('./routes/notification.routes');
 const commentRoutes = require('./routes/comment.routes');
 const entityRoutes = require('./routes/entity.routes');
 const holidayRoutes = require('./routes/holiday.routes');
+const holidayGroupRoutes = require('./routes/holidayGroup.routes');
 const attendanceRoutes = require('./routes/attendance.routes');
 const faceAttendanceRoutes = require('./routes/faceAttendance.routes');
 const locationRoutes = require('./routes/location.routes');
@@ -351,6 +354,7 @@ const musicRoutes = require('./routes/music.routes');
 const workflowRoutes = require('./routes/workflow.routes');
 const emailTemplateRoutes = require('./routes/emailTemplate.routes');
 const automationRoutes = require('./routes/automation.routes');
+const demoDataRoutes = require('./routes/demoData.routes');
 app.use((req, res, next) => {
     // console.log(`[ACCESS] ${req.method} ${req.originalUrl}`);
     next();
@@ -582,11 +586,22 @@ const recruitmentCheck = checkModuleAccess('recruitment');
 const activeEmployeeCheck = require('./middleware/requireActiveEmployee');
 const { checkPermission } = require('./middleware/rbac.middleware');
 
+/* ===============================
+   SWAGGER DOCUMENTATION
+================================ */
+const setupSwagger = require('./config/swagger.config');
+setupSwagger(app);
+
 // 0. Public Routes (UNPROTECTED)
 app.use('/api/public', publicRoutes);
 app.use('/api/public', require('./routes/publicCandidate.routes'));
 app.use('/api/public/careers', require('./routes/publicCareer.routes'));
 app.use('/api/public/offer', require('./routes/public.offer.routes'));
+app.use('/api/public/candidate-documents', require('./routes/publicCandidateDocument.routes'));
+// Alias used by EmployeeForm.jsx (isExternal mode): maps /candidate/document-upload/:token/*
+// to the same publicCandidateDocument router so no frontend URL changes are needed.
+// The router handles: GET reference-data/:token, PUT draft/:token, POST submit/:token, POST upload/:token
+app.use('/api/candidate/document-upload', require('./routes/publicCandidateDocument.routes'));
 
 // 1. Auth & System (Foundation)
 app.use('/api/auth', authRoutes);
@@ -605,7 +620,7 @@ app.use('/api/shift-assignment', shiftAssignmentRoutes);
 app.use('/api/offer-templates', offerTemplateRoutes);
 app.use('/api/social-media-enterprise', socialMediaEnterpriseRoutes);
 app.use('/api', realtimeSocialPostRoutes);
-app.use('/api/email-templates', emailTemplateRoutes);
+// email-templates route registered below with auth middleware (line 627)
 app.use('/api/automations', automationRoutes);
 app.use('/api/social-templates', socialTemplateRoutes);
 app.use('/api/music', musicRoutes);
@@ -623,6 +638,7 @@ app.use('/api/hierarchy', auth, require('./routes/hierarchy.routes'));
 app.use('/api/email-templates', auth, require('./routes/emailTemplate.routes'));
 app.use('/api/automations', auth, require('./routes/automation.routes'));
 app.use('/api/workflows', auth, workflowRoutes);
+app.use('/api/demo-data', demoDataRoutes);
 
 // 3. Attendance & Shifts (Order Specific routes first)
 app.use('/api/shift-master', auth, attendanceCheck, require('./routes/shiftMaster.routes'));
@@ -630,9 +646,15 @@ app.use('/api/attendance/shifts', auth, attendanceCheck, require('./routes/shift
 app.use('/api/shifts', auth, attendanceCheck, require('./routes/shift.routes'));
 app.use('/api/shift-master', shiftMasterRoutes);
 app.use('/api/shift-assignment', shiftAssignmentRoutes);
+app.use('/api/roster', auth, require('./routes/roster.routes'));
+app.use('/api/enterprise-roster', auth, require('./routes/enterpriseRoster.routes'));
+app.use('/api/swaps', auth, require('./routes/swap.routes'));
+app.use('/api/audit-logs', auth, require('./routes/auditLog.routes'));
+app.use('/api/shift-analytics', auth, require('./routes/shiftAnalytics.routes'));
 app.use('/api/attendance-policy', auth, attendanceCheck, attendancePolicyRoutes);
 app.use('/api/location', auth, attendanceCheck, locationRoutes);
 app.use('/api/holidays', auth, attendanceCheck, holidayRoutes);
+app.use('/api/holiday-groups', auth, attendanceCheck, holidayGroupRoutes);
 app.use('/api/face-attendance', auth, attendanceCheck, activeEmployeeCheck, faceAttendanceRoutes);
 app.use('/api/attendance', auth, attendanceCheck, activeEmployeeCheck, attendanceRoutes);
 
@@ -663,10 +685,12 @@ app.use('/api', auth, hrRoutes); // Mount general HR routes last within /api
 app.use('/api/admin', auth, recruitmentCheck, require('./routes/admin.hiring.routes'));
 app.use('/api/applications', auth, recruitmentCheck, require('./routes/applications.routes'));
 app.use('/api/recruitment', auth, recruitmentCheck, require('./routes/recruitment.workflow.routes'));
+app.use('/api/recruitment/candidate-documents', auth, recruitmentCheck, require('./routes/hr.candidateDocuments.routes'));
 app.use('/api/offer-templates', auth, recruitmentCheck, offerTemplateRoutes);
 app.use('/api/interviews', auth, recruitmentCheck, require('./routes/interview.routes'));
 app.use('/api/tracker', auth, recruitmentCheck, require('./routes/tracker.routes'));
 app.use('/api/requirements', auth, recruitmentCheck, requirementRoutes);
+app.use('/api/manpower-requisition', auth, require('./routes/manpowerRequisition.routes'));
 app.use('/api', auth, recruitmentCheck, require('./routes/feedback.routes'));
 app.use('/api/job-portal', require('./routes/jobPortal.routes'));
 app.use('/api/career', (req, res, next) => {
@@ -701,9 +725,21 @@ app.use(hrmsPrefix, auth, hrRoutes);
 app.use(hrmsPrefix + '/payroll', auth, payrollRoutes);
 app.use(hrmsPrefix + '/attendance', auth, attendanceRoutes);
 
+// ── DMS Integration ──────────────────────────────────────────────────
+// Sync employees from HRMS → DMS (bulk sync, single sync, status)
+app.use('/api/dms-sync', require('./routes/dmsSync.routes'));
+
+// Initialise nightly DMS employee sync cron job (2:00 AM IST)
+try {
+  const { initDmsNightlySyncJob } = require('./jobs/dmsNightlySync.job');
+  initDmsNightlySyncJob();
+} catch (cronErr) {
+  console.warn('[DMS-CRON] ⚠️  Failed to initialize nightly DMS sync job:', cronErr.message);
+}
+
 // Catch-all for API (404)
 app.use('/api', (req, res) => {
-    console.warn(`[404_API] ${req.method} ${req.originalUrl} - No route matched.`);
+    console.warn(`[404_API_CAUGHT] Method: ${req.method} URL: ${req.originalUrl} Headers:`, req.headers);
     res.status(404).json({ success: false, message: `Route ${req.originalUrl} not found on this server.` });
 });
 

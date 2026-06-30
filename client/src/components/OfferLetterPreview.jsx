@@ -136,14 +136,13 @@ const OfferLetterPreview = memo(
         // Perform Replacements
         Object.keys(replacements).forEach(key => {
           // Replace {{key}}, handling case where key already includes brackets or not
-          const searchKey = key.startsWith('{{') ? key : \`{{\${key}}}\`;
-          const regex = new RegExp(searchKey, 'g');
-          content = content.replace(regex, replacements[key] || '');
+          const searchKey = key.startsWith('{{') ? key : `{{${key}}}`;
+          content = content.split(searchKey).join(replacements[key] || '');
         });
 
         // Ensure content is wrapped if it's just raw HTML fragments
         if (!content.trim().startsWith('<div') && !content.trim().startsWith('<html')) {
-          content = \`<div class="p-8">\${content}</div>\`;
+          content = `<div class="p-8">${content}</div>`;
         }
 
         return content;

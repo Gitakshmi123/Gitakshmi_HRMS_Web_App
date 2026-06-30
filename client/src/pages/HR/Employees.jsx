@@ -55,6 +55,7 @@ export default function Employees() {
   const navigate = useNavigate();
   const location = useLocation();
   const [employees, setEmployees] = useState([]);
+  const [externalRecords, setExternalRecords] = useState([]);
   const [loading, setLoading] = useState(false);
   const [openUploadPopup, setOpenUploadPopup] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -104,6 +105,12 @@ export default function Employees() {
       }
 
       setEmployees([...draftEmployees, ...activeEmployees]);
+      try {
+        const externalRes = await api.get("/applications/external-records/list?limit=1000");
+        setExternalRecords(externalRes.data?.data || []);
+      } catch (err) {
+        console.log("[Employees] External records access limited or failed.");
+      }
     } catch (err) {
       console.error("[Employees] Unexpected load failure:", err);
     } finally {
@@ -215,8 +222,8 @@ export default function Employees() {
         e.joiningDate &&
         dayjs(e.joiningDate).isAfter(dayjs().subtract(30, "days")),
     ).length;
-    return { total, active, depts, newJoiners, drafts };
-  }, [employees]);
+    return { total, active, depts, newJoiners, drafts, external: externalRecords.length };
+  }, [employees, externalRecords]);
 
   const departmentStats = useMemo(() => {
     const deptMap = {};
@@ -276,7 +283,27 @@ export default function Employees() {
     return filteredEmployees.slice(start, start + pageSize);
   }, [filteredEmployees, currentPage, pageSize]);
 
-  const totalPages = Math.ceil(filteredEmployees.length / pageSize);
+  const filteredExternalRecords = useMemo(() => {
+    const q = searchTerm.toLowerCase();
+    return externalRecords.filter((record) => {
+      const text = [
+        record.applicantId?.name,
+        record.applicantId?.applicationId,
+        record.applicantId?.email,
+        record.jobId?.jobTitle,
+        record.status,
+      ].filter(Boolean).join(" ").toLowerCase();
+      return text.includes(q);
+    });
+  }, [externalRecords, searchTerm]);
+
+  const paginatedExternalRecords = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredExternalRecords.slice(start, start + pageSize);
+  }, [filteredExternalRecords, currentPage, pageSize]);
+
+  const activeRecordCount = employeeViewMode === "External Records" ? filteredExternalRecords.length : filteredEmployees.length;
+  const totalPages = Math.ceil(activeRecordCount / pageSize);
 
   const getDisplayName = (emp) => {
     if (!emp) return "";
@@ -307,6 +334,18 @@ export default function Employees() {
     navigate(`${basePath}/salary-structure/${emp._id}?type=employee`, {
       state: { employee: emp },
     });
+  };
+
+  const handleExternalAction = async (record, action) => {
+    const remarks = action === "approve" ? "" : window.prompt(action === "reject" ? "Reason for rejection:" : "Requested changes:");
+    if (remarks === null) return;
+    try {
+      await api.post(`/applications/external-records/${record._id}/${action === "changes" ? "request-changes" : action}`, { remarks });
+      showToast("success", "Updated", "External record updated successfully");
+      load();
+    } catch (err) {
+      showToast("error", "Action failed", err.response?.data?.message || "Unable to update external record");
+    }
   };
 
   const openJoiningModal = (emp) => {
@@ -535,17 +574,21 @@ export default function Employees() {
                 {selectedDepartment} ×
               </button>
             )}
-            {["all", "Employee", "Intern", "Active", "On Leave", "Inactive", "Draft"].map((f) => (
+            {["all", "Employee", "Intern", "Active", "On Leave", "Inactive", "Draft", "External Records"].map((f) => (
               <button
                 key={f}
                 type="button"
                 className={clsx(
-                  "h-10 shrink-0 rounded-xl px-5 text-xs font-semibold uppercase tracking-widest transition-all",
+                  "h-10 shrink-0 rounded-xl px-5 text-xs font-semibold uppercase tracking-widest transition-all whitespace-nowrap",
                   employeeViewMode === f
                     ? "bg-slate-900 text-white shadow-lg shadow-slate-200"
                     : "border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
                 )}
                 onClick={() => {
+                  if (f === "External Records") {
+                      navigate('/hr/external-records');
+                      return;
+                  }
                   setEmployeeViewMode(f);
                   setCurrentPage(1);
                 }}
@@ -606,13 +649,128 @@ export default function Employees() {
           {loading && (
             <div className="flex items-center justify-center py-20">
               <div className="text-slate-400 font-semibold text-sm animate-pulse">
-                Loading employees...
+                Loading records...
               </div>
             </div>
           )}
 
+          {!loading && employeeViewMode === "External Records" && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden overflow-x-auto custom-scrollbar">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-white border-b border-slate-100">
+                    <th className="px-6 py-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Photo</th>
+                    <th className="px-6 py-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Candidate Name</th>
+                    <th className="px-6 py-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Candidate ID</th>
+                    <th className="px-6 py-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Applied Position</th>
+                    <th className="px-6 py-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Completion %</th>
+                    <th className="px-6 py-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Submitted Date</th>
+                    <th className="px-6 py-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Status</th>
+                    <th className="px-6 py-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {paginatedExternalRecords.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="px-6 py-16 text-center text-sm font-bold uppercase tracking-widest text-slate-300">
+                        No external records found
+                      </td>
+                    </tr>
+                  ) : paginatedExternalRecords.map((record) => {
+                    const applicant = record.applicantId || {};
+                    return (
+                      <tr key={record._id} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-6 py-3">
+                          <div className="h-10 w-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-sm font-semibold text-slate-600 overflow-hidden">
+                            {record.rawEmployeePayload?.profilePic ? (
+                              <img
+                                src={String(record.rawEmployeePayload.profilePic).startsWith("http") ? record.rawEmployeePayload.profilePic : `${BACKEND_URL}${String(record.rawEmployeePayload.profilePic).startsWith("/") ? "" : "/"}${record.rawEmployeePayload.profilePic}`}
+                                alt=""
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              String(applicant.name || "?").charAt(0).toUpperCase()
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-3 whitespace-nowrap">
+                          <div className="text-sm font-medium text-slate-900">{applicant.name || "Candidate"}</div>
+                          <div className="mt-1 text-[10px] font-medium lowercase tracking-widest text-slate-400">{applicant.email || ""}</div>
+                        </td>
+                        <td className="px-6 py-3 whitespace-nowrap text-xs font-medium text-slate-500 tabular-nums uppercase tracking-widest">
+                          {applicant.applicationId || String(applicant._id || record.candidateId || "").slice(-8)}
+                        </td>
+                        <td className="px-6 py-3 whitespace-nowrap text-xs font-medium text-slate-700 uppercase tracking-widest">
+                          {record.jobId?.jobTitle || "--"}
+                        </td>
+                        <td className="px-6 py-3 whitespace-nowrap text-xs font-black text-slate-700">
+                          {record.completionPercentage || 0}%
+                        </td>
+                        <td className="px-6 py-3 whitespace-nowrap text-xs font-medium text-slate-500">
+                          {record.submittedAt ? dayjs(record.submittedAt).format("DD MMM YYYY") : "--"}
+                        </td>
+                        <td className="px-6 py-3 whitespace-nowrap">
+                          <span className={clsx(
+                            "inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-widest",
+                            record.status === "Approved" ? "text-emerald-600" :
+                            record.status === "Rejected" ? "text-rose-600" :
+                            record.status === "Submitted" ? "text-blue-600" : "text-amber-600"
+                          )}>
+                            <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
+                            {record.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-3 whitespace-nowrap text-right">
+                          <div className="inline-flex items-center justify-end gap-2">
+                            <button
+                              className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-all"
+                              title="View"
+                              onClick={() => {
+                                const payload = record.rawEmployeePayload || {};
+                                setQuickViewEmployee({
+                                  ...payload,
+                                  firstName: payload.firstName || applicant.name,
+                                  email: payload.email || applicant.email,
+                                  status: record.status,
+                                });
+                              }}
+                            >
+                              <Eye size={14} />
+                            </button>
+                            {record.status === "Submitted" && canEdit && (
+                              <>
+                                <button
+                                  className="h-8 px-3 inline-flex items-center justify-center rounded-lg bg-emerald-50 text-[10px] font-black uppercase tracking-widest text-emerald-700 hover:bg-emerald-100"
+                                  onClick={() => handleExternalAction(record, "approve")}
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  className="h-8 px-3 inline-flex items-center justify-center rounded-lg bg-rose-50 text-[10px] font-black uppercase tracking-widest text-rose-700 hover:bg-rose-100"
+                                  onClick={() => handleExternalAction(record, "reject")}
+                                >
+                                  Reject
+                                </button>
+                                <button
+                                  className="h-8 px-3 inline-flex items-center justify-center rounded-lg bg-amber-50 text-[10px] font-black uppercase tracking-widest text-amber-700 hover:bg-amber-100"
+                                  onClick={() => handleExternalAction(record, "changes")}
+                                >
+                                  Request Changes
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
           {/* Grid View */}
-          {!loading && viewMode === "grid" && (
+          {!loading && employeeViewMode !== "External Records" && viewMode === "grid" && (
             <div className="employee-grid">
             {paginatedEmployees.length === 0 ? (
               <div className="col-span-full flex flex-col items-center justify-center py-20 text-slate-300">
@@ -708,7 +866,7 @@ export default function Employees() {
           )}
 
           {/* List View */}
-          {!loading && viewMode === "list" && (
+          {!loading && employeeViewMode !== "External Records" && viewMode === "list" && (
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden overflow-x-auto custom-scrollbar">
             <table className="w-full text-left border-collapse">
               <thead>

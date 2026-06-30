@@ -10,6 +10,27 @@ import {
 import { formatDateDDMMYYYY, formatDateTimeDDMMYYYY } from '../../utils/dateUtils';
 import { Can } from '../../components/rbac/PermissionGate';
 
+// Helper to filter balances based on eligibility (e.g. Maternity / Paternity rules)
+const filterBalances = (balances, employee) => {
+    if (!Array.isArray(balances)) return [];
+    if (!employee) return balances;
+
+    const gender = String(employee.gender || '').trim().toLowerCase();
+    const maritalStatus = String(employee.maritalStatus || '').trim().toLowerCase();
+    const isMarried = ['married', 'मेरेड', 'मेरेડ', 'विवाहित', 'vivahit'].includes(maritalStatus);
+
+    return balances.filter(b => {
+        const lt = String(b.leaveType || '').toUpperCase();
+        if (lt === 'MATERNITY') {
+            return gender === 'female' && isMarried;
+        }
+        if (lt === 'PATERNITY') {
+            return gender === 'male' && isMarried;
+        }
+        return true;
+    });
+};
+
 // ─── Stat Card ─────────────────────────────────────────────────────────────────
 
 function StatCard({ label, value, icon, iconColor, iconBg }) {
@@ -31,12 +52,20 @@ function StatCard({ label, value, icon, iconColor, iconBg }) {
 }
 
 // ─── Status Chip ───────────────────────────────────────────────────────────────
-function StatusChip({ status }) {
+function StatusChip({ status, meta }) {
     const map = {
         Approved: 'text-emerald-600 bg-emerald-50 border-emerald-100',
         Rejected: 'text-rose-600 bg-rose-50 border-rose-100',
         Pending: 'text-amber-600 bg-amber-50 border-amber-100',
     };
+    if (meta?.earlyReturnRequest?.status === 'Pending') {
+        return (
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border text-purple-600 bg-purple-50 border-purple-100 animate-pulse">
+                <span className="w-1.5 h-1.5 rounded-full mr-1.5 bg-purple-500"></span>
+                Return Pending
+            </span>
+        );
+    }
     const style = map[status] || 'bg-slate-50 text-slate-500 border-slate-100';
     const label = status === 'Approved' ? 'Approved' : status === 'Pending' ? 'Pending' : 'Rejected';
     
@@ -64,7 +93,7 @@ function LeaveCard({ req, onViewReason, onAction, formatDateDDMMYYYY, formatDate
                         <div className="text-[11px] text-slate-400 font-bold uppercase tracking-widest">{req.leaveType}</div>
                     </div>
                 </div>
-                <StatusChip status={req.status} />
+                <StatusChip status={req.status} meta={req.meta} />
             </div>
 
             <div className="grid grid-cols-2 gap-3 py-3 border-y border-slate-100">
@@ -74,19 +103,65 @@ function LeaveCard({ req, onViewReason, onAction, formatDateDDMMYYYY, formatDate
                         <span className="flex items-center gap-1.5"><Calendar size={12} className="text-slate-400" />{formatDateDDMMYYYY(req.startDate)}</span>
                         <span className="flex items-center gap-1.5"><Calendar size={12} className="text-slate-400 opacity-0" />{formatDateDDMMYYYY(req.endDate)}</span>
                     </div>
-                    <div className="flex items-center gap-2 mt-1.5">
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                         <span className="text-[11px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">
                             {req.daysCount} {req.daysCount === 1 ? 'day' : 'days'}
                         </span>
-                        {req.isHalfDay && (
-                            <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100">
-                                Half
+                        {Array.isArray(req.employeeBalances) && filterBalances(req.employeeBalances, req.employee).map(b => (
+                            <span key={b.leaveType} className="text-[9px] font-black text-slate-505 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-150">
+                                {b.leaveType}: {b.available}
                             </span>
-                        )}
+                        ))}
+                        {req.isHalfDay && (() => {
+                            const custom = req.meta?.customHalfDays;
+                            if (custom && req.startDate !== req.endDate) {
+                                if (custom.firstDayHalf && custom.lastDayHalf) {
+                                    return (
+                                        <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100" title={`First Day: ${custom.firstDaySession}, Last Day: ${custom.lastDaySession}`}>
+                                            Half (Both Days)
+                                        </span>
+                                    );
+                                }
+                                if (custom.firstDayHalf) {
+                                    return (
+                                        <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100" title={`First Day: ${custom.firstDaySession}`}>
+                                            Half (First)
+                                        </span>
+                                    );
+                                }
+                                if (custom.lastDayHalf) {
+                                    return (
+                                        <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100" title={`Last Day: ${custom.lastDaySession}`}>
+                                            Half (Last)
+                                        </span>
+                                    );
+                                }
+                            }
+                            return (
+                                <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100" title={`${req.halfDaySession || 'Half Day'}${req.startDate !== req.endDate ? ` on ${req.halfDayTarget === 'End' ? 'Last Day' : 'First Day'}` : ''}`}>
+                                    Half {req.startDate !== req.endDate && `(${req.halfDayTarget === 'End' ? 'Last' : 'First'})`}
+                                </span>
+                            );
+                        })()}
                         {req.meta?.earlyReturn && (
                             <span className="text-[10px] font-black text-purple-600 uppercase tracking-widest bg-purple-50 px-2 py-0.5 rounded-md border border-purple-100" title={`Originally until ${req.meta.originalEndDate ? formatDateDDMMYYYY(req.meta.originalEndDate) : 'later'}`}>
                                 Reduced
                             </span>
+                        )}
+                        {req.meta?.earlyReturnRequest?.status === 'Pending' && (
+                            <span className="text-[10px] font-black text-purple-600 uppercase tracking-widest bg-purple-50 px-2 py-0.5 rounded-md border border-purple-100 animate-pulse" title={`Requested return date: ${req.meta.earlyReturnRequest.actualReturnDate ? formatDateDDMMYYYY(req.meta.earlyReturnRequest.actualReturnDate) : 'N/A'}`}>
+                                Early Return Pending
+                            </span>
+                        )}
+                        {req.medicalCertUrl && (
+                            <a
+                                href={req.medicalCertUrl.startsWith('http') ? req.medicalCertUrl : `${HRMS_API_ROOT}${req.medicalCertUrl}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-600 uppercase tracking-widest bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100 hover:bg-emerald-100 hover:text-emerald-700 transition-all"
+                            >
+                                <FileText size={12} /> Cert
+                            </a>
                         )}
                     </div>
                 </div>
@@ -94,7 +169,7 @@ function LeaveCard({ req, onViewReason, onAction, formatDateDDMMYYYY, formatDate
                     <div className="text-[11px] text-slate-400 font-bold uppercase tracking-widest mb-1">Reason</div>
                     <Can module="leave.requests" action="view">
                         <button
-                            onClick={() => onViewReason(req.reason)}
+                            onClick={() => onViewReason(req.meta?.earlyReturnRequest?.status === 'Pending' ? `Early Return Requested\nActual Return Date: ${req.meta.earlyReturnRequest.actualReturnDate ? formatDateDDMMYYYY(req.meta.earlyReturnRequest.actualReturnDate) : ''}\nReason: ${req.meta.earlyReturnRequest.reason || ''}\nComments: ${req.meta.earlyReturnRequest.comments || ''}` : req.reason)}
                             className="text-[11px] font-bold text-blue-600 hover:text-white hover:bg-blue-600 border border-blue-100 px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 active:scale-95"
                         >
                             <Eye size={12} /> View
@@ -103,7 +178,7 @@ function LeaveCard({ req, onViewReason, onAction, formatDateDDMMYYYY, formatDate
                 </div>
             </div>
 
-            {req.status === 'Pending' ? (
+            {req.status === 'Pending' || req.meta?.earlyReturnRequest?.status === 'Pending' ? (
                 <div className="flex gap-2 pt-1">
                     <Can module="leave.requests" action="edit">
                         <button
@@ -144,6 +219,8 @@ export default function LeaveApprovals({
     const [viewReason, setViewReason] = useState(null);
     const [actionModal, setActionModal] = useState(null);
     const [remark, setRemark] = useState('');
+    const [snapshot, setSnapshot] = useState(null);
+    const [snapshotLoading, setSnapshotLoading] = useState(false);
     
     // Partial Approval State
     const [approvalDates, setApprovalDates] = useState({
@@ -153,6 +230,37 @@ export default function LeaveApprovals({
         halfDayTarget: 'Start',
         halfDaySession: 'First Half'
     });
+
+    useEffect(() => {
+        if (!actionModal || !actionModal.req) {
+            setSnapshot(null);
+            return;
+        }
+        const fetchSnapshot = async () => {
+            setSnapshotLoading(true);
+            try {
+                const req = actionModal.req;
+                const employeeId = req.employee?._id || req.employee;
+                const startDate = req.startDate ? req.startDate.split('T')[0] : '';
+                const endDate = req.endDate ? req.endDate.split('T')[0] : '';
+                const res = await api.get('/employee/leaves/workforce-visibility', {
+                    params: {
+                        employeeId,
+                        startDate,
+                        endDate
+                    }
+                });
+                if (res.data?.success && res.data?.snapshot) {
+                    setSnapshot(res.data.snapshot);
+                }
+            } catch (err) {
+                console.error("Failed to fetch workforce snapshot for manager:", err);
+            } finally {
+                setSnapshotLoading(false);
+            }
+        };
+        fetchSnapshot();
+    }, [actionModal]);
 
     useEffect(() => {
         fetchRequests(pagination.page);
@@ -221,7 +329,7 @@ export default function LeaveApprovals({
         }
     };
 
-    const pending = requests.filter(r => r.status === 'Pending').length;
+    const pending = requests.filter(r => r.status === 'Pending' || r.meta?.earlyReturnRequest?.status === 'Pending').length;
     const approved = requests.filter(r => r.status === 'Approved').length;
 
     return (
@@ -261,6 +369,7 @@ export default function LeaveApprovals({
                             <tr className="bg-slate-50/50 border-b border-slate-100">
                                 <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Employee & ID</th>
                                 <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Leave Type</th>
+                                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Leave Balance</th>
                                 <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Duration</th>
                                 <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Days</th>
                                 <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Reason</th>
@@ -330,6 +439,19 @@ export default function LeaveApprovals({
                                             <span className="text-[11px] font-bold text-slate-600 uppercase tracking-tight">{req.leaveType}</span>
                                         </td>
                                         <td className="px-6 py-4">
+                                            <div className="flex flex-wrap gap-1 max-w-[240px]">
+                                                {Array.isArray(req.employeeBalances) && filterBalances(req.employeeBalances, req.employee).length > 0 ? (
+                                                    filterBalances(req.employeeBalances, req.employee).map(b => (
+                                                        <span key={b.leaveType} className="px-1.5 py-0.5 bg-slate-50 border border-slate-150 rounded text-[9px] text-slate-500 font-bold whitespace-nowrap">
+                                                            {b.leaveType}: <span className="font-extrabold text-slate-800">{b.available}</span>
+                                                        </span>
+                                                    ))
+                                                ) : (
+                                                    <span className="text-[10px] text-slate-400 font-bold">—</span>
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4">
                                             <div className="flex items-center gap-2 text-[12px] font-bold text-slate-700 tracking-tight">
                                                 <Calendar size={13} className="text-slate-400" />
                                                 <span>{formatDateDDMMYYYY(req.startDate)}</span>
@@ -342,17 +464,54 @@ export default function LeaveApprovals({
                                                 <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-2.5 py-1 rounded-md border border-blue-100 shadow-sm shadow-blue-500/5 min-w-[50px]">
                                                     {req.daysCount} {req.daysCount === 1 ? 'day' : 'days'}
                                                 </span>
-                                                {req.isHalfDay && (
-                                                    <span className="text-[8px] font-black text-amber-600 uppercase tracking-widest">
-                                                        Half Day
-                                                    </span>
+                                                {req.isHalfDay && (() => {
+                                                     const custom = req.meta?.customHalfDays;
+                                                     if (custom && req.startDate !== req.endDate) {
+                                                         if (custom.firstDayHalf && custom.lastDayHalf) {
+                                                             return (
+                                                                 <span className="text-[8px] font-black text-amber-600 uppercase tracking-widest" title={`First Day: ${custom.firstDaySession}, Last Day: ${custom.lastDaySession}`}>
+                                                                     Half (Both Days)
+                                                                 </span>
+                                                             );
+                                                         }
+                                                         if (custom.firstDayHalf) {
+                                                             return (
+                                                                 <span className="text-[8px] font-black text-amber-600 uppercase tracking-widest" title={`First Day: ${custom.firstDaySession}`}>
+                                                                     Half (First)
+                                                                 </span>
+                                                             );
+                                                         }
+                                                         if (custom.lastDayHalf) {
+                                                             return (
+                                                                 <span className="text-[8px] font-black text-amber-600 uppercase tracking-widest" title={`Last Day: ${custom.lastDaySession}`}>
+                                                                     Half (Last)
+                                                                 </span>
+                                                             );
+                                                         }
+                                                     }
+                                                     return (
+                                                         <span className="text-[8px] font-black text-amber-600 uppercase tracking-widest" title={`${req.halfDaySession || 'Half Day'}${req.startDate !== req.endDate ? ` on ${req.halfDayTarget === 'End' ? 'Last Day' : 'First Day'}` : ''}`}>
+                                                             Half {req.startDate !== req.endDate && `(${req.halfDayTarget === 'End' ? 'Last' : 'First'})`}
+                                                         </span>
+                                                     );
+                                                 })()}
+                                                {req.medicalCertUrl && (
+                                                    <a 
+                                                        href={req.medicalCertUrl.startsWith('http') ? req.medicalCertUrl : `${HRMS_API_ROOT}${req.medicalCertUrl}`} 
+                                                        target="_blank" 
+                                                        rel="noopener noreferrer"
+                                                        className="inline-flex items-center gap-1 mt-1 text-[9px] font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-700 px-2 py-0.5 rounded-md border border-emerald-100 transition-all select-none active:scale-95 shadow-sm"
+                                                        title="Click to view medical certificate"
+                                                    >
+                                                        <FileText size={10} /> Cert
+                                                    </a>
                                                 )}
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 text-center">
                                             <Can module="leave.requests" action="view">
                                                 <button
-                                                    onClick={() => setViewReason(req.reason)}
+                                                    onClick={() => setViewReason(req.meta?.earlyReturnRequest?.status === 'Pending' ? `Early Return Requested\nActual Return Date: ${req.meta.earlyReturnRequest.actualReturnDate ? formatDateDDMMYYYY(req.meta.earlyReturnRequest.actualReturnDate) : ''}\nReason: ${req.meta.earlyReturnRequest.reason || ''}\nComments: ${req.meta.earlyReturnRequest.comments || ''}` : req.reason)}
                                                     className="w-8 h-8 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all flex items-center justify-center mx-auto border border-transparent hover:border-blue-100"
                                                     title="View Reason"
                                                 >
@@ -361,11 +520,11 @@ export default function LeaveApprovals({
                                             </Can>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <StatusChip status={req.status} />
+                                            <StatusChip status={req.status} meta={req.meta} />
                                         </td>
                                         <td className="px-6 py-4">
                                             <div className="flex items-center justify-end gap-2">
-                                                {req.status === 'Pending' ? (
+                                                {req.status === 'Pending' || req.meta?.earlyReturnRequest?.status === 'Pending' ? (
                                                     <>
                                                         <Can module="leave.requests" action="edit">
                                                             <button
@@ -459,7 +618,7 @@ export default function LeaveApprovals({
                     <div className="relative bg-white w-full max-w-md rounded-3xl shadow-2xl border border-slate-100 p-5 animate-in zoom-in-95 duration-200 max-h-[95vh] overflow-y-auto">
 
                         {/* Partial Approval Controls */}
-                        {actionModal.type === 'approve' && (
+                        {actionModal.type === 'approve' && actionModal.req?.meta?.earlyReturnRequest?.status !== 'Pending' && (
                             <div className="bg-slate-50/50 border border-slate-100 rounded-2xl p-5 mb-6 space-y-4">
                                 <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest border-b border-blue-100 pb-2 mb-3 flex items-center gap-2">
                                     <Calendar size={12} /> Approved Duration Override
@@ -497,33 +656,137 @@ export default function LeaveApprovals({
                                     </div>
                                 </div>
 
-                                    {approvalDates.isHalfDay && (
-                                        <div className="grid grid-cols-2 gap-4 animate-in slide-in-from-top-2 duration-300">
-                                            <div className="space-y-1.5">
-                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Target</label>
-                                                <select 
-                                                    value={approvalDates.halfDayTarget}
-                                                    onChange={e => setApprovalDates({ ...approvalDates, halfDayTarget: e.target.value })}
-                                                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:border-blue-500 transition"
-                                                >
-                                                    <option value="Start">Start Date</option>
-                                                    <option value="End">End Date</option>
-                                                </select>
-                                            </div>
-                                            <div className="space-y-1.5">
-                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Session</label>
-                                                <select 
-                                                    value={approvalDates.halfDaySession}
-                                                    onChange={e => setApprovalDates({ ...approvalDates, halfDaySession: e.target.value })}
-                                                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:border-blue-500 transition"
-                                                >
-                                                    <option value="First Half">First Half</option>
-                                                    <option value="Second Half">Second Half</option>
-                                                </select>
-                                            </div>
+                                {approvalDates.isHalfDay && (
+                                    <div className="grid grid-cols-2 gap-4 animate-in slide-in-from-top-2 duration-300">
+                                        <div className="space-y-1.5">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Target</label>
+                                            <select 
+                                                value={approvalDates.halfDayTarget}
+                                                onChange={e => setApprovalDates({ ...approvalDates, halfDayTarget: e.target.value })}
+                                                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:border-blue-500 transition"
+                                            >
+                                                <option value="Start">Start Date</option>
+                                                <option value="End">End Date</option>
+                                            </select>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Session</label>
+                                            <select 
+                                                value={approvalDates.halfDaySession}
+                                                onChange={e => setApprovalDates({ ...approvalDates, halfDaySession: e.target.value })}
+                                                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:border-blue-500 transition"
+                                            >
+                                                <option value="First Half">First Half</option>
+                                                <option value="Second Half">Second Half</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {actionModal.type === 'approve' && actionModal.req?.meta?.earlyReturnRequest?.status === 'Pending' && (
+                            <div className="bg-purple-50 border border-purple-100 rounded-2xl p-5 mb-6 space-y-3">
+                                <p className="text-[10px] font-black text-purple-600 uppercase tracking-widest border-b border-purple-100 pb-2 mb-2 flex items-center gap-2">
+                                    <Calendar size={12} /> Early Return Request Details
+                                </p>
+                                <div className="text-xs space-y-2">
+                                    <div>
+                                        <span className="font-bold text-slate-500 uppercase tracking-wider text-[9px] block">Actual Return Date</span>
+                                        <span className="text-slate-800 font-bold">{formatDateDDMMYYYY(actionModal.req.meta.earlyReturnRequest.actualReturnDate)}</span>
+                                    </div>
+                                    <div>
+                                        <span className="font-bold text-slate-500 uppercase tracking-wider text-[9px] block">Reason</span>
+                                        <span className="text-slate-800 font-semibold">{actionModal.req.meta.earlyReturnRequest.reason}</span>
+                                    </div>
+                                    {actionModal.req.meta.earlyReturnRequest.comments && (
+                                        <div>
+                                            <span className="font-bold text-slate-500 uppercase tracking-wider text-[9px] block">Comments</span>
+                                            <span className="text-slate-800 font-normal italic">{actionModal.req.meta.earlyReturnRequest.comments}</span>
                                         </div>
                                     )}
                                 </div>
+                            </div>
+                        )}
+
+                        {/* Workforce Availability Snapshot */}
+                        {actionModal.req && (
+                            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-6 space-y-4 text-left">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-105 pb-2 flex items-center justify-between">
+                                    <span>Workforce Impact Details</span>
+                                    {snapshotLoading ? (
+                                        <span className="text-[8px] text-slate-400 animate-pulse">Analyzing...</span>
+                                    ) : (
+                                        <span className="text-[8px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded font-black">Live Info</span>
+                                    )}
+                                </p>
+
+                                {snapshotLoading ? (
+                                    <div className="py-4 text-center">
+                                        <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Loading availability...</p>
+                                    </div>
+                                ) : snapshot ? (
+                                    <div className="space-y-3">
+                                        {/* Headcounts */}
+                                        <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                                            <div className="bg-white p-2 rounded-xl border border-slate-100">
+                                                <span className="text-[8px] font-bold text-slate-400 block mb-0.5">Team Strength</span>
+                                                <span className="font-semibold text-slate-700">{snapshot.teamStrength}</span>
+                                            </div>
+                                            <div className="bg-white p-2 rounded-xl border border-slate-105">
+                                                <span className="text-[8px] font-bold text-slate-400 block mb-0.5">Overlap Leaves</span>
+                                                <span className="font-semibold text-slate-700">
+                                                    {snapshot.alreadyOnLeave.length + snapshot.pendingLeaves.length}
+                                                </span>
+                                            </div>
+                                            <div className={`p-2 rounded-xl border ${snapshot.available <= 1 ? "bg-rose-50/20 border-rose-100" : "bg-emerald-50/20 border-emerald-100"}`}>
+                                                <span className="text-[8px] font-bold text-slate-400 block mb-0.5">Available Headcount</span>
+                                                <span className={`font-bold ${snapshot.available <= 1 ? "text-rose-600" : "text-emerald-600"}`}>
+                                                    {snapshot.available}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Critical alert */}
+                                        {snapshot.isCritical && (
+                                            <div className="flex items-start gap-2 bg-rose-50 p-3 rounded-xl border border-rose-100 text-left">
+                                                <AlertCircle size={14} className="text-rose-600 shrink-0 mt-0.5" />
+                                                <div>
+                                                    <p className="text-[10px] font-black text-rose-700 uppercase tracking-wide leading-none">Critical Resource Alert</p>
+                                                    <p className="text-[9px] text-rose-600 font-medium mt-1 leading-normal">
+                                                        This employee is the only active team member with their designation in the department.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Overlap details */}
+                                        {(snapshot.alreadyOnLeave.length > 0 || snapshot.pendingLeaves.length > 0) && (
+                                            <div className="flex items-start gap-2 bg-amber-50 p-3 rounded-xl border border-amber-100 text-left">
+                                                <AlertCircle size={14} className="text-amber-600 shrink-0 mt-0.5" />
+                                                <div>
+                                                    <p className="text-[10px] font-black text-amber-700 uppercase tracking-wide leading-none font-inter">Overlap Warnings</p>
+                                                    <div className="text-[9px] text-amber-750 font-medium mt-2 leading-relaxed">
+                                                        {snapshot.alreadyOnLeave.length > 0 && (
+                                                            <div>
+                                                                Approved: <span className="font-semibold">{snapshot.alreadyOnLeave.map(l => `${l.employee?.firstName || ''} ${l.employee?.lastName || ''}`.trim()).join(', ')}</span>
+                                                            </div>
+                                                        )}
+                                                        {snapshot.pendingLeaves.length > 0 && (
+                                                            <div className="mt-1">
+                                                                Pending: <span className="font-semibold">{snapshot.pendingLeaves.map(l => `${l.employee?.firstName || ''} ${l.employee?.lastName || ''}`.trim()).join(', ')}</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <p className="text-[10px] text-slate-400 font-semibold text-center py-2">No availability data retrieved.</p>
+                                )}
+                            </div>
                         )}
 
                         <div className="space-y-2 mb-8">

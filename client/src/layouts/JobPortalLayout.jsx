@@ -4,20 +4,20 @@ import { useJobPortalAuth } from '../context/JobPortalAuthContext';
 import {
   LogOut, User, Briefcase, FileText,
   LayoutDashboard, ChevronDown,
-  Bell, ArrowLeft, Shield
+  Bell, ArrowLeft, Shield, UploadCloud
 } from 'lucide-react';
-import { getTenantId } from '../utils/auth';
+import { getCandidateTenantId } from '../utils/auth';
 
 export default function JobPortalLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { candidate, logoutCandidate } = useJobPortalAuth();
   const [profileOpen, setProfileOpen] = useState(false);
-  const tenantId = getTenantId();
+  const tenantId = getCandidateTenantId();
   const isMainDashboard = location.pathname === '/candidate/dashboard';
 
   const handleLogout = () => {
-    const tid = candidate?.tenantId || localStorage.getItem('tenantId');
+    const tid = candidate?.tenantId || getCandidateTenantId();
     logoutCandidate();
     if (tid) {
       navigate(`/jobs/${tid}`);
@@ -31,7 +31,7 @@ export default function JobPortalLayout() {
       const path = window.location.pathname;
       if (path.includes('/apply-job/') || path.includes('/application/')) {
         event.preventDefault();
-        const tid = tenantId || getTenantId();
+        const tid = tenantId || getCandidateTenantId();
         if (tid) {
           navigate(`/jobs/${tid}`, { replace: true });
         } else {
@@ -48,11 +48,12 @@ export default function JobPortalLayout() {
     { path: '/candidate/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/candidate/open-positions', icon: Briefcase, label: 'Open Positions' },
     { path: '/candidate/applications', icon: FileText, label: 'My Applications' },
+    { path: '/candidate/upload-documents', icon: UploadCloud, label: 'Upload Documents' },
     { path: '/candidate/profile', icon: User, label: 'My Profile' }
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans flex flex-col selection:bg-indigo-100 selection:text-indigo-600">
+    <div className="h-screen overflow-hidden bg-slate-50 font-sans flex flex-col selection:bg-indigo-100 selection:text-indigo-600">
       {/* LUXURY TOP HEADER */}
       <header className="h-16 bg-white/80 backdrop-blur-xl border-b border-gray-100 flex items-center justify-between px-6 lg:px-10 sticky top-0 z-50 shadow-sm">
         <div className="flex items-center gap-6 min-w-0">

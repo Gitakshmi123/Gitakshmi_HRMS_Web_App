@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { useJobPortalAuth } from '../../context/JobPortalAuthContext';
 import api, { resolveTenantLogoUrl } from '../../utils/api';
-import { setCompany, getCompany } from '../../utils/auth';
+import { setCandidateCompany, getCandidateCompany } from '../../utils/auth';
 import { companyMatchesPortalIdentifier, getJobPortalIdentifier } from '../../utils/jobPortalContext';
 import { ArrowLeft, ArrowRight, Briefcase, Lock, Mail, ShieldCheck, CheckCircle2, KeyRound } from 'lucide-react';
 import Loader from '../../components/common/Loader';
@@ -21,7 +21,7 @@ export default function CandidateLogin() {
     const [loading, setLoading] = useState(false);
     const [pageLoading, setPageLoading] = useState(true);
     const [logoUrl, setLogoUrl] = useState(() => {
-        const stored = getCompany();
+        const stored = getCandidateCompany();
         return stored ? resolveTenantLogoUrl(stored) : null;
     });
 
@@ -34,6 +34,7 @@ export default function CandidateLogin() {
     const [forgotLoading, setForgotLoading] = useState(false);
     const [forgotError, setForgotError] = useState('');
     const [forgotSuccess, setForgotSuccess] = useState('');
+    const [forgotDebugOtp, setForgotDebugOtp] = useState('');
 
     useEffect(() => {
         if (!isInitialized) return;
@@ -52,7 +53,7 @@ export default function CandidateLogin() {
 
             setPageLoading(true);
             try {
-                let companyInfo = getCompany();
+                let companyInfo = getCandidateCompany();
 
                 if (!companyMatchesPortalIdentifier(companyInfo, portalIdentifier)) {
                     const res = await api.get(`/public/tenant/${encodeURIComponent(portalIdentifier)}`);
@@ -62,7 +63,7 @@ export default function CandidateLogin() {
                             tenantId: portalIdentifier,
                             code: res.data.code || companyInfo?.code || '',
                         };
-                        setCompany(companyInfo);
+                        setCandidateCompany(companyInfo);
                     }
                 }
 
@@ -118,6 +119,7 @@ export default function CandidateLogin() {
         e.preventDefault();
         setForgotError('');
         setForgotSuccess('');
+        setForgotDebugOtp('');
         
         const finalPortalIdentifier = portalIdentifier || getJobPortalIdentifier(searchParams);
         if (!finalPortalIdentifier) {
@@ -134,6 +136,9 @@ export default function CandidateLogin() {
             if (res.data.success) {
                 setForgotSuccess(res.data.message || 'Verification code sent to your email.');
                 setForgotStep(2);
+                if (res.data?.debugOtp) {
+                    setForgotDebugOtp(res.data.debugOtp);
+                }
             }
         } catch (err) {
             setForgotError(err.response?.data?.error || err.message || 'Failed to send verification code.');
@@ -171,6 +176,7 @@ export default function CandidateLogin() {
                     setNewPassword('');
                     setForgotEmail('');
                     setForgotSuccess('');
+                    setForgotDebugOtp('');
                 }, 3000);
             }
         } catch (err) {
@@ -258,6 +264,11 @@ export default function CandidateLogin() {
                                     <div className="bg-rose-50 border border-rose-100 p-3 rounded-xl flex items-center gap-2 text-rose-600 text-[11px] font-bold animate-in fade-in slide-in-from-top-2">
                                         <ShieldCheck className="w-4 h-4 flex-shrink-0" />
                                         {forgotError}
+                                    </div>
+                                )}
+                                {forgotDebugOtp && (
+                                    <div className="bg-amber-50 border border-amber-100 p-3 rounded-2xl text-amber-700 text-xs font-bold text-center mb-4">
+                                        [DEV ONLY] OTP Code: <span className="text-sm font-extrabold select-all tracking-wider ml-1">{forgotDebugOtp}</span>
                                     </div>
                                 )}
                                 {forgotSuccess && (

@@ -273,3 +273,6 @@ exports.withdrawApplication = async (req, res) => {
         res.status(500).json({ success: false, message: 'Failed to withdraw application', error: err.message });
     }
 };
+
+
+exports.submitApplicationProfile = async (req, res) => { try { const { id: candidateId } = req.candidate; const { id: applicationId } = req.params; const Applicant = req.tenantDB.model('Applicant'); const app = await Applicant.findOne({ _id: applicationId, candidateId }); if (!app) return res.status(404).json({success: false, message: 'Application not found'}); app.customData = { ...app.customData, employeeData: req.body }; app.status = 'Profile Submitted'; await app.save(); res.json({success: true, message: 'Profile submitted successfully', application: app}); } catch (err) { res.status(500).json({success: false, message: err.message}); } };

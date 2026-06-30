@@ -26,14 +26,22 @@ const companyIdConfig = require('./companyIdConfig.controller');
 function getModels(req) {
     if (!req.tenantDB) throw new Error("Tenant database connection not available");
     const db = req.tenantDB;
+    
+    const safeGetModel = (modelName, modelPath) => {
+        return db.models[modelName] || db.model(modelName, require(`../models/${modelPath || modelName}`));
+    };
+
     return {
-        Applicant: db.model("Applicant"),
-        SalaryTemplate: db.model("SalaryTemplate"),
-        CompanyProfile: db.model("CompanyProfile"),
-        TrackerCandidate: db.model("TrackerCandidate"),
-        CandidateStatusLog: db.model("CandidateStatusLog"),
-        Requirement: db.model("Requirement"),
-        Employee: db.model("Employee")
+        Applicant: safeGetModel("Applicant"),
+        SalaryTemplate: safeGetModel("SalaryTemplate"),
+        CompanyProfile: safeGetModel("CompanyProfile"),
+        TrackerCandidate: safeGetModel("TrackerCandidate"),
+        CandidateStatusLog: safeGetModel("CandidateStatusLog"),
+        Requirement: safeGetModel("Requirement"),
+        Employee: safeGetModel("Employee"),
+        CandidateDocumentRequest: safeGetModel("CandidateDocumentRequest"),
+        AuditLog: safeGetModel("AuditLog"),
+        Notification: safeGetModel("Notification")
     };
 }
 
@@ -1058,3 +1066,262 @@ exports.rescoreAllApplicants = async (req, res) => {
     }
 };
 
+
+
+exports.requestDocuments = async (req, res) => {
+    try {
+        const crypto = require('crypto');
+        const { Applicant, CandidateDocumentRequest, Notification, AuditLog, Candidate } = getModels(req);
+        const app = await Applicant.findById(req.params.id).populate('requirementId');
+        if (!app) return res.status(404).json({ success: false, message: 'Application not found' });
+
+        const tenantId = req.tenantId || req.user?.tenantId;
+        if (!app.candidateId) {
+            let candidateDoc = await Candidate.findOne({ email: app.email.toLowerCase().trim(), tenant: tenantId });
+            if (!candidateDoc) {
+                const companyIdConfig = require('./companyIdConfig.controller');
+                const bcrypt = require('bcryptjs');
+                const candIdResult = await companyIdConfig.generateIdInternal({
+                    tenantId,
+                    entityType: 'CANDIDATE',
+                    increment: true
+                });
+                const hashedPassword = await bcrypt.hash(crypto.randomBytes(16).toString('hex'), 10);
+                candidateDoc = new Candidate({
+                    tenant: tenantId,
+                    candidateId: candIdResult.id,
+                    name: app.name,
+                    email: app.email.toLowerCase().trim(),
+                    password: hashedPassword,
+                    mobile: app.mobile || ''
+                });
+                await candidateDoc.save();
+            }
+            app.candidateId = candidateDoc._id;
+            await app.save();
+        }
+
+        const stage = String(app.currentStage?.stageName || '').trim().toLowerCase();
+        const status = String(app.status || '').trim().toLowerCase();
+        const terminalStatuses = new Set(['finalized', 'selected', 'fully signed', 'offer issued', 'offer accepted – awaiting company approval']);
+        
+        console.log(`[REQUEST_DOCS] Applicant: ${app.name}, ID: ${app._id}, Stage: '${stage}', Status: '${status}'`);
+        
+        if (!terminalStatuses.has(stage) && !terminalStatuses.has(status)) {
+            console.log(`[REQUEST_DOCS] Failed check. Stage '${stage}' and Status '${status}' are not in terminalStatuses.`);
+            return res.status(400).json({
+                success: false,
+                message: 'Documents can be requested only after candidate is finalized.'
+            });
+        }
+
+        const rawToken = `${tenantId}_${crypto.randomBytes(24).toString('hex')}`;
+        const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+        const expiresAt = dayjs().add(Number(process.env.CANDIDATE_DOCUMENT_TOKEN_DAYS || 7), 'day').toDate();
+
+        const docRequest = await CandidateDocumentRequest.findOneAndUpdate(
+            { applicantId: app._id, status: { $in: ['Pending', 'Submitted', 'Rejected'] } },
+            {
+                $set: {
+                    tenant: tenantId,
+                    candidateId: app.candidateId,
+                    applicantId: app._id,
+                    jobId: app.requirementId?._id || app.requirementId,
+                    token: tokenHash,
+                    status: 'Pending',
+                    sentBy: req.user?._id || null,
+                    sentAt: new Date(),
+                    submittedAt: null,
+                    approvedAt: null,
+                    rejectedAt: null,
+                    expiresAt,
+                    remarks: req.body?.remarks || ''
+                }
+            },
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
+
+        const frontendBase = String(process.env.FRONTEND_URL || req.headers.origin || '').replace(/\/+$/, '');
+        const uploadPath = `/candidate/document-upload/${rawToken}`;
+        const completeUrl = `${frontendBase || ''}${uploadPath}?tenantId=${tenantId}`;
+
+        try {
+            await EmailService.sendEmail(
+                app.email,
+                'Complete Your Employment Profile',
+                `
+                    <p>Congratulations.</p>
+                    <p>Please complete your profile and upload all required documents.</p>
+                    <p><a href="${completeUrl}" style="display:inline-block;padding:12px 18px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:700;">Complete Profile</a></p>
+                    <p>This secure link expires on ${dayjs(expiresAt).format('DD MMM YYYY, hh:mm A')}.</p>
+                `,
+                [],
+                tenantId
+            );
+        } catch (emailErr) {
+            console.warn('[DOCUMENT_REQUEST_EMAIL] failed:', emailErr.message);
+        }
+
+        try {
+            await Notification.create({
+                tenant: tenantId,
+                receiverId: app.candidateId,
+                receiverRole: 'candidate',
+                entityType: 'CandidateDocumentRequest',
+                entityId: docRequest._id,
+                title: 'Complete Your Employment Profile',
+                message: 'Please complete your profile and upload all required documents.'
+            });
+        } catch (notifyErr) {
+            console.warn('[DOCUMENT_REQUEST_NOTIFICATION] failed:', notifyErr.message);
+        }
+
+        app.status = 'Document Requested';
+        if (!app.timeline) app.timeline = [];
+        app.timeline.push({
+            status: 'Document Request Sent',
+            message: 'Candidate was asked to complete employment profile and upload documents.',
+            updatedBy: req.user?.name || req.user?.email || 'HR',
+            timestamp: new Date()
+        });
+        await app.save();
+
+        try {
+            await AuditLog.create({
+                tenant: tenantId,
+                entity: 'CandidateDocumentRequest',
+                entityId: docRequest._id,
+                action: 'Document Request Sent',
+                performedBy: req.user?._id || null,
+                changes: { before: null, after: docRequest.toObject() },
+                meta: {
+                    module: 'Hiring',
+                    candidateId: app.candidateId,
+                    applicantId: app._id,
+                    jobId: app.requirementId?._id || app.requirementId,
+                    ipAddress: req.ip,
+                    date: new Date()
+                }
+            });
+        } catch (auditErr) {
+            console.warn('[DOCUMENT_REQUEST_AUDIT] failed:', auditErr.message);
+        }
+
+        res.json({
+            success: true,
+            message: 'Documents requested successfully',
+            application: app,
+            documentRequest: docRequest,
+            uploadPath,
+            expiresAt
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+exports.approveProfile = async (req, res) => { 
+    try { 
+        const ExternalEmployeeRecord = req.tenantDB.models.ExternalEmployeeRecord || req.tenantDB.model('ExternalEmployeeRecord', require('../models/ExternalEmployeeRecord'));
+        const externalRecord = await ExternalEmployeeRecord.findOne({ applicantId: req.params.id, status: 'Submitted' });
+        if (externalRecord) {
+            req.params.id = externalRecord._id;
+            return require('./externalEmployeeRecord.controller').approve(req, res);
+        }
+
+        const Applicant = req.tenantDB.model('Applicant'); 
+        const app = await Applicant.findById(req.params.id); 
+        if (!app) return res.status(404).json({success: false, message: 'Application not found'}); 
+        app.status = 'Document Verified'; 
+        if (!app.timeline) app.timeline = [];
+        app.timeline.push({
+            status: 'Document Verified',
+            message: 'HR has approved your profile and documents.',
+            updatedBy: req.user?.name || "HR",
+            timestamp: new Date()
+        });
+        await app.save(); 
+        res.json({success: true, message: 'Profile approved successfully', application: app}); 
+    } catch (err) { 
+        res.status(500).json({success: false, message: err.message}); 
+    } 
+};
+
+exports.requestReupload = async (req, res) => { 
+    try { 
+        const Applicant = req.tenantDB.model('Applicant'); 
+        const app = await Applicant.findById(req.params.id); 
+        if (!app) return res.status(404).json({success: false, message: 'Application not found'}); 
+        const { reason } = req.body;
+        app.status = 'Re-upload Required'; 
+        app.rejectionReason = reason;
+        if (!app.timeline) app.timeline = [];
+        app.timeline.push({
+            status: 'Re-upload Required',
+            message: `HR requested document re-upload. Reason: ${reason || 'Not specified'}`,
+            updatedBy: req.user?.name || "HR",
+            timestamp: new Date()
+        });
+        await app.save(); 
+        res.json({success: true, message: 'Re-upload requested successfully', application: app}); 
+    } catch (err) { 
+        res.status(500).json({success: false, message: err.message}); 
+    } 
+};
+
+exports.convertToEmployee = async (req, res) => {
+    try {
+        const { Applicant, Employee } = getModels(req);
+        const app = await Applicant.findById(req.params.id);
+        if (!app) return res.status(404).json({ success: false, message: 'Application not found' });
+
+        if (String(app.joiningLetterStatus || '').toUpperCase() !== 'SIGNED') {
+            return res.status(400).json({ success: false, message: 'Joining must be signed before employee creation.' });
+        }
+
+        if (!app.employeeId) {
+            return res.status(400).json({ success: false, message: 'Candidate Profile Not Approved' });
+        }
+
+        const draftEmployee = await Employee.findOne({ _id: app.employeeId, tenant: req.tenantId });
+        if (!draftEmployee) {
+            return res.status(404).json({ success: false, message: 'Draft employee not found.' });
+        }
+        if (String(draftEmployee.status || '').toLowerCase() !== 'draft') {
+            return res.status(400).json({ success: false, message: 'Candidate already converted to employee.' });
+        }
+
+        const count = await Employee.countDocuments({ tenant: req.tenantId, status: { $ne: 'Draft' } });
+        if (!draftEmployee.employeeId || String(draftEmployee.employeeId).startsWith('DRFT-')) {
+            const employeeCode = `EMP-${Math.floor(Math.random() * 10000)}-${count + 1}`;
+            draftEmployee.employeeId = employeeCode;
+            draftEmployee.employeeCode = employeeCode;
+        }
+        draftEmployee.status = 'Active';
+        draftEmployee.isActive = true;
+        draftEmployee.joiningDate = draftEmployee.joiningDate || app.joiningDate || new Date();
+        draftEmployee.meta = {
+            ...(draftEmployee.meta || {}),
+            hiringConversionStatus: 'ACTIVE_EMPLOYEE',
+            convertedFromApplicantId: app._id,
+            convertedAt: new Date()
+        };
+        await draftEmployee.save();
+
+        app.status = 'Hired';
+        app.isOnboarded = true;
+        if (!app.timeline) app.timeline = [];
+        app.timeline.push({
+            status: 'Employee Created',
+            message: 'Draft employee activated after signed joining letter.',
+            updatedBy: req.user?.name || "System",
+            timestamp: new Date()
+        });
+
+        await app.save();
+
+        res.json({ success: true, message: 'Candidate successfully converted to Employee.', employee: draftEmployee });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+};

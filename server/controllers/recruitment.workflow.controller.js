@@ -531,7 +531,7 @@ exports.createOffer = async (req, res) => {
         const { applicationId } = req.params;
         const offerData = req.body;
 
-        const { Application, Offer, SalaryStructure, Grade } = getModels(db);
+        const { Application, Offer, SalaryStructure, Grade, Employee } = getModels(db);
 
         // ─────────────────────────────────────────────────────────────────
         // VALIDATION 1: Check application
@@ -555,6 +555,24 @@ exports.createOffer = async (req, res) => {
                 success: false,
                 message: `Cannot create offer. Status: ${application.status}, Existing offer: ${!!application.offerId}`,
                 code: 'CANNOT_CREATE_OFFER'
+            });
+        }
+
+        // ─────────────────────────────────────────────────────────────────
+        // VALIDATION 1B: Check if candidate has approved Draft Employee profile
+        // ─────────────────────────────────────────────────────────────────
+        const draftEmployee = await Employee.findOne({
+            tenant: tenantId,
+            'meta.candidateId': application.candidateId?._id || application.candidateId,
+            status: 'Draft'
+        });
+
+        if (!draftEmployee) {
+            await session.abortTransaction();
+            return res.status(400).json({
+                success: false,
+                message: 'Candidate Profile Not Approved. The candidate must submit their documents and the profile must be approved by HR first.',
+                code: 'CANDIDATE_PROFILE_NOT_APPROVED'
             });
         }
 

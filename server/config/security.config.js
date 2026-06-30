@@ -1,4 +1,10 @@
-const DEFAULT_DEV_ORIGINS = [];
+const DEFAULT_DEV_ORIGINS = [
+  'http://localhost:5180',
+  'http://127.0.0.1:5180',
+  'http://192.168.1.93:5180',
+  'http://localhost:5173',
+  'http://192.168.1.93:5173'
+];
 
 const DEFAULT_PROD_ORIGINS = [
   'https://hrms.gitakshmi.com',

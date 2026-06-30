@@ -115,7 +115,7 @@ const formatRunType = (runType) =>
   RUN_TYPE_OPTIONS.find((item) => item.value === runType)?.label || runType || 'Payroll Run';
 
 const employeeLabel = (employee) =>
-  `${[employee?.firstName, employee?.lastName].filter(Boolean).join(' ') || employee?.name || 'Employee'}${employee?.employeeId ? ` (${employee.employeeId})` : ''}`;
+  `${[employee?.firstName, employee?.lastName].filter(Boolean).join(' ') || employee?.name || 'Employee'}${employee?.employeeId ? ` (${employee.employeeId?.startsWith('DRAFT-') ? 'Draft' : employee.employeeId})` : ''}`;
 
 function StatusChip({ status }) {
   const palette = {
@@ -217,7 +217,7 @@ function RunCard({ run, canEdit, canCreate, onInspect, onPreflight, onCalculate,
           </>
         )}
 
-        {canEdit && run.status === 'CALCULATED' && (
+        {canEdit && run.status === 'CALCULATED' && run.approvalStatus !== 'PENDING_APPROVAL' && (
           <button
             onClick={() => onSubmitForApproval(run)}
             className="h-9 px-3 rounded-xl bg-emerald-600 text-white text-[11px] font-bold uppercase tracking-widest hover:bg-emerald-700 transition-all inline-flex items-center gap-1.5"
@@ -227,7 +227,7 @@ function RunCard({ run, canEdit, canCreate, onInspect, onPreflight, onCalculate,
           </button>
         )}
 
-        {canEdit && hasPendingApproval && (
+        {canEdit && run.approvalStatus === 'PENDING_APPROVAL' && hasPendingApproval && (
           <>
             <button
               onClick={() => onReviewApproval(run, 'APPROVE')}

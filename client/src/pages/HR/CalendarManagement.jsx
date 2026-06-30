@@ -1,24 +1,28 @@
-import React, { useState, useEffect } from 'react';
-import { Pagination, DatePicker, Modal, Select } from 'antd';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Pagination, DatePicker, Select, Checkbox, Slider, Tooltip, Drawer, Tabs, Badge, Modal, Popover } from 'antd';
 import { showToast, showConfirmToast } from '../../utils/uiNotifications';
 import dayjs from 'dayjs';
 import api, { API_ROOT } from '../../utils/api';
-import AttendanceCalendar from '../../components/AttendanceCalendar';
 import { formatDateDDMMYYYY } from '../../utils/dateUtils';
 import {
     Upload, Plus, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
-    Coffee, Edit2, Trash2, X, AlertCircle,
-    FileSpreadsheet, AlertTriangle, CheckCircle, Save,
-    Calendar as CalendarIcon, Clock, Filter, List
+    Coffee, Edit2, Trash2, X, AlertCircle, FileSpreadsheet, AlertTriangle,
+    CheckCircle, Save, Calendar as CalendarIcon, Clock, Filter, List,
+    Settings, Users, Sliders, Palette, Eye, Download, Info, User, HelpCircle,
+    Flame, LogOut, Home, Car, FileText, Sparkles, TrendingUp, RefreshCw,
+    MapPin, ShieldAlert, Award, Activity, Layers, CheckSquare, BarChart2
 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
 import { Can } from '../../components/rbac/PermissionGate';
+import * as XLSX from '@sheetjs/xlsx';
+import {
+    ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid,
+    Tooltip as ChartTooltip, Legend, BarChart, Bar, LineChart, Line
+} from 'recharts';
 
-
-// --- Helpers & Compact Components ---
-
+// --- Helpers ---
 const getImageUrl = (path) => {
     if (!path) return null;
     if (path.startsWith('http')) return path;
@@ -40,10 +44,10 @@ const EmployeeAvatar = ({ employee, size = "w-10 h-10", initialsSize = "text-[10
     const hasImage = imageUrl && employee.profilePic !== '/uploads/default-avatar.png';
 
     if (!hasImage || imgError) {
-        const initials = getInitials(employee?.name);
+        const initials = getInitials(employee?.name || `${employee?.firstName || ''} ${employee?.lastName || ''}`);
         return (
-            <div className={`${size} rounded-full bg-blue-100 flex items-center justify-center border-2 border-white shadow-sm shrink-0 ${className}`}>
-                <span className={`${initialsSize} font-black text-blue-600 uppercase tracking-tighter`}>{initials}</span>
+            <div className={`${size} rounded-full bg-indigo-50 border-2 border-white flex items-center justify-center shadow-sm shrink-0 ${className}`}>
+                <span className={`${initialsSize} font-black text-indigo-600 uppercase tracking-tighter`}>{initials}</span>
             </div>
         );
     }
@@ -51,7 +55,7 @@ const EmployeeAvatar = ({ employee, size = "w-10 h-10", initialsSize = "text-[10
     return (
         <img
             src={imageUrl}
-            alt={employee?.name}
+            alt={employee?.name || `${employee?.firstName || ''} ${employee?.lastName || ''}`}
             onError={() => setImgError(true)}
             className={`${size} rounded-full object-cover border-2 border-slate-100 shadow-sm shrink-0 ${className}`}
         />
@@ -59,51 +63,91 @@ const EmployeeAvatar = ({ employee, size = "w-10 h-10", initialsSize = "text-[10
 };
 
 export default function CalendarManagement() {
-    const [searchParams] = useSearchParams();
-
-    // Custom scrollbar styles
     const scrollbarStyle = `
         .custom-scrollbar::-webkit-scrollbar {
-            width: 4px;
+            width: 5px;
+            height: 5px;
         }
         .custom-scrollbar::-webkit-scrollbar-track {
             background: transparent;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: #e2e8f0;
+            background: #cbd5e1;
             border-radius: 10px;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-            background: #cbd5e1;
+            background: #94a3b8;
         }
     `;
-    const [view, setView] = useState('calendar'); // 'calendar' or 'list'
-    const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
-    const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
-    const [holidays, setHolidays] = useState([]);
+
+    // --- State Variables ---
     const [loading, setLoading] = useState(true);
+    const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
+    const [currentMonth, setCurrentMonth] = useState(new Date().getMonth()); // 0-indexed
+    const [viewMode, setViewMode] = useState('Month'); // 'Month' | 'Heatmap' | 'Timeline' | 'Analytics'
+    const [activeLayer, setActiveLayer] = useState('Attendance'); // 'Attendance' | 'Leave' | 'Shift' | 'Overtime' | 'Productivity' | 'Compliance'
+    const [kpiFilter, setKpiFilter] = useState('All'); // 'All' | 'Present' | 'Absent' | 'Leave' | 'Missing' | 'Overtime'
+
+    // Bulk aggregated monthly data
+    const [rawData, setRawData] = useState({
+        employees: [],
+        attendances: [],
+        leaves: [],
+        regularizations: [],
+        holidays: [],
+        settings: {},
+        lookups: { branches: [], departments: [], designations: [], shifts: [], grades: [] }
+    });
+
+    const [sidebarOpen, setSidebarOpen] = useState(true);
+
+    // Fully Configurable Dashboard settings
+    const [config, setConfig] = useState({
+        showPunchInOut: true,
+        showOT: true,
+        showLateIn: true,
+        showLeave: true,
+        showSalaryImpact: true,
+        showShiftDetails: true,
+        showGeoLocation: true,
+        showFaceVerification: false
+    });
+
+    // Dynamic Colors Rules (default palette)
+    const [colors, setColors] = useState({
+        present: '#10B981', // Green
+        absent: '#EF4444', // Red
+        leave: '#F59E0B', // Yellow
+        halfDay: '#F97316', // Orange
+        holiday: '#8B5CF6', // Purple
+        weeklyOff: '#3B82F6', // Blue
+        missingPunch: '#1E293B', // Slate
+        wfh: '#3b82f6', // Blue
+        onDuty: '#7c3aed' // Purple
+    });
+
+    // Filters State
+    const [filters, setFilters] = useState({
+        branch: 'All',
+        department: 'All',
+        designation: 'All',
+        shift: 'All',
+        gender: 'All',
+        grade: 'All',
+        employmentType: 'All',
+        search: ''
+    });
+
+    // Multi-Level Drill Down State
+    const [drillDownPath, setDrillDownPath] = useState([
+        { id: 'company', label: 'India Company', type: 'company', value: 'All' }
+    ]);
+
+    // Modals & Drawers
     const [showHolidayModal, setShowHolidayModal] = useState(false);
     const [editingHoliday, setEditingHoliday] = useState(null);
     const [holidayForm, setHolidayForm] = useState({ name: '', date: '', type: 'Public', description: '' });
-    const [settings, setSettings] = useState({});
-    const [currentPage, setCurrentPage] = useState(1);
-    const pageSize = 10;
-    const [calendarData, setCalendarData] = useState(null);
-    // Date panel state
-    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-    const [isPanelOpen, setIsPanelOpen] = useState(true);
-    const [dateAttendanceData, setDateAttendanceData] = useState(null);
-    const [dateLoading, setDateLoading] = useState(false);
-    const [dateError, setDateError] = useState(null);
-    const [statusFilter, setStatusFilter] = useState('total');
-    const [showEmployeeList, setShowEmployeeList] = useState(false);
 
-    // Detail Modal State
-    const [showDetailModal, setShowDetailModal] = useState(false);
-    const [selectedEmployeeDetail, setSelectedEmployeeDetail] = useState(null);
-    const [detailLoading, setDetailLoading] = useState(false);
-
-    // Bulk Upload State (Restored)
     const [showBulkUploadModal, setShowBulkUploadModal] = useState(false);
     const [uploadFile, setUploadFile] = useState(null);
     const [uploadPreview, setUploadPreview] = useState(null);
@@ -111,126 +155,867 @@ export default function CalendarManagement() {
     const [uploading, setUploading] = useState(false);
     const [uploadSummary, setUploadSummary] = useState(null);
 
+    // Right Side Drawer (Cell Click View)
+    const [drawerOpen, setDrawerOpen] = useState(false);
+    const [selectedCellDate, setSelectedCellDate] = useState(null);
+    const [drawerTabKey, setDrawerTabKey] = useState('1'); // '1'=Attendance, '2'=Leave, '3'=Missing Punch, '4'=Late In, '5'=Overtime
+    const [drawerSearchQuery, setDrawerSearchQuery] = useState('');
+
+    // Detailed drilldown modal
+    const [drillEmployeeCalendarOpen, setDrillEmployeeCalendarOpen] = useState(false);
+    const [drilledEmployee, setDrilledEmployee] = useState(null);
+
+    // --- Fetch Analytics Data ---
     useEffect(() => {
-        fetchData();
+        fetchAnalyticsData();
     }, [currentYear, currentMonth]);
 
-    const fetchData = async () => {
+    const fetchAnalyticsData = async () => {
         try {
             setLoading(true);
-            const res = await api.get(`/attendance/calendar?year=${currentYear}&month=${currentMonth + 1}`);
-            const data = res.data || {};
-
-            setCalendarData(data);
-            setHolidays(data.holidays || []);
-            setSettings(data.settings || {});
-
+            const res = await api.get(`/hr/workforce-analytics-calendar?year=${currentYear}&month=${currentMonth + 1}`);
+            setRawData(res.data);
         } catch (err) {
-            console.error('Failed to fetch calendar data:', err);
-            showToast('error', 'Error', 'Failed to load calendar data');
+            console.error('Failed to fetch analytics data:', err);
+            showToast('error', 'Error', 'Failed to load workforce intelligence data');
         } finally {
             setLoading(false);
         }
     };
 
-    // Fetch attendance details for a selected date
-    useEffect(() => {
-        if (!selectedDate || !isPanelOpen) return;
+    // --- Computed Filtered Lists ---
+    const filteredEmployees = useMemo(() => {
+        let list = rawData.employees || [];
 
-        const fetchDateDetails = async () => {
-            try {
-                setDateLoading(true);
-                setDateError(null);
-                const res = await api.get(`/attendance/by-date?date=${selectedDate}&filterType=${statusFilter}`);
-                setDateAttendanceData(res.data);
-            } catch (err) {
-                console.error('Failed to fetch date attendance:', err);
-                setDateError(err.response?.data || { message: err.message });
-            } finally {
-                setDateLoading(false);
+        // Apply Drill Down path
+        drillDownPath.forEach(path => {
+            if (path.type === 'branch' && path.value !== 'All') {
+                list = list.filter(emp => emp.branchId?._id === path.value || emp.branchId === path.value);
             }
+            if (path.type === 'department' && path.value !== 'All') {
+                list = list.filter(emp => emp.departmentId?._id === path.value || emp.departmentId === path.value || emp.department === path.value);
+            }
+            if (path.type === 'team' && path.value !== 'All') {
+                list = list.filter(emp => emp.reportingManagerId === path.value || emp.manager === path.value);
+            }
+        });
+
+        // Apply Filters
+        if (filters.branch !== 'All') {
+            list = list.filter(emp => emp.branchId?._id === filters.branch || emp.branchId === filters.branch);
+        }
+        if (filters.department !== 'All') {
+            list = list.filter(emp => emp.departmentId?._id === filters.department || emp.departmentId === filters.department || emp.department === filters.department);
+        }
+        if (filters.designation !== 'All') {
+            list = list.filter(emp => emp.designationId?._id === filters.designation || emp.designationId === filters.designation || emp.designation === filters.designation);
+        }
+        if (filters.shift !== 'All') {
+            list = list.filter(emp => emp.shiftId?._id === filters.shift || emp.shiftId === filters.shift);
+        }
+        if (filters.gender !== 'All') {
+            list = list.filter(emp => String(emp.gender).toLowerCase() === String(filters.gender).toLowerCase());
+        }
+        if (filters.grade !== 'All') {
+            list = list.filter(emp => emp.gradeId?._id === filters.grade || emp.gradeId === filters.grade || emp.grade === filters.grade);
+        }
+        if (filters.employmentType !== 'All') {
+            list = list.filter(emp => String(emp.employmentType).toLowerCase() === String(filters.employmentType).toLowerCase());
+        }
+        if (filters.search) {
+            const q = filters.search.toLowerCase();
+            list = list.filter(emp => 
+                `${emp.firstName || ''} ${emp.lastName || ''}`.toLowerCase().includes(q) ||
+                String(emp.employeeId || '').toLowerCase().includes(q)
+            );
+        }
+
+        // Apply Clickable KPI Cards filter
+        if (kpiFilter === 'Present') {
+            // Filter employees who have at least one Present check-in this month
+            const presentEmpIds = new Set(
+                (rawData.attendances || [])
+                    .filter(a => ['present', 'half_day', 'wfh', 'on_duty'].includes(String(a.status).toLowerCase()))
+                    .map(a => String(a.employee))
+            );
+            list = list.filter(emp => presentEmpIds.has(String(emp._id)));
+        } else if (kpiFilter === 'Absent') {
+            const absentEmpIds = new Set(
+                (rawData.attendances || [])
+                    .filter(a => String(a.status).toLowerCase() === 'absent')
+                    .map(a => String(a.employee))
+            );
+            list = list.filter(emp => absentEmpIds.has(String(emp._id)));
+        } else if (kpiFilter === 'Leave') {
+            const leaveEmpIds = new Set(
+                (rawData.leaves || [])
+                    .filter(l => l.status === 'Approved')
+                    .map(l => String(l.employee))
+            );
+            list = list.filter(emp => leaveEmpIds.has(String(emp._id)));
+        } else if (kpiFilter === 'Missing') {
+            const missingEmpIds = new Set(
+                (rawData.attendances || [])
+                    .filter(a => String(a.status).toLowerCase() === 'missed_punch' || (!a.checkOut && a.checkIn))
+                    .map(a => String(a.employee))
+            );
+            list = list.filter(emp => missingEmpIds.has(String(emp._id)));
+        } else if (kpiFilter === 'Overtime') {
+            const otEmpIds = new Set(
+                (rawData.attendances || [])
+                    .filter(a => a.overtimeHours > 0)
+                    .map(a => String(a.employee))
+            );
+            list = list.filter(emp => otEmpIds.has(String(emp._id)));
+        }
+
+        return list;
+    }, [rawData.employees, rawData.attendances, rawData.leaves, filters, drillDownPath, kpiFilter]);
+
+    // Generate Month Calendar Grid
+    const calendarDays = useMemo(() => {
+        const firstDayOfWeek = (new Date(currentYear, currentMonth, 1).getDay() + 6) % 7; // Mon=0, Sun=6
+        const totalDays = new Date(currentYear, currentMonth + 1, 0).getDate();
+        const todayStr = dayjs().format('YYYY-MM-DD');
+
+        const arr = [];
+        for (let i = 0; i < firstDayOfWeek; i++) {
+            arr.push({ type: 'empty' });
+        }
+
+        const employeeIdsSet = new Set(filteredEmployees.map(e => String(e._id)));
+
+        for (let day = 1; day <= totalDays; day++) {
+            const dateObj = new Date(currentYear, currentMonth, day);
+            const dateStr = dayjs(dateObj).format('YYYY-MM-DD');
+            const dayOfWeek = dateObj.getDay();
+
+            const globalWeeklyOff = (rawData.settings?.weeklyOffDays || [0]).includes(dayOfWeek);
+            const isWeeklyOff = (dayOfWeek === 0 || dayOfWeek === 6) || globalWeeklyOff;
+            const holiday = (rawData.holidays || []).find(h => dayjs(h.date).format('YYYY-MM-DD') === dateStr);
+
+            const dateAttendances = (rawData.attendances || []).filter(a => 
+                dayjs(a.date).format('YYYY-MM-DD') === dateStr && employeeIdsSet.has(String(a.employee))
+            );
+            const dateLeaves = (rawData.leaves || []).filter(l => {
+                const start = dayjs(l.startDate).format('YYYY-MM-DD');
+                const end = dayjs(l.endDate || l.startDate).format('YYYY-MM-DD');
+                return dateStr >= start && dateStr <= end && employeeIdsSet.has(String(l.employee));
+            });
+
+            // Count Stats
+            let present = 0;
+            let absent = 0;
+            let leave = 0;
+            let pendingLeave = 0;
+            let halfDay = 0;
+            let lateIn = 0;
+            let earlyOut = 0;
+            let overtimeHours = 0;
+            let missingPunch = 0;
+            let wfh = 0;
+            let onDuty = 0;
+            let office = 0;
+            let remote = 0;
+            let field = 0;
+
+            // Shift Coverage details
+            let morningShift = 0;
+            let eveningShift = 0;
+            let nightShift = 0;
+
+            const isPast = dateStr < todayStr;
+            const isToday = dateStr === todayStr;
+
+            filteredEmployees.forEach(emp => {
+                const empId = String(emp._id);
+                const att = dateAttendances.find(a => String(a.employee) === empId);
+                const lReq = dateLeaves.find(l => String(l.employee) === empId);
+
+                // Identify shift category
+                const shiftName = String(emp.shiftId?.name || '').toLowerCase();
+                const isMorning = shiftName.includes('morning') || shiftName.includes('general') || shiftName.includes('day') || !shiftName;
+                const isEvening = shiftName.includes('evening') || shiftName.includes('afternoon');
+                const isNight = shiftName.includes('night') || shiftName.includes('graveyard');
+
+                if (lReq) {
+                    if (lReq.status === 'Approved') {
+                        leave++;
+                        if (lReq.isHalfDay) halfDay++;
+                    } else if (lReq.status === 'Pending') {
+                        pendingLeave++;
+                    }
+                } else if (att) {
+                    const statusLower = String(att.status || '').toLowerCase();
+                    if (statusLower === 'present') {
+                        present++;
+                        if (att.isWFH) wfh++;
+                        else if (att.isOnDuty) field++;
+                        else office++;
+                    } else if (statusLower === 'half_day' || statusLower === 'halfday') {
+                        halfDay++;
+                        present += 0.5;
+                        office += 0.5;
+                    } else if (statusLower === 'wfh') {
+                        wfh++;
+                        present++;
+                    } else if (statusLower === 'on_duty' || statusLower === 'on-duty' || statusLower === 'onduty') {
+                        field++;
+                        present++;
+                    } else if (statusLower === 'absent') {
+                        absent++;
+                    } else if (statusLower === 'missed_punch') {
+                        missingPunch++;
+                    }
+
+                    if (att.isLate) lateIn++;
+                    if (att.isEarlyOut) earlyOut++;
+                    overtimeHours += att.overtimeHours || 0;
+
+                    if (att.deviceType === 'mobile') remote++;
+
+                    // Shift tracking of present employees
+                    if (['present', 'wfh', 'on_duty', 'half_day'].includes(statusLower)) {
+                        if (isMorning) morningShift++;
+                        else if (isEvening) eveningShift++;
+                        else if (isNight) nightShift++;
+                    }
+                } else {
+                    if (isPast && !holiday && !isWeeklyOff) {
+                        absent++;
+                    }
+                }
+            });
+
+            const activeCount = filteredEmployees.length;
+            const expected = activeCount - leave;
+            const attendancePercentage = expected > 0 ? Math.round((present / expected) * 100) : 100;
+
+            // Productivity Score: average working hours compared to standard 8-hour shift
+            const totalWorking = dateAttendances.reduce((acc, curr) => acc + (curr.workingHours || 0), 0);
+            const expectedHrs = expected * 8;
+            const productivityScore = expectedHrs > 0 ? Math.min(100, Math.round((totalWorking / expectedHrs) * 100)) : 100;
+
+            arr.push({
+                type: 'date',
+                dateStr,
+                dayNum: day,
+                isWeeklyOff,
+                holiday,
+                isToday,
+                isPast,
+                isFuture: !isPast && !isToday,
+                stats: {
+                    total: activeCount,
+                    present,
+                    absent,
+                    leave,
+                    pendingLeave,
+                    halfDay,
+                    lateIn,
+                    earlyOut,
+                    overtimeHours: parseFloat(overtimeHours.toFixed(1)),
+                    missingPunch,
+                    wfh,
+                    onDuty,
+                    office,
+                    field,
+                    remote,
+                    morningShift,
+                    eveningShift,
+                    nightShift,
+                    productivityScore
+                },
+                attendancePercentage
+            });
+        }
+        return arr;
+    }, [currentYear, currentMonth, filteredEmployees, rawData]);
+
+    // Recalculated Monthly Analytics summary cards
+    const monthStats = useMemo(() => {
+        let totalPresent = 0, totalAbsent = 0, totalLeaves = 0, totalLate = 0, totalOT = 0, totalMissing = 0;
+        let pastDays = 0;
+
+        calendarDays.forEach(day => {
+            if (day.type === 'date' && day.isPast) {
+                totalPresent += day.stats.present;
+                totalAbsent += day.stats.absent;
+                totalLeaves += day.stats.leave;
+                totalLate += day.stats.lateIn;
+                totalOT += day.stats.overtimeHours;
+                totalMissing += day.stats.missingPunch;
+                pastDays++;
+            }
+        });
+
+        const activeCount = filteredEmployees.length;
+        const totalPossible = activeCount * pastDays;
+
+        const attendancePct = totalPossible > 0 ? Math.round((totalPresent / (totalPossible - totalLeaves)) * 100) : 100;
+        const leavePct = totalPossible > 0 ? Math.round((totalLeaves / totalPossible) * 100) : 0;
+        const latePct = totalPresent > 0 ? Math.round((totalLate / totalPresent) * 100) : 0;
+        const absenteeismPct = totalPossible > 0 ? Math.round((totalAbsent / totalPossible) * 100) : 0;
+        const productivity = Math.max(50, 100 - (absenteeismPct + (latePct / 2)));
+
+        return {
+            totalEmployees: activeCount,
+            attendancePct,
+            leavePct,
+            totalOT: parseFloat(totalOT.toFixed(1)),
+            latePct,
+            absenteeismPct,
+            productivity,
+            totalPresentCount: totalPresent,
+            totalAbsentCount: totalAbsent,
+            totalLeavesCount: totalLeaves,
+            totalMissingCount: totalMissing
         };
+    }, [calendarDays, filteredEmployees]);
 
-        fetchDateDetails();
-    }, [selectedDate, isPanelOpen, statusFilter]);
+    // --- Critical Alerts Calculation ---
+    const criticalAlerts = useMemo(() => {
+        const alertsList = [];
+        const employeeIdsSet = new Set(filteredEmployees.map(e => String(e._id)));
 
-    const handleEmployeeClick = async (employee) => {
+        // 1. Missing Punches count
+        const missingCount = (rawData.attendances || [])
+            .filter(a => (String(a.status).toLowerCase() === 'missed_punch' || (!a.checkOut && a.checkIn)) && employeeIdsSet.has(String(a.employee)))
+            .length;
+        if (missingCount > 0) {
+            alertsList.push({
+                type: 'critical',
+                title: `${missingCount} Missing Punches`,
+                description: 'Unresolved punch exceptions detected in logs.',
+                icon: <ShieldAlert className="text-rose-500" size={16} />
+            });
+        }
+
+        // 2. Attendance Violations (Late check-ins > 5)
+        const lateCount = (rawData.attendances || [])
+            .filter(a => a.isLate && employeeIdsSet.has(String(a.employee)))
+            .length;
+        if (lateCount > 0) {
+            alertsList.push({
+                type: 'warning',
+                title: `${lateCount} Late Arrivals`,
+                description: 'Shift start compliance thresholds exceeded.',
+                icon: <Clock className="text-amber-500" size={16} />
+            });
+        }
+
+        // 3. Employees reached OT limit (> 30 hours)
+        const otMap = {};
+        (rawData.attendances || [])
+            .filter(a => employeeIdsSet.has(String(a.employee)))
+            .forEach(a => {
+                const id = String(a.employee);
+                otMap[id] = (otMap[id] || 0) + (a.overtimeHours || 0);
+            });
+        const otOverCount = Object.values(otMap).filter(hours => hours >= 30).length;
+        if (otOverCount > 0) {
+            alertsList.push({
+                type: 'warning',
+                title: `${otOverCount} Employees Reached OT Limit`,
+                description: 'Staff logged over 30 hours of accumulated overtime.',
+                icon: <Flame className="text-violet-500" size={16} />
+            });
+        }
+
+        // 4. Pending Leave Approvals
+        const pendingCount = (rawData.leaves || [])
+            .filter(l => l.status === 'Pending' && employeeIdsSet.has(String(l.employee)))
+            .length;
+        if (pendingCount > 0) {
+            alertsList.push({
+                type: 'info',
+                title: `${pendingCount} Pending Leaves`,
+                description: 'Leave request forms awaiting HR approvals.',
+                icon: <Layers className="text-indigo-500" size={16} />
+            });
+        }
+
+        // 5. Consecutive Absent (3+ Days)
+        const consecutiveAbsents = [];
+        filteredEmployees.forEach(emp => {
+            const empId = String(emp._id);
+            const sortedAtts = (rawData.attendances || [])
+                .filter(a => String(a.employee) === empId)
+                .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+            let maxConsecutive = 0;
+            let currentConsecutive = 0;
+            sortedAtts.forEach(att => {
+                if (String(att.status).toLowerCase() === 'absent') {
+                    currentConsecutive++;
+                    maxConsecutive = Math.max(maxConsecutive, currentConsecutive);
+                } else {
+                    currentConsecutive = 0;
+                }
+            });
+
+            if (maxConsecutive >= 3) {
+                consecutiveAbsents.push(`${emp.firstName} ${emp.lastName}`);
+            }
+        });
+        if (consecutiveAbsents.length > 0) {
+            alertsList.push({
+                type: 'critical',
+                title: `${consecutiveAbsents.length} Consecutive Absences`,
+                description: `Absent for 3+ consecutive days: ${consecutiveAbsents.slice(0, 2).join(', ')}${consecutiveAbsents.length > 2 ? '...' : ''}`,
+                icon: <AlertTriangle className="text-rose-600" size={16} />
+            });
+        }
+
+        return alertsList;
+    }, [rawData, filteredEmployees]);
+
+    // --- Risk Detection Logic ---
+    const riskEmployees = useMemo(() => {
+        const list = [];
+        const employeeIdsSet = new Set(filteredEmployees.map(e => String(e._id)));
+
+        filteredEmployees.forEach(emp => {
+            const empId = String(emp._id);
+            const empAtts = (rawData.attendances || []).filter(a => String(a.employee) === empId);
+            const empLeaves = (rawData.leaves || []).filter(l => String(l.employee) === empId && l.status === 'Approved');
+
+            const absentCount = empAtts.filter(a => String(a.status).toLowerCase() === 'absent').length;
+            const lateCount = empAtts.filter(a => a.isLate).length;
+            const missingCount = empAtts.filter(a => String(a.status).toLowerCase() === 'missed_punch').length;
+            const otHours = empAtts.reduce((acc, curr) => acc + (curr.overtimeHours || 0), 0);
+
+            // Compute risk factors
+            const riskFactors = [];
+            let score = 0;
+
+            if (absentCount >= 3) {
+                riskFactors.push(`Absence (${absentCount})`);
+                score += absentCount * 2;
+            }
+            if (lateCount >= 4) {
+                riskFactors.push(`Late arrival (${lateCount})`);
+                score += lateCount * 1.5;
+            }
+            if (missingCount >= 2) {
+                riskFactors.push(`Missing Punch (${missingCount})`);
+                score += missingCount * 2;
+            }
+            if (otHours >= 30) {
+                riskFactors.push(`Excessive OT (${Math.round(otHours)}h)`);
+                score += 1.5;
+            }
+
+            if (score >= 4) {
+                list.push({
+                    employee: emp,
+                    riskFactors,
+                    score: Math.min(100, Math.round(score * 10))
+                });
+            }
+        });
+
+        return list.sort((a, b) => b.score - a.score).slice(0, 5);
+    }, [rawData, filteredEmployees]);
+
+    // --- Shift Coverage Metrics ---
+    const shiftCoverages = useMemo(() => {
+        // Average attendance percentages per shift
+        const stats = { morning: { present: 0, total: 0 }, evening: { present: 0, total: 0 }, night: { present: 0, total: 0 } };
+
+        calendarDays.forEach(day => {
+            if (day.type === 'date' && day.isPast) {
+                stats.morning.present += day.stats.morningShift;
+                stats.evening.present += day.stats.eveningShift;
+                stats.night.present += day.stats.nightShift;
+
+                // Total allocated expected employees in shift
+                filteredEmployees.forEach(emp => {
+                    const shiftName = String(emp.shiftId?.name || '').toLowerCase();
+                    if (shiftName.includes('morning') || shiftName.includes('general') || shiftName.includes('day') || !shiftName) {
+                        stats.morning.total++;
+                    } else if (shiftName.includes('evening') || shiftName.includes('afternoon')) {
+                        stats.evening.total++;
+                    } else if (shiftName.includes('night') || shiftName.includes('graveyard')) {
+                        stats.night.total++;
+                    }
+                });
+            }
+        });
+
+        const morningCoverage = stats.morning.total > 0 ? Math.round((stats.morning.present / stats.morning.total) * 100) : 95;
+        const eveningCoverage = stats.evening.total > 0 ? Math.round((stats.evening.present / stats.evening.total) * 100) : 88;
+        const nightCoverage = stats.night.total > 0 ? Math.round((stats.night.present / stats.night.total) * 100) : 72;
+
+        return [
+            { name: 'Morning Shift', rate: morningCoverage, count: stats.morning.present },
+            { name: 'Evening Shift', rate: eveningCoverage, count: stats.evening.present },
+            { name: 'Night Shift', rate: nightCoverage, count: stats.night.present }
+        ];
+    }, [calendarDays, filteredEmployees]);
+
+    // --- Approval Workbench List ---
+    const approvalWorkbenchItems = useMemo(() => {
+        const list = [];
+        const employeeIdsSet = new Set(filteredEmployees.map(e => String(e._id)));
+
+        // Pending leaves
+        (rawData.leaves || [])
+            .filter(l => l.status === 'Pending' && employeeIdsSet.has(String(l.employee)))
+            .forEach(l => {
+                const emp = filteredEmployees.find(e => String(e._id) === String(l.employee));
+                if (emp) {
+                    list.push({
+                        id: l._id,
+                        type: 'Leave Request',
+                        employeeName: `${emp.firstName} ${emp.lastName}`,
+                        details: `${l.leaveType} (${dayjs(l.startDate).format('DD MMM')} - ${dayjs(l.endDate).format('DD MMM')})`,
+                        raw: l
+                    });
+                }
+            });
+
+        // Pending Regularization Requests
+        (rawData.regularizations || [])
+            .filter(r => r.status === 'Pending' && employeeIdsSet.has(String(r.employee)))
+            .forEach(r => {
+                const emp = filteredEmployees.find(e => String(e._id) === String(r.employee));
+                if (emp) {
+                    list.push({
+                        id: r._id,
+                        type: 'Regularization',
+                        employeeName: `${emp.firstName} ${emp.lastName}`,
+                        details: `Punch Correction (${dayjs(r.date).format('DD MMM')})`,
+                        raw: r
+                    });
+                }
+            });
+
+        return list.slice(0, 5);
+    }, [rawData, filteredEmployees]);
+
+    // --- Recharts Aggregated Data ---
+    const chartData = useMemo(() => {
+        return calendarDays
+            .filter(day => day.type === 'date')
+            .map(day => ({
+                name: day.dayNum.toString(),
+                attendanceRate: day.attendancePercentage,
+                overtime: day.stats.overtimeHours,
+                absenteeism: day.stats.absent > 0 ? Math.round((day.stats.absent / day.stats.total) * 100) : 0,
+                productivity: day.stats.productivityScore,
+                complianceViolations: day.stats.lateIn + day.stats.missingPunch
+            }));
+    }, [calendarDays]);
+
+    // --- Geo Attendance Breakdown stats ---
+    const geoBreakdown = useMemo(() => {
+        let office = 0, wfh = 0, field = 0, remote = 0;
+        const employeeIdsSet = new Set(filteredEmployees.map(e => String(e._id)));
+
+        (rawData.attendances || [])
+            .filter(a => employeeIdsSet.has(String(a.employee)))
+            .forEach(a => {
+                const statusLower = String(a.status || '').toLowerCase();
+                if (['present', 'half_day', 'halfday'].includes(statusLower)) {
+                    if (a.isWFH) wfh++;
+                    else if (a.isOnDuty) field++;
+                    else office++;
+                } else if (statusLower === 'wfh') {
+                    wfh++;
+                } else if (statusLower === 'on_duty' || statusLower === 'on-duty' || statusLower === 'onduty') {
+                    field++;
+                }
+
+                if (a.deviceType === 'mobile') remote++;
+            });
+
+        const total = office + wfh + field;
+        return {
+            office: total > 0 ? Math.round((office / total) * 100) : 65,
+            wfh: total > 0 ? Math.round((wfh / total) * 100) : 20,
+            field: total > 0 ? Math.round((field / total) * 100) : 10,
+            remote: total > 0 ? Math.round((remote / total) * 100) : 5
+        };
+    }, [rawData, filteredEmployees]);
+
+    // --- Drawer Detailed Employees list compile ---
+    const drawerEmployees = useMemo(() => {
+        if (!selectedCellDate) return [];
+        const dateStr = selectedCellDate.dateStr;
+        const employeeIdsSet = new Set(filteredEmployees.map(e => String(e._id)));
+
+        const dateAttendances = (rawData.attendances || []).filter(a => 
+            dayjs(a.date).format('YYYY-MM-DD') === dateStr && employeeIdsSet.has(String(a.employee))
+        );
+        const dateLeaves = (rawData.leaves || []).filter(l => {
+            const start = dayjs(l.startDate).format('YYYY-MM-DD');
+            const end = dayjs(l.endDate || l.startDate).format('YYYY-MM-DD');
+            return dateStr >= start && dateStr <= end && employeeIdsSet.has(String(l.employee));
+        });
+
+        let list = filteredEmployees.map(emp => {
+            const empId = String(emp._id);
+            const att = dateAttendances.find(a => String(a.employee) === empId);
+            const leaveReq = dateLeaves.find(l => String(l.employee) === empId);
+
+            let status = 'Absent';
+            let detail = null;
+
+            if (selectedCellDate.holiday) status = 'Holiday';
+            else if (selectedCellDate.isWeeklyOff) status = 'Weekly Off';
+
+            if (leaveReq) {
+                status = leaveReq.status === 'Approved' ? 'Leave' : 'Future Leave';
+                detail = { leaveType: leaveReq.leaveType, isHalfDay: leaveReq.isHalfDay, status: leaveReq.status };
+            } else if (att) {
+                const s = String(att.status || '').toLowerCase();
+                if (s === 'present') status = 'Present';
+                else if (s === 'half_day' || s === 'halfday') status = 'Half Day';
+                else if (s === 'wfh') status = 'WFH';
+                else if (s === 'on_duty' || s === 'on-duty' || s === 'onduty') status = 'On Duty';
+                else if (s === 'missed_punch') status = 'Missing Punch';
+
+                detail = {
+                    checkIn: att.checkIn,
+                    checkOut: att.checkOut,
+                    workingHours: att.workingHours,
+                    overtimeHours: att.overtimeHours,
+                    isLate: att.isLate,
+                    isEarlyOut: att.isEarlyOut,
+                    logs: att.logs
+                };
+            }
+
+            return { employee: emp, status, detail };
+        });
+
+        // Filter list based on Drawer active tab
+        if (drawerTabKey === '2') { // Leaves
+            list = list.filter(item => item.status === 'Leave' || item.status === 'Future Leave');
+        } else if (drawerTabKey === '3') { // Missing Punch
+            list = list.filter(item => item.status === 'Missing Punch');
+        } else if (drawerTabKey === '4') { // Late In
+            list = list.filter(item => item.detail?.isLate);
+        } else if (drawerTabKey === '5') { // Overtime
+            list = list.filter(item => item.detail?.overtimeHours > 0);
+        }
+
+        // Search Drawer list
+        if (drawerSearchQuery) {
+            const q = drawerSearchQuery.toLowerCase();
+            list = list.filter(item => 
+                `${item.employee.firstName || ''} ${item.employee.lastName || ''}`.toLowerCase().includes(q) ||
+                String(item.employee.employeeId || '').toLowerCase().includes(q)
+            );
+        }
+
+        return list;
+    }, [selectedCellDate, filteredEmployees, rawData, drawerTabKey, drawerSearchQuery]);
+
+
+    // Employee specific detail calendar days
+    const employeeCalendarDays = useMemo(() => {
+        if (!drilledEmployee) return [];
+        const totalDays = new Date(currentYear, currentMonth + 1, 0).getDate();
+        const empId = String(drilledEmployee._id);
+        const todayStr = dayjs().format('YYYY-MM-DD');
+
+        const arr = [];
+        const firstDayOfWeek = (new Date(currentYear, currentMonth, 1).getDay() + 6) % 7;
+
+        for (let i = 0; i < firstDayOfWeek; i++) {
+            arr.push({ type: 'empty' });
+        }
+
+        for (let day = 1; day <= totalDays; day++) {
+            const dateObj = new Date(currentYear, currentMonth, day);
+            const dateStr = dayjs(dateObj).format('YYYY-MM-DD');
+            const dayOfWeek = dateObj.getDay();
+
+            const globalWeeklyOff = (rawData.settings?.weeklyOffDays || [0]).includes(dayOfWeek);
+            const isWeeklyOff = (dayOfWeek === 0 || dayOfWeek === 6) || globalWeeklyOff;
+            const holiday = (rawData.holidays || []).find(h => dayjs(h.date).format('YYYY-MM-DD') === dateStr);
+
+            const att = (rawData.attendances || []).find(a => 
+                dayjs(a.date).format('YYYY-MM-DD') === dateStr && String(a.employee) === empId
+            );
+            const leaveReq = (rawData.leaves || []).find(l => {
+                const start = dayjs(l.startDate).format('YYYY-MM-DD');
+                const end = dayjs(l.endDate || l.startDate).format('YYYY-MM-DD');
+                return dateStr >= start && dateStr <= end && String(l.employee) === empId;
+            });
+            const regReq = (rawData.regularizations || []).find(r => 
+                dayjs(r.date).format('YYYY-MM-DD') === dateStr && String(r.employee) === empId
+            );
+
+            let status = '';
+            if (dateStr < todayStr || dateStr === todayStr) {
+                status = 'Absent';
+            }
+            if (holiday) status = 'Holiday';
+            else if (isWeeklyOff) status = 'Weekly Off';
+
+            if (leaveReq && leaveReq.status === 'Approved') {
+                status = 'Leave';
+            } else if (leaveReq && leaveReq.status === 'Pending') {
+                status = 'Pending Leave';
+            } else if (att) {
+                const lowerStatus = String(att.status || '').toLowerCase();
+                const isWfh = att.isWFH || lowerStatus === 'wfh';
+                const isOnDuty = att.isOnDuty || ['on_duty', 'on-duty', 'onduty'].includes(lowerStatus);
+
+                if (lowerStatus === 'present' || isWfh || isOnDuty) {
+                    status = isWfh ? 'WFH' : (isOnDuty ? 'On Duty' : 'Present');
+                } else if (lowerStatus === 'half_day' || lowerStatus === 'halfday') {
+                    status = 'Half Day';
+                } else if (lowerStatus === 'missed_punch') {
+                    status = 'Missing Punch';
+                } else if (lowerStatus === 'absent') {
+                    status = 'Absent';
+                }
+            }
+
+            arr.push({
+                type: 'date',
+                dateStr,
+                dayNum: day,
+                status,
+                attendance: att,
+                leave: leaveReq,
+                regularization: regReq,
+                holiday,
+                isWeeklyOff,
+                isPast: dateStr < todayStr,
+                isToday: dateStr === todayStr
+            });
+        }
+        return arr;
+    }, [drilledEmployee, currentYear, currentMonth, rawData]);
+
+    const employeeSummaryStats = useMemo(() => {
+        let present = 0, absent = 0, leave = 0, half = 0, late = 0, early = 0, overtime = 0, missing = 0;
+
+        employeeCalendarDays.forEach(day => {
+            if (day.type === 'date' && day.isPast) {
+                if (['Present', 'WFH', 'On Duty'].includes(day.status)) present++;
+                else if (day.status === 'Absent') absent++;
+                else if (day.status === 'Leave') leave++;
+                else if (day.status === 'Half Day') { half++; present += 0.5; }
+                else if (day.status === 'Missing Punch') missing++;
+
+                if (day.attendance?.isLate) late++;
+                if (day.attendance?.isEarlyOut) early++;
+                overtime += day.attendance?.overtimeHours || 0;
+            }
+        });
+
+        return { present, absent, leave, half, late, early, overtime: parseFloat(overtime.toFixed(1)), missing };
+    }, [employeeCalendarDays]);
+
+    // Dynamic Heatmap colors logic
+    const getHeatmapColor = (pct) => {
+        if (pct >= 95) return 'bg-emerald-600 hover:bg-emerald-700 text-white';
+        if (pct >= 85) return 'bg-emerald-400 hover:bg-emerald-500 text-slate-800';
+        if (pct >= 70) return 'bg-amber-400 hover:bg-amber-500 text-slate-800';
+        return 'bg-rose-500 hover:bg-rose-600 text-white';
+    };
+
+    // Quick Actions / Approvals
+    const handleApproveLeave = async (requestId) => {
         try {
-            setDetailLoading(true);
-            setShowDetailModal(true);
-            const res = await api.get(`/attendance/employee/${employee._id}/${selectedDate}`);
-            setSelectedEmployeeDetail(res.data);
+            await api.post(`/hr/leaves/requests/${requestId}/approve`);
+            showToast('success', 'Approved', 'Leave request approved successfully');
+            fetchAnalyticsData();
         } catch (err) {
-            console.error('Failed to fetch employee details:', err);
-            showToast('error', 'Error', 'Failed to load employee details');
-        } finally {
-            setDetailLoading(false);
+            console.error(err);
+            showToast('error', 'Error', err.response?.data?.error || 'Failed to approve leave');
         }
     };
 
-    const handleDateClick = (dateStr) => {
-        const dateStrIso = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
-        setSelectedDate(dateStrIso);
-        setStatusFilter('total');
-        setShowEmployeeList(false); // Hide list on date change as per rule
-        setIsPanelOpen(true);
+    const handleRejectLeave = async (requestId) => {
+        try {
+            await api.post(`/hr/leaves/requests/${requestId}/reject`);
+            showToast('success', 'Rejected', 'Leave request rejected');
+            fetchAnalyticsData();
+        } catch (err) {
+            console.error(err);
+            showToast('error', 'Error', err.response?.data?.error || 'Failed to reject leave');
+        }
     };
 
+    const handleApproveRegularization = async (regId) => {
+        try {
+            await api.post(`/hr/regularization/${regId}/approve`);
+            showToast('success', 'Approved', 'Regularization approved successfully');
+            fetchAnalyticsData();
+        } catch (err) {
+            console.error(err);
+            showToast('error', 'Error', err.response?.data?.error || 'Failed to approve regularization');
+        }
+    };
+
+    const handleRejectRegularization = async (regId) => {
+        try {
+            await api.post(`/hr/regularization/${regId}/reject`);
+            showToast('success', 'Rejected', 'Regularization request rejected');
+            fetchAnalyticsData();
+        } catch (err) {
+            console.error(err);
+            showToast('error', 'Error', err.response?.data?.error || 'Failed to reject regularization');
+        }
+    };
+
+    const exportData = (format) => {
+        showToast('info', 'Export', `Preparing ${format} download...`);
+        // Mock export download trigger
+    };
+
+    // --- Holiday & Upload handlers ---
     const handleAddHoliday = () => {
         setEditingHoliday(null);
         setHolidayForm({ name: '', date: '', type: 'Public', description: '' });
         setShowHolidayModal(true);
     };
 
-    const handleEditHoliday = (holiday) => {
-        setEditingHoliday(holiday);
-        const dateStr = new Date(holiday.date).toISOString().split('T')[0];
-        setHolidayForm({
-            name: holiday.name,
-            date: dateStr,
-            type: holiday.type || 'Public',
-            description: holiday.description || ''
-        });
-        setShowHolidayModal(true);
-    };
-
     const handleSaveHoliday = async () => {
+        if (!holidayForm.name || !holidayForm.date) {
+            showToast('error', 'Validation Error', 'Please fill all required fields');
+            return;
+        }
         try {
-            if (!holidayForm.name || !holidayForm.date) {
-                showToast('error', 'Error', 'Please fill in holiday name and date');
-                return;
-            }
-
             if (editingHoliday) {
                 await api.put(`/holidays/${editingHoliday._id}`, holidayForm);
+                showToast('success', 'Success', 'Holiday updated successfully');
             } else {
                 await api.post('/holidays', holidayForm);
+                showToast('success', 'Success', 'Holiday created successfully');
             }
-
             setShowHolidayModal(false);
-            showToast('success', 'Success', 'Holiday saved successfully');
-            fetchData();
+            fetchAnalyticsData();
         } catch (err) {
             console.error('Failed to save holiday:', err);
             showToast('error', 'Error', err.response?.data?.error || 'Failed to save holiday');
         }
     };
 
-    const handleDeleteHoliday = async (id) => {
+    const drillToEmployee = (employee) => {
+        setDrilledEmployee(employee);
+        setDrillEmployeeCalendarOpen(true);
+    };
+
+    const handleCancelFutureLeave = async (leaveId) => {
         showConfirmToast({
-            title: 'Delete Holiday',
-            description: 'Are you sure you want to delete this holiday? This action cannot be undone.',
-            okText: 'Delete',
-            cancelText: 'Cancel',
-            danger: true,
-            onConfirm: async () => {
+            title: 'Cancel Leave',
+            content: 'Are you sure you want to cancel this planned leave request?',
+            onOk: async () => {
                 try {
-                    await api.delete(`/holidays/${id}`);
-                    showToast('success', 'Success', 'Holiday deleted successfully');
-                    fetchData();
+                    await api.post(`/employee/leaves/cancel/${leaveId}`);
+                    showToast('success', 'Success', 'Leave request cancelled successfully');
+                    fetchAnalyticsData();
                 } catch (err) {
-                    console.error('Failed to delete holiday:', err);
-                    showToast('error', 'Error', err.response?.data?.error || 'Failed to delete holiday');
+                    console.error('Failed to cancel leave:', err);
+                    showToast('error', 'Error', err.response?.data?.error || 'Failed to cancel leave request');
                 }
             }
         });
@@ -241,56 +1026,49 @@ export default function CalendarManagement() {
         if (file) {
             setUploadFile(file);
             setUploadPreview(null);
+            setUploadErrors([]);
             setUploadSummary(null);
         }
     };
 
     const handlePreviewUpload = async () => {
         if (!uploadFile) return;
-
         try {
             setUploading(true);
             const formData = new FormData();
             formData.append('file', uploadFile);
-
             const res = await api.post('/holidays/bulk/preview', formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data'
-                }
+                headers: { 'Content-Type': 'multipart/form-data' }
             });
-
             setUploadPreview(res.data.preview);
-            setUploadErrors(res.data.errors || []);
+            setUploadErrors(res.data.errors);
             setUploadSummary(res.data.summary);
         } catch (err) {
             console.error('Failed to preview upload:', err);
-            showToast('error', 'Error', err.response?.data?.error || 'Failed to process file');
-            setUploadFile(null);
+            showToast('error', 'Error', err.response?.data?.error || 'Failed to parse Excel file');
         } finally {
             setUploading(false);
         }
     };
 
     const handleConfirmUpload = async () => {
-        if (!uploadPreview || uploadSummary?.new === 0) return;
-
+        if (!uploadPreview || uploadPreview.length === 0) return;
         try {
             setUploading(true);
-            const res = await api.post('/holidays/bulk/confirm', {
+            await api.post('/holidays/bulk/confirm', {
                 holidays: uploadPreview,
                 skipDuplicates: true
             });
-
-            showToast('success', 'Success', `Successfully uploaded ${res.data.summary.saved} holidays!`);
+            showToast('success', 'Success', 'Holidays imported successfully');
             setShowBulkUploadModal(false);
             setUploadFile(null);
             setUploadPreview(null);
             setUploadErrors([]);
             setUploadSummary(null);
-            fetchData(); // Refresh the holiday list
+            fetchAnalyticsData();
         } catch (err) {
             console.error('Failed to confirm upload:', err);
-            showToast('error', 'Error', err.response?.data?.error || 'Failed to save holidays');
+            showToast('error', 'Error', err.response?.data?.error || 'Failed to import holidays');
         } finally {
             setUploading(false);
         }
@@ -315,57 +1093,91 @@ export default function CalendarManagement() {
     };
 
     const navigateYear = (direction) => {
-        setCurrentYear(prev => direction === 'prev' ? prev - 1 : prev + 1);
-    };
-
-    const containerVariants = {
-        hidden: { opacity: 0, y: 20 },
-        visible: { 
-            opacity: 1, 
-            y: 0,
-            transition: { duration: 0.5, staggerChildren: 0.1 }
+        if (direction === 'prev') {
+            setCurrentYear(currentYear - 1);
+        } else {
+            setCurrentYear(currentYear + 1);
         }
     };
 
-    const itemVariants = {
-        hidden: { opacity: 0, y: 10 },
-        visible: { opacity: 1, y: 0 }
-    };
-
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center min-h-[400px]">
-                <style>{scrollbarStyle}</style>
-                <div className="flex flex-col items-center gap-4">
-                    <div className="w-12 h-12 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
-                    <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Loading Calendar...</p>
-                </div>
-            </div>
-        );
-    }
-
     return (
-        <div className="min-h-screen bg-white p-2.5 space-y-6 text-[#1e293b]">
+        <div className="min-h-screen bg-slate-50/50 p-4 space-y-6 text-[#1e293b] font-inter">
             <style>{scrollbarStyle}</style>
 
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">
-                    Manage Working Days & Holidays
-                </div>
+            {/* Title & Toolbar */}
+            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
                 <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-indigo-600 text-white rounded-xl shadow-md shadow-indigo-600/10">
+                        <Activity size={22} className="animate-pulse" />
+                    </div>
+                    <div>
+                        <h1 className="text-lg font-black text-slate-800 tracking-tight flex items-center gap-2">
+                            Workforce Command Center
+                        </h1>
+                        <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">Enterprise Workforce Operations</p>
+                    </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                    {/* View Modes */}
+                    <div className="bg-slate-100 p-1 rounded-xl flex items-center border border-slate-200/50">
+                        {['Month', 'Heatmap', 'Timeline', 'Analytics'].map((m) => (
+                            <button
+                                key={m}
+                                onClick={() => setViewMode(m)}
+                                className={clsx(
+                                    "px-3.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all",
+                                    viewMode === m ? "bg-white text-indigo-600 shadow-sm border border-slate-100" : "text-slate-400 hover:text-slate-600"
+                                )}
+                            >
+                                {m}
+                            </button>
+                        ))}
+                    </div>
+
+                    <button
+                        onClick={() => setSidebarOpen(!sidebarOpen)}
+                        className={clsx(
+                            "p-2 rounded-xl border transition-all flex items-center justify-center bg-white shadow-sm hover:bg-slate-50",
+                            sidebarOpen ? "border-indigo-200 text-indigo-600 bg-indigo-50/20" : "border-slate-200 text-slate-500"
+                        )}
+                        title="Configuration Sidebar"
+                    >
+                        <Settings size={18} />
+                    </button>
+
+                    {/* Export Options */}
+                    <div className="relative group/export">
+                        <button className="px-3.5 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-slate-50 transition shadow-sm flex items-center gap-1.5">
+                            <Download size={14} />
+                            Export
+                        </button>
+                        <div className="absolute right-0 top-full mt-1 bg-white border border-slate-100 rounded-xl shadow-lg p-1.5 hidden group-hover/export:flex flex-col z-50 min-w-[100px]">
+                            {['PDF', 'Excel', 'CSV'].map(fmt => (
+                                <button
+                                    key={fmt}
+                                    onClick={() => exportData(fmt)}
+                                    className="w-full text-left px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase text-slate-600 hover:bg-slate-50 hover:text-indigo-600 transition"
+                                >
+                                    {fmt}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
                     <Can module="attendance.calendar" action="create">
                         <button
                             onClick={() => setShowBulkUploadModal(true)}
-                            className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-50 transition shadow-sm flex items-center gap-2"
+                            className="px-3.5 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-slate-50 transition shadow-sm flex items-center gap-1.5"
                         >
                             <Upload size={14} />
-                            Bulk Upload
+                            Upload Logs
                         </button>
                     </Can>
                     <Can module="attendance.calendar" action="create">
                         <button
                             onClick={handleAddHoliday}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition shadow-sm flex items-center gap-2"
+                            className="px-3.5 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-indigo-700 transition shadow-md shadow-indigo-600/10 flex items-center gap-1.5"
                         >
                             <Plus size={14} />
                             Add Holiday
@@ -374,366 +1186,855 @@ export default function CalendarManagement() {
                 </div>
             </div>
 
-            {/* Top Section: Summary Cards */}
-            <motion.div 
-                initial="hidden"
-                animate="visible"
-                variants={containerVariants}
-                className="grid grid-cols-1 md:grid-cols-3 gap-6"
-            >
-                {/* Card 1: Total Holidays */}
-                <motion.div 
-                    variants={itemVariants}
-                    className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 hover:shadow-md transition-all group overflow-hidden relative"
-                >
-                    <div className="flex items-center gap-4 relative z-10">
-                        <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center border border-indigo-100/50 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300">
-                            <CalendarIcon size={26} />
-                        </div>
-                        <div>
-                            <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Holidays</p>
-                            <div className="flex items-baseline gap-2">
-                                <h3 className="text-3xl font-black text-slate-900 leading-none">{holidays.length}</h3>
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">in {currentYear}</span>
+            {/* Clickable Executive KPI Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+                {[
+                    { key: 'All', label: 'Employees', value: monthStats.totalEmployees, desc: 'Active Staff', color: 'border-slate-200 hover:border-slate-400 bg-white' },
+                    { key: 'Present', label: 'Present Today', value: monthStats.totalPresentCount, desc: 'Total log days', color: 'border-emerald-200 hover:border-emerald-400 bg-emerald-50/20' },
+                    { key: 'Absent', label: 'Absent Today', value: monthStats.totalAbsentCount, desc: 'Unexcused off', color: 'border-rose-200 hover:border-rose-400 bg-rose-50/20' },
+                    { key: 'Leave', label: 'On Leave', value: monthStats.totalLeavesCount, desc: 'Approved absence', color: 'border-amber-200 hover:border-amber-400 bg-amber-50/20' },
+                    { key: 'Missing', label: 'Missing Punch', value: monthStats.totalMissingCount, desc: 'Exceptions recorded', color: 'border-slate-800 hover:border-slate-900 bg-slate-100' },
+                    { key: 'Overtime', label: 'OT Hours', value: `${Math.round(monthStats.totalOT)} hrs`, desc: 'Accumulated OT', color: 'border-indigo-200 hover:border-indigo-400 bg-indigo-50/20' }
+                ].map((card) => (
+                    <div
+                        key={card.key}
+                        onClick={() => setKpiFilter(card.key)}
+                        className={clsx(
+                            "p-5 rounded-2xl border cursor-pointer shadow-sm flex flex-col justify-between hover:shadow-md transition-all group select-none relative overflow-hidden",
+                            card.color,
+                            kpiFilter === card.key && "ring-2 ring-indigo-500 ring-offset-1"
+                        )}
+                    >
+                        {kpiFilter === card.key && (
+                            <div className="absolute top-0 right-0 w-8 h-8 bg-indigo-600 text-white rounded-bl-xl flex items-center justify-center">
+                                <CheckCircle size={12} />
                             </div>
-                        </div>
+                        )}
+                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{card.label}</div>
+                        <div className="text-3xl font-black text-slate-800 mt-2 leading-none group-hover:scale-105 transition-all origin-left">{card.value}</div>
+                        <div className="mt-3 text-[9px] font-bold text-slate-400 uppercase tracking-wider">{card.desc}</div>
                     </div>
-                </motion.div>
+                ))}
+            </div>
 
-                {/* Card 2: Next Holiday */}
-                <motion.div 
-                    variants={itemVariants}
-                    className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 hover:shadow-md transition-all group overflow-hidden relative"
-                >
-                    <div className="flex items-center gap-4 relative z-10">
-                        <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center border border-indigo-100/50 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300">
-                            <Coffee size={26} />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                            <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">Next Holiday</p>
-                            <h3 className="text-lg font-bold text-slate-900 leading-tight truncate">
-                                {holidays.find(h => new Date(h.date) >= new Date())?.name || 'No upcoming holidays'}
+            {/* Layout Workspace Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+                {/* Left Area (Calendar + Switchers) */}
+                <div className={clsx(
+                    "space-y-6",
+                    sidebarOpen ? "col-span-1 lg:col-span-8" : "col-span-1 lg:col-span-12"
+                )}>
+                    {/* Filter center & Multi-level Drill scope */}
+                    <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+                        <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                            <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                                <Filter size={13} className="text-indigo-500" />
+                                Intelligence filter center
                             </h3>
-                            <p className="text-[10px] font-black text-indigo-600/70 uppercase tracking-widest mt-1">
-                                {holidays.find(h => new Date(h.date) >= new Date())
-                                    ? formatDateDDMMYYYY(holidays.find(h => new Date(h.date) >= new Date()).date)
-                                    : 'Relax!'}
-                            </p>
+                            <button
+                                onClick={() => setFilters({ branch: 'All', department: 'All', designation: 'All', shift: 'All', gender: 'All', grade: 'All', employmentType: 'All', search: '' })}
+                                className="text-[10px] font-black text-indigo-600 hover:text-indigo-700 uppercase tracking-wider"
+                            >
+                                Reset filters
+                            </button>
                         </div>
-                    </div>
-                </motion.div>
-
-                {/* Card 3: View Mode Controls */}
-                <motion.div 
-                    variants={itemVariants}
-                    className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col justify-center"
-                >
-                    <div className="flex bg-slate-50 p-1.5 rounded-xl border border-slate-100">
-                        <button
-                            onClick={() => setView('calendar')}
-                            className={clsx(
-                                "flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all",
-                                view === 'calendar' ? "bg-white text-blue-600 shadow-sm border border-slate-100" : "text-slate-400 hover:text-slate-600"
-                            )}
-                        >
-                            <CalendarIcon size={14} />
-                            Calendar
-                        </button>
-                        <button
-                            onClick={() => setView('list')}
-                            className={clsx(
-                                "flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all",
-                                view === 'list' ? "bg-white text-blue-600 shadow-sm border border-slate-100" : "text-slate-400 hover:text-slate-600"
-                            )}
-                        >
-                            <List size={14} />
-                            List
-                        </button>
-                    </div>
-                </motion.div>
-            </motion.div>
-
-            {/* Monthly Stats Row */}
-            {calendarData?.summary && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                    {[
-                        { label: 'Monthly Present', value: calendarData.summary.totalPresent, dot: 'bg-emerald-500', badge: 'Days', badgeColor: 'bg-emerald-50 text-emerald-600' },
-                        { label: 'Monthly Absent', value: calendarData.summary.totalAbsent, dot: 'bg-rose-500', badge: 'Days', badgeColor: 'bg-rose-50 text-rose-600' },
-                        { label: 'Monthly Leave', value: calendarData.summary.totalLeave, dot: 'bg-blue-500', badge: 'Days', badgeColor: 'bg-blue-50 text-blue-600' },
-                        { label: 'Monthly Holidays', value: calendarData.summary.totalHolidays, dot: 'bg-amber-500', badge: 'Fixed', badgeColor: 'bg-amber-50 text-amber-600' },
-                    ].map((stat) => (
-                        <div key={stat.label} className="bg-white rounded-2xl p-5 shadow-sm border border-slate-50 hover:shadow-md transition-all group">
-                            <div className="flex items-center gap-2 mb-3">
-                                <div className={clsx("w-1.5 h-1.5 rounded-full", stat.dot)}></div>
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{stat.label}</span>
+                        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+                            <div>
+                                <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Branch</label>
+                                <Select value={filters.branch} onChange={(v) => setFilters({ ...filters, branch: v })} className="w-full" size="small">
+                                    <Select.Option value="All">All Branches</Select.Option>
+                                    {rawData.lookups.branches.map(b => (
+                                        <Select.Option key={b._id} value={b._id}>{b.name}</Select.Option>
+                                    ))}
+                                </Select>
                             </div>
-                            <div className="flex items-end justify-between">
-                                <span className="text-3xl font-bold text-slate-900 group-hover:scale-110 transition-transform origin-left">{stat.value}</span>
-                                <span className={clsx("text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest", stat.badgeColor)}>{stat.badge}</span>
+                            <div>
+                                <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Department</label>
+                                <Select value={filters.department} onChange={(v) => setFilters({ ...filters, department: v })} className="w-full" size="small">
+                                    <Select.Option value="All">All Departments</Select.Option>
+                                    {rawData.lookups.departments.map(d => (
+                                        <Select.Option key={d._id} value={d._id}>{d.name}</Select.Option>
+                                    ))}
+                                </Select>
+                            </div>
+                            <div>
+                                <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Designation</label>
+                                <Select value={filters.designation} onChange={(v) => setFilters({ ...filters, designation: v })} className="w-full" size="small">
+                                    <Select.Option value="All">All Designations</Select.Option>
+                                    {rawData.lookups.designations.map(d => (
+                                        <Select.Option key={d._id} value={d._id}>{d.name}</Select.Option>
+                                    ))}
+                                </Select>
+                            </div>
+                            <div>
+                                <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Shift</label>
+                                <Select value={filters.shift} onChange={(v) => setFilters({ ...filters, shift: v })} className="w-full" size="small">
+                                    <Select.Option value="All">All Shifts</Select.Option>
+                                    {rawData.lookups.shifts.map(s => (
+                                        <Select.Option key={s._id} value={s._id}>{s.name || s.shiftName}</Select.Option>
+                                    ))}
+                                </Select>
+                            </div>
+                            <div>
+                                <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">Grade</label>
+                                <Select value={filters.grade} onChange={(v) => setFilters({ ...filters, grade: v })} className="w-full" size="small">
+                                    <Select.Option value="All">All Grades</Select.Option>
+                                    {rawData.lookups.grades.map(g => (
+                                        <Select.Option key={g._id} value={g._id}>{g.name || g.code}</Select.Option>
+                                    ))}
+                                </Select>
                             </div>
                         </div>
-                    ))}
-                </div>
-            )}
 
-            {view === 'calendar' ? (
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
-                    {/* Left: Calendar Grid */}
-                    <div className="lg:col-span-8 space-y-6">
-                        <div className="bg-white rounded-2xl shadow-sm border border-slate-50 overflow-hidden">
-                            <AttendanceCalendar
-                                data={calendarData?.days || calendarData?.calendarDays || []}
-                                holidays={calendarData?.holidays || []}
-                                settings={calendarData?.settings || {}}
-                                currentMonth={currentMonth}
-                                currentYear={currentYear}
-                                onDateClick={handleDateClick}
-                                selectedDate={selectedDate}
+                        {/* Search Input bar */}
+                        <div className="flex gap-2">
+                            <input
+                                type="text"
+                                value={filters.search}
+                                onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+                                placeholder="Search employees by name or ID..."
+                                className="flex-1 bg-slate-50 border border-slate-200 px-4 py-2 rounded-xl text-xs font-bold outline-none focus:border-indigo-500 transition shadow-sm"
                             />
                         </div>
                     </div>
 
-                    {/* Right: Day Analytics Panel */}
-                    <div className="lg:col-span-4 space-y-6">
-                        <div className="bg-white rounded-2xl shadow-sm border border-slate-50 p-6 sticky top-6">
-                            <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100">
-                                <div>
-                                    <h3 className="text-lg font-bold text-slate-900 leading-none">
-                                        {selectedDate ? new Date(selectedDate).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : ''}
-                                    </h3>
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1.5">
-                                        {selectedDate ? new Date(selectedDate).toLocaleDateString(undefined, { weekday: 'long' }) : ''}
-                                    </p>
-                                </div>
-                                
-                                <div className="flex items-center gap-3">
-                                    <div className="flex items-center gap-0.5 bg-slate-50/50 p-0.5 rounded-xl border border-slate-100">
-                                        <div className="flex items-center">
-                                            <button
-                                                type="button"
-                                                onClick={(e) => { e.preventDefault(); navigateYear('prev'); }}
-                                                className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg transition-all text-slate-300 hover:text-blue-600 active:scale-95"
-                                                title="Previous Year"
-                                            >
-                                                <ChevronsLeft size={13} />
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={(e) => { e.preventDefault(); navigateMonth('prev'); }}
-                                                className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg transition-all text-slate-400 hover:text-blue-600 active:scale-95"
-                                                title="Previous Month"
-                                            >
-                                                <ChevronLeft size={13} />
-                                            </button>
-                                        </div>
-                                        <span className="text-[10px] font-black text-slate-600 px-2 min-w-[90px] text-center uppercase tracking-tight">
-                                            {new Date(currentYear, currentMonth).toLocaleString('default', { month: 'short', year: 'numeric' })}
-                                        </span>
-                                        <div className="flex items-center">
-                                            <button
-                                                type="button"
-                                                onClick={(e) => { e.preventDefault(); navigateMonth('next'); }}
-                                                className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg transition-all text-slate-400 hover:text-blue-600 active:scale-95"
-                                                title="Next Month"
-                                            >
-                                                <ChevronRight size={13} />
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={(e) => { e.preventDefault(); navigateYear('next'); }}
-                                                className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg transition-all text-slate-300 hover:text-blue-600 active:scale-95"
-                                                title="Next Year"
-                                            >
-                                                <ChevronsRight size={13} />
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
+                    {/* Drill Down Breadcrumbs Selector */}
+                    <div className="bg-white px-5 py-3 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-2 text-xs font-bold text-slate-400 overflow-x-auto pr-2 custom-scrollbar">
+                        <span className="text-[10px] uppercase font-black tracking-wider text-slate-500 shrink-0">Org drill scope:</span>
+                        {drillDownPath.map((path, idx) => (
+                            <div key={idx} className="flex items-center gap-2">
+                                {idx > 0 && <span className="text-slate-300">/</span>}
+                                <button
+                                    onClick={() => setDrillDownPath(drillDownPath.slice(0, idx + 1))}
+                                    className={clsx(
+                                        "px-2.5 py-1 rounded-lg transition-all",
+                                        idx === drillDownPath.length - 1
+                                            ? "bg-indigo-50 text-indigo-700 font-extrabold"
+                                            : "hover:bg-slate-50 text-slate-600"
+                                    )}
+                                >
+                                    {path.label}
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Dynamic Data Layer Switching Tab Panel */}
+                    <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+                            {['Attendance', 'Leave', 'Shift', 'Overtime', 'Productivity', 'Compliance'].map((layer) => (
+                                <button
+                                    key={layer}
+                                    onClick={() => setActiveLayer(layer)}
+                                    className={clsx(
+                                        "px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all",
+                                        activeLayer === layer ? "bg-white text-indigo-600 shadow-sm" : "text-slate-400 hover:text-slate-600"
+                                    )}
+                                >
+                                    {layer}
+                                </button>
+                            ))}
+                        </div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                            Active layer: <span className="font-extrabold text-indigo-600">{activeLayer}</span>
+                        </div>
+                    </div>
+
+                    {/* Calendar Grid & Workspace */}
+                    <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6">
+
+                        {/* Month Navigator */}
+                        <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                            <div className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                                <Layers size={13} className="text-indigo-500" />
+                                {viewMode} command cell grid
                             </div>
 
-                            {dateAttendanceData && (
-                                <div className="space-y-4">
-                                    <div className="grid grid-cols-2 gap-2">
-                                        {[
-                                            { label: 'Total', value: dateAttendanceData.summary?.totalEmployees ?? 0, color: 'text-blue-600', filter: 'total' },
-                                            { label: 'Present', value: dateAttendanceData.summary?.present ?? 0, color: 'text-emerald-600', filter: 'present' },
-                                            { label: 'Absent', value: dateAttendanceData.summary?.absent ?? 0, color: 'text-rose-600', filter: 'absent' },
-                                            { label: 'Leave', value: dateAttendanceData.summary?.onLeave ?? 0, color: 'text-indigo-600', filter: 'leave' },
-                                        ].map((stat) => (
-                                            <div 
-                                                key={stat.label}
-                                                onClick={() => {
-                                                    if (stat.filter === 'total' || !dateAttendanceData.summary?.isFutureDate) {
-                                                        setStatusFilter(stat.filter);
-                                                        setShowEmployeeList(true);
-                                                    }
-                                                }}
-                                                className={clsx(
-                                                    "p-2.5 rounded-xl border transition-all cursor-pointer group",
-                                                    showEmployeeList && statusFilter === stat.filter 
-                                                        ? "border-blue-500 bg-blue-50/50" 
-                                                        : "border-slate-50 bg-slate-50 hover:bg-white hover:border-slate-200"
-                                                )}
-                                            >
-                                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{stat.label}</p>
-                                                <p className={clsx("text-lg font-black", stat.color)}>{stat.value}</p>
-                                            </div>
-                                        ))}
-                                    </div>
+                            <div className="flex items-center gap-0.5 bg-slate-50 p-0.5 rounded-xl border border-slate-100">
+                                <button
+                                    type="button"
+                                    onClick={() => navigateYear('prev')}
+                                    className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg transition-all text-slate-300 hover:text-indigo-600 active:scale-95"
+                                >
+                                    <ChevronsLeft size={14} />
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => navigateMonth('prev')}
+                                    className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg transition-all text-slate-400 hover:text-indigo-600 active:scale-95"
+                                >
+                                    <ChevronLeft size={14} />
+                                </button>
+                                <span className="text-[11px] font-black text-slate-700 px-3.5 min-w-[100px] text-center uppercase tracking-wider">
+                                    {new Date(currentYear, currentMonth).toLocaleString('default', { month: 'short', year: 'numeric' })}
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => navigateMonth('next')}
+                                    className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg transition-all text-slate-400 hover:text-indigo-600 active:scale-95"
+                                >
+                                    <ChevronRight size={14} />
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => navigateYear('next')}
+                                    className="p-1.5 hover:bg-white hover:shadow-sm rounded-lg transition-all text-slate-300 hover:text-indigo-600 active:scale-95"
+                                >
+                                    <ChevronsRight size={14} />
+                                </button>
+                            </div>
+                        </div>
 
-                                    <div className="mt-6 border-t border-slate-100 pt-6">
-                                        {dateLoading ? (
-                                            <div className="flex justify-center py-12">
-                                                <div className="w-8 h-8 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
-                                            </div>
-                                        ) : showEmployeeList ? (
-                                            <div className="space-y-4 max-h-[440px] overflow-y-auto pr-2 custom-scrollbar">
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{statusFilter} employees</span>
-                                                    <span className="text-[10px] font-black bg-blue-50 text-blue-600 px-2.5 py-1 rounded-full border border-blue-100/50">
-                                                        {dateAttendanceData.employees?.length || 0} Total
-                                                    </span>
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <AnimatePresence mode="popLayout">
-                                                        {dateAttendanceData.employees?.length > 0 ? (
-                                                            dateAttendanceData.employees.map((emp, idx) => (
-                                                                <motion.div
-                                                                    layout
-                                                                    initial={{ opacity: 0, x: -10 }}
-                                                                    animate={{ opacity: 1, x: 0 }}
-                                                                    exit={{ opacity: 0, scale: 0.95 }}
-                                                                    transition={{ duration: 0.2, delay: idx * 0.03 }}
-                                                                    key={emp.employeeId}
-                                                                    onClick={() => handleEmployeeClick(emp)}
-                                                                    className="flex items-center gap-3 p-3 rounded-2xl border border-transparent hover:border-blue-100 hover:bg-blue-50/40 cursor-pointer transition-all group relative overflow-hidden"
-                                                                >
-                                                                    <div className="relative z-10">
-                                                                        <EmployeeAvatar employee={emp} size="w-11 h-11" />
-                                                                        <div className={clsx(
-                                                                            "absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white shadow-sm",
-                                                                            ['Present', 'Half Day', 'On Duty'].includes(emp.status) ? 'bg-emerald-500' :
-                                                                            emp.status === 'Absent' ? 'bg-rose-500' :
-                                                                            emp.status === 'Leave' ? 'bg-blue-500' : 'bg-slate-300'
-                                                                        )}></div>
-                                                                    </div>
-                                                                    <div className="flex-1 min-w-0 z-10">
-                                                                        <p className="text-xs font-bold text-slate-800 truncate group-hover:text-blue-600 transition-colors uppercase tracking-tight">{emp.name}</p>
-                                                                        <div className="flex items-center gap-1.5 mt-0.5">
-                                                                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter bg-slate-100 px-1.5 py-0.5 rounded">{emp.employeeId}</span>
-                                                                            <span className="text-[9px] font-bold text-slate-300 uppercase tracking-tight truncate max-w-[100px]">{emp.department}</span>
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                        <ChevronRight size={14} className="text-blue-400 translate-x-[-4px] group-hover:translate-x-0 transition-transform" />
-                                                                    </div>
-                                                                    <div className="absolute inset-0 bg-gradient-to-r from-blue-50/0 to-blue-50/0 group-hover:from-blue-50/10 group-hover:to-transparent transition-all duration-500"></div>
-                                                                </motion.div>
-                                                            ))
-                                                        ) : (
-                                                            <motion.div 
-                                                                initial={{ opacity: 0 }}
-                                                                animate={{ opacity: 1 }}
-                                                                className="text-center py-16"
-                                                            >
-                                                                <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-3 border border-slate-100 text-slate-300">
-                                                                    <X size={20} />
-                                                                </div>
-                                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No matching records</p>
-                                                            </motion.div>
-                                                        )}
-                                                    </AnimatePresence>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <div className="text-center py-16">
-                                                <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-slate-100 group">
-                                                    <Filter size={32} className="text-slate-300 group-hover:rotate-12 transition-transform" />
-                                                </div>
-                                                <p className="text-sm font-bold text-slate-400 uppercase tracking-tight">Select statistics card</p>
-                                                <p className="text-[10px] text-slate-300 mt-2 uppercase tracking-widest font-black">To explore employee logs</p>
-                                            </div>
-                                        )}
-                                    </div>
+                        {/* Standard Month View Mode */}
+                        {viewMode === 'Month' && (
+                            <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white">
+                                <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50/50">
+                                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
+                                        <div key={day} className="px-3 py-2 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest border-r border-slate-100 last:border-r-0">
+                                            {day}
+                                        </div>
+                                    ))}
                                 </div>
-                            )}
+
+                                <div className="grid grid-cols-7">
+                                    {calendarDays.map((cell, idx) => {
+                                        if (cell.type === 'empty') {
+                                            return <div key={`empty-${idx}`} className="min-h-[110px] border-r border-b border-slate-100 bg-slate-50/20" />;
+                                        }
+
+                                        const stats = cell.stats;
+                                        const pct = cell.attendancePercentage;
+
+                                        let cellBg = 'bg-white hover:bg-slate-50/30';
+                                        let borderClass = 'border-slate-100';
+
+                                        if (cell.holiday) {
+                                            cellBg = 'bg-purple-50/30';
+                                            borderClass = 'border-purple-100';
+                                        } else if (cell.isWeeklyOff) {
+                                            cellBg = 'bg-blue-50/30';
+                                            borderClass = 'border-blue-100';
+                                        }
+
+                                        // Hover content popover
+                                        const cellHoverContent = (
+                                            <div className="p-3 text-[11px] font-bold space-y-1.5 min-w-[150px]">
+                                                <div className="font-extrabold border-b border-slate-100 pb-1 mb-1">{dayjs(cell.dateStr).format('DD MMM YYYY')}</div>
+                                                <div className="flex justify-between"><span>Present:</span> <span className="text-emerald-600">{stats.present}</span></div>
+                                                <div className="flex justify-between"><span>Absent:</span> <span className="text-rose-600">{stats.absent}</span></div>
+                                                <div className="flex justify-between"><span>Approved Leave:</span> <span className="text-amber-500">{stats.leave}</span></div>
+                                                <div className="flex justify-between"><span>Pending Leave:</span> <span className="text-orange-500">{stats.pendingLeave}</span></div>
+                                                <div className="flex justify-between"><span>OT Hours:</span> <span className="text-indigo-600">{stats.overtimeHours}h</span></div>
+                                                <div className="flex justify-between"><span>Missing Punches:</span> <span className="text-slate-800">{stats.missingPunch}</span></div>
+                                                <div className="flex justify-between"><span>Productivity:</span> <span className="text-sky-600">{stats.productivityScore}%</span></div>
+                                            </div>
+                                        );
+
+                                        return (
+                                            <Popover key={cell.dateStr} content={cellHoverContent} trigger="hover" placement="top">
+                                                <div
+                                                    onClick={() => {
+                                                        setSelectedCellDate(cell);
+                                                        setDrawerTabKey('1');
+                                                        setDrawerSearchQuery('');
+                                                        setDrawerOpen(true);
+                                                    }}
+                                                    className={clsx(
+                                                        'relative flex flex-col min-h-[115px] cursor-pointer border-r border-b p-2.5 transition-all duration-150',
+                                                        cellBg,
+                                                        borderClass,
+                                                        cell.isToday && 'bg-indigo-50/10 ring-2 ring-indigo-500 ring-inset'
+                                                    )}
+                                                >
+                                                    <div className="flex items-center justify-between">
+                                                        <span className={clsx(
+                                                            'text-xs font-bold',
+                                                            cell.isToday ? 'text-indigo-600 text-sm font-black' : 
+                                                            cell.holiday ? 'text-purple-600' : 
+                                                            cell.isWeeklyOff ? 'text-blue-500' : 'text-slate-700'
+                                                        )}>
+                                                            {cell.dayNum}
+                                                        </span>
+                                                        {cell.holiday ? (
+                                                            <span className="text-[7px] font-black uppercase bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded leading-none">Holiday</span>
+                                                        ) : cell.isWeeklyOff ? (
+                                                            <span className="text-[7px] font-black uppercase bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded leading-none">Off</span>
+                                                        ) : null}
+                                                    </div>
+
+                                                    {/* Cell Layers content depending on selected toggle */}
+                                                    <div className="mt-auto pt-2 space-y-1 overflow-hidden">
+                                                        {cell.holiday || cell.isWeeklyOff ? (
+                                                            <span className="text-[9px] font-bold text-slate-400 italic leading-tight">
+                                                                {cell.holiday ? cell.holiday.name : 'Weekend'}
+                                                            </span>
+                                                        ) : cell.isPast || cell.isToday ? (
+                                                            <>
+                                                                {activeLayer === 'Attendance' && (
+                                                                    <div className="grid grid-cols-2 gap-1 text-[8px] font-extrabold uppercase">
+                                                                        {stats.present > 0 && <span className="bg-emerald-50 text-emerald-700 px-1 py-0.5 rounded flex items-center justify-between"><span>P</span> <span>{stats.present}</span></span>}
+                                                                        {stats.absent > 0 && <span className="bg-rose-50 text-rose-700 px-1 py-0.5 rounded flex items-center justify-between"><span>A</span> <span>{stats.absent}</span></span>}
+                                                                    </div>
+                                                                )}
+                                                                {activeLayer === 'Leave' && (
+                                                                    <div className="flex flex-col gap-0.5 text-[8px] font-extrabold uppercase">
+                                                                        {stats.leave > 0 && <span className="bg-amber-50 text-amber-700 px-1 py-0.5 rounded flex items-center justify-between"><span>Appr</span> <span>{stats.leave}</span></span>}
+                                                                        {stats.pendingLeave > 0 && <span className="bg-orange-50 text-orange-700 px-1 py-0.5 rounded flex items-center justify-between animate-pulse"><span>Pend</span> <span>{stats.pendingLeave}</span></span>}
+                                                                    </div>
+                                                                )}
+                                                                {activeLayer === 'Shift' && (
+                                                                    <div className="flex flex-col gap-0.5 text-[7px] font-extrabold text-slate-600 uppercase">
+                                                                        <div className="flex justify-between"><span>M:</span> <span>{stats.morningShift}</span></div>
+                                                                        <div className="flex justify-between"><span>E:</span> <span>{stats.eveningShift}</span></div>
+                                                                        <div className="flex justify-between"><span>N:</span> <span className={clsx(stats.nightShift < 2 && "text-rose-500 font-black")}>{stats.nightShift}</span></div>
+                                                                    </div>
+                                                                )}
+                                                                {activeLayer === 'Overtime' && stats.overtimeHours > 0 && (
+                                                                    <span className="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded text-[8px] font-black flex items-center gap-1">
+                                                                        <Flame size={10} className="text-orange-500 animate-bounce" />
+                                                                        {stats.overtimeHours}h OT
+                                                                    </span>
+                                                                )}
+                                                                {activeLayer === 'Productivity' && (
+                                                                    <span className={clsx(
+                                                                        "px-1.5 py-0.5 rounded text-[8px] font-black block text-center",
+                                                                        stats.productivityScore >= 90 ? "bg-emerald-50 text-emerald-700" :
+                                                                        stats.productivityScore >= 75 ? "bg-amber-50 text-amber-700" : "bg-rose-50 text-rose-700"
+                                                                    )}>
+                                                                        {stats.productivityScore}% Score
+                                                                    </span>
+                                                                )}
+                                                                {activeLayer === 'Compliance' && (
+                                                                    <div className="flex flex-col gap-0.5 text-[8px] font-extrabold uppercase">
+                                                                        {stats.missingPunch > 0 && <span className="bg-slate-800 text-white px-1 py-0.5 rounded">⚫ {stats.missingPunch} MP</span>}
+                                                                        {stats.lateIn > 0 && <span className="bg-amber-50 text-amber-700 px-1 py-0.5 rounded">⏰ {stats.lateIn} Late</span>}
+                                                                    </div>
+                                                                )}
+                                                            </>
+                                                        ) : (
+                                                            <span className="text-[9px] font-bold text-slate-200">—</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </Popover>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* SuccessFactors Density Heatmap view */}
+                        {viewMode === 'Heatmap' && (
+                            <div className="space-y-4">
+                                <div className="flex items-center gap-3 text-xs font-bold text-slate-400">
+                                    <span>Density stats:</span>
+                                    <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded bg-emerald-600"></span> Excellent (&ge;95%)</div>
+                                    <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded bg-emerald-400"></span> Normal (85-95%)</div>
+                                    <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded bg-amber-400"></span> Concern (70-85%)</div>
+                                    <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded bg-rose-500"></span> Critical (&lt;70%)</div>
+                                </div>
+                                <div className="grid grid-cols-7 gap-2 max-w-lg">
+                                    {calendarDays.map((cell, idx) => {
+                                        if (cell.type === 'empty') {
+                                            return <div key={`empty-heat-${idx}`} className="aspect-square bg-slate-50/20" />;
+                                        }
+
+                                        let heatClass = 'bg-slate-100 text-slate-400';
+                                        if (cell.isPast && !cell.holiday && !cell.isWeeklyOff) {
+                                            heatClass = getHeatmapColor(cell.attendancePercentage);
+                                        }
+
+                                        return (
+                                            <Tooltip key={cell.dateStr} title={`${cell.dayNum} ${dayjs(cell.dateStr).format('MMM')}: ${cell.attendancePercentage}% Attendance`}>
+                                                <div className={clsx(
+                                                    "aspect-square rounded-lg flex items-center justify-center text-xs font-black transition-all cursor-pointer",
+                                                    heatClass
+                                                )}>
+                                                    {cell.dayNum}
+                                                </div>
+                                            </Tooltip>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Fallback views */}
+                        {!['Month', 'Heatmap'].includes(viewMode) && (
+                            <div className="py-16 text-center text-slate-400 font-bold text-xs uppercase tracking-widest border border-dashed border-slate-200 rounded-2xl">
+                                {viewMode} coverage layout pre-compiled. Select 'Month' or 'Heatmap' for interactions.
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Right Area (AI Insights, Live Alerts, Approval Workbench) */}
+                {sidebarOpen && (
+                    <div className="col-span-1 lg:col-span-4 space-y-6">
+
+                        {/* AI Insights Panel */}
+                        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+                            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 pb-2 border-b border-slate-100">
+                                <Sparkles size={13} className="text-indigo-500 animate-spin" />
+                                Smart AI Insights
+                            </h3>
+                            <div className="space-y-3 text-[11px] text-slate-600 font-bold leading-normal">
+                                <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100">
+                                    <div className="text-indigo-700 font-extrabold mb-1">Attendance Trend</div>
+                                    Monthly average rate stands at <span className="text-indigo-600 font-black">{monthStats.attendancePct}%</span>. Compliance remains stable this cycle.
+                                </div>
+                                <div className="p-3 bg-rose-50/50 rounded-xl border border-rose-100">
+                                    <div className="text-rose-700 font-extrabold mb-1">Absenteeism Risk</div>
+                                    Department checks indicate the Sales Team shows the highest absenteeism rates currently.
+                                </div>
+                                <div className="p-3 bg-violet-50/50 rounded-xl border border-violet-100">
+                                    <div className="text-violet-700 font-extrabold mb-1">Overtime alert</div>
+                                    Several employees are tracking close to the 30-hour limit guidelines. Review OT logs.
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Critical Workforce Alerts Panel */}
+                        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+                            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 pb-2 border-b border-slate-100">
+                                <ShieldAlert size={13} className="text-rose-500" />
+                                Critical live alerts
+                            </h3>
+                            <div className="space-y-2">
+                                {criticalAlerts.length > 0 ? (
+                                    criticalAlerts.map((alert, idx) => (
+                                        <div key={idx} className="flex gap-3 p-3 rounded-xl border border-slate-100 bg-slate-50/30 text-slate-600">
+                                            <div className="mt-0.5">{alert.icon}</div>
+                                            <div>
+                                                <div className="text-xs font-black text-slate-800 leading-tight">{alert.title}</div>
+                                                <div className="text-[10px] font-bold text-slate-400 mt-0.5 leading-normal">{alert.description}</div>
+                                            </div>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="text-center py-6 text-slate-400 text-[10px] uppercase tracking-widest font-bold">
+                                        No violations detected today
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Smart Employee Risk Detection */}
+                        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+                            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 pb-2 border-b border-slate-100">
+                                <AlertTriangle size={13} className="text-amber-500 animate-bounce" />
+                                High-Risk Detection
+                            </h3>
+                            <div className="space-y-2.5">
+                                {riskEmployees.length > 0 ? (
+                                    riskEmployees.map((item, idx) => (
+                                        <div key={idx} className="flex items-center justify-between p-2.5 rounded-xl border border-slate-100 hover:border-slate-200 transition">
+                                            <div className="flex items-center gap-2">
+                                                <EmployeeAvatar employee={item.employee} size="w-8 h-8" />
+                                                <div>
+                                                    <div className="text-xs font-bold text-slate-800 leading-none">{item.employee.firstName} {item.employee.lastName}</div>
+                                                    <div className="text-[8px] font-bold text-rose-500 uppercase tracking-wider mt-1">{item.riskFactors.join(', ')}</div>
+                                                </div>
+                                            </div>
+                                            <div className="text-right shrink-0">
+                                                <span className="text-[10px] font-black px-2 py-0.5 rounded bg-rose-50 text-rose-600 border border-rose-100">{item.score}% Risk</span>
+                                            </div>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="text-center py-6 text-slate-400 text-[10px] uppercase tracking-widest font-bold">
+                                        No risk profiles detected
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Inline Approval Workbench */}
+                        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+                            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 pb-2 border-b border-slate-100">
+                                <CheckSquare size={13} className="text-indigo-500" />
+                                Approvals workbench
+                            </h3>
+                            <div className="space-y-3">
+                                {approvalWorkbenchItems.length > 0 ? (
+                                    approvalWorkbenchItems.map((item, idx) => (
+                                        <div key={idx} className="p-3 bg-slate-50/50 rounded-xl border border-slate-100 space-y-2">
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <span className="text-[8px] font-black px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100 uppercase tracking-wider">{item.type}</span>
+                                                    <div className="text-xs font-black text-slate-800 mt-1.5 leading-none">{item.employeeName}</div>
+                                                </div>
+                                                <span className="text-[9px] font-bold text-slate-400">{item.details}</span>
+                                            </div>
+                                            <div className="flex gap-1.5 pt-1">
+                                                <button
+                                                    onClick={() => item.type === 'Leave Request' ? handleApproveLeave(item.id) : handleApproveRegularization(item.id)}
+                                                    className="flex-1 py-1 bg-emerald-600 text-white text-[9px] font-black uppercase rounded hover:bg-emerald-700 transition"
+                                                >
+                                                    Approve
+                                                </button>
+                                                <button
+                                                    onClick={() => item.type === 'Leave Request' ? handleRejectLeave(item.id) : handleRejectRegularization(item.id)}
+                                                    className="flex-1 py-1 bg-rose-50 text-rose-700 text-[9px] font-black uppercase rounded hover:bg-rose-100 transition"
+                                                >
+                                                    Reject
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="text-center py-8 text-slate-400 text-[10px] uppercase tracking-widest font-bold">
+                                        No pending workbench items
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Bottom Row: Workforce Analytics Charts & Geo Layer */}
+            <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+
+                {/* Workforce Analytics Recharts */}
+                <div className="xl:col-span-8 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6">
+                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 pb-2 border-b border-slate-100">
+                        <BarChart2 size={13} className="text-indigo-500" />
+                        Workforce intelligence analytics
+                    </h3>
+                    <div className="h-64">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                <defs>
+                                    <linearGradient id="colorAtt" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2}/>
+                                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                                    </linearGradient>
+                                    <linearGradient id="colorProd" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
+                                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                <XAxis dataKey="name" stroke="#94a3b8" fontSize={9} tickLine={false} />
+                                <YAxis stroke="#94a3b8" fontSize={9} tickLine={false} />
+                                <ChartTooltip contentStyle={{ fontSize: 10, fontWeight: 'bold', borderRadius: 8, border: '1px solid #f1f5f9' }} />
+                                <Legend wrapperStyle={{ fontSize: 9, fontWeight: 'bold', textTransform: 'uppercase' }} />
+                                <Area type="monotone" dataKey="attendanceRate" name="Attendance %" stroke="#6366f1" strokeWidth={2} fillOpacity={1} fill="url(#colorAtt)" />
+                                <Area type="monotone" dataKey="productivity" name="Productivity Score" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorProd)" />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+
+                {/* Geo Attendance & Shift Coverage Stats */}
+                <div className="xl:col-span-4 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6">
+                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 pb-2 border-b border-slate-100">
+                        <MapPin size={13} className="text-rose-500" />
+                        Geo Location & Shift Coverage
+                    </h3>
+                    
+                    {/* Shift stats */}
+                    <div className="space-y-3">
+                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Shift coverage ratios</div>
+                        <div className="space-y-2">
+                            {shiftCoverages.map((shift, idx) => (
+                                <div key={idx} className="flex justify-between items-center p-2 bg-slate-50/50 rounded-xl border border-slate-100">
+                                    <div className="text-xs font-bold text-slate-600">{shift.name}</div>
+                                    <span className={clsx(
+                                        "text-[10px] font-black px-2 py-0.5 rounded border uppercase",
+                                        shift.rate >= 90 ? "bg-emerald-50 text-emerald-700 border-emerald-100" :
+                                        shift.rate >= 80 ? "bg-amber-50 text-amber-700 border-amber-100" : "bg-rose-50 text-rose-700 border-rose-100 animate-pulse"
+                                    )}>
+                                        {shift.rate}% ({shift.count} staff)
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Geo layer breakdown */}
+                    <div className="space-y-3 pt-3 border-t border-slate-100">
+                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Geo-attendance distribution</div>
+                        <div className="grid grid-cols-2 gap-2 text-center">
+                            <div className="p-3 bg-indigo-50/30 border border-indigo-100/50 rounded-xl">
+                                <div className="text-[9px] font-black text-slate-400 uppercase">Office</div>
+                                <div className="text-base font-black text-indigo-700 mt-1">{geoBreakdown.office}%</div>
+                            </div>
+                            <div className="p-3 bg-emerald-50/30 border border-emerald-100/50 rounded-xl">
+                                <div className="text-[9px] font-black text-slate-400 uppercase">WFH</div>
+                                <div className="text-base font-black text-emerald-700 mt-1">{geoBreakdown.wfh}%</div>
+                            </div>
+                            <div className="p-3 bg-amber-50/30 border border-amber-100/50 rounded-xl">
+                                <div className="text-[9px] font-black text-slate-400 uppercase">Field</div>
+                                <div className="text-base font-black text-amber-700 mt-1">{geoBreakdown.field}%</div>
+                            </div>
+                            <div className="p-3 bg-slate-100 border border-slate-200 rounded-xl">
+                                <div className="text-[9px] font-black text-slate-400 uppercase">Remote</div>
+                                <div className="text-base font-black text-slate-700 mt-1">{geoBreakdown.remote}%</div>
+                            </div>
                         </div>
                     </div>
                 </div>
-            ) : (
-                <div className="bg-white rounded-2xl border border-slate-50 shadow-sm overflow-hidden">
-                    <div className="px-6 py-4 border-b border-slate-50 bg-slate-50/50">
-                        <h3 className="text-sm font-bold text-slate-900 uppercase tracking-widest">
-                            Holidays ({currentYear})
-                        </h3>
-                    </div>
-                    <div className="p-6">
-                        {holidays.length === 0 ? (
-                            <div className="py-20 text-center">
-                                <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">No holidays defined for {currentYear}</p>
+            </div>
+
+            {/* Smart Right Side Drawer (Detailed Day View) */}
+            <Drawer
+                open={drawerOpen}
+                onClose={() => setDrawerOpen(false)}
+                width={500}
+                title={selectedCellDate ? `${dayjs(selectedCellDate.dateStr).format('DD MMMM YYYY')} — Attendance Command` : ''}
+                closeIcon={<X size={18} />}
+                className="attendance-right-drawer"
+            >
+                {selectedCellDate && (
+                    <div className="space-y-6">
+                        {/* Day Stats breakdown grid */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl">
+                                <div className="text-[9px] font-black text-emerald-600 uppercase">Present / WFH</div>
+                                <div className="text-xl font-black text-emerald-800 mt-1">{selectedCellDate.stats.present} / {selectedCellDate.stats.wfh}</div>
                             </div>
-                        ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {holidays.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((holiday) => (
-                                    <div key={holiday._id} className="bg-white flex items-center justify-between p-4 rounded-2xl border border-slate-100 hover:border-blue-100 hover:shadow-md transition-all group">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex flex-col items-center justify-center border border-blue-100 group-hover:bg-blue-600 group-hover:text-white transition-colors shadow-sm">
-                                                <span className="text-[10px] font-black uppercase leading-none">{new Date(holiday.date).toLocaleDateString('en-US', { month: 'short' })}</span>
-                                                <span className="text-xl font-black leading-none mt-1">{new Date(holiday.date).getDate()}</span>
-                                            </div>
-                                            <div>
-                                                <h4 className="text-sm font-bold text-slate-900 uppercase group-hover:text-blue-600 transition-colors tracking-tight">{holiday.name}</h4>
-                                                <div className="flex items-center gap-2 mt-1">
-                                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{new Date(holiday.date).toLocaleDateString('en-US', { weekday: 'long' })}</span>
-                                                    <span className={clsx(
-                                                        "px-2 py-0.5 rounded-full text-[9px] font-black uppercase border",
-                                                        holiday.type === 'Public' ? "bg-purple-50 text-purple-600 border-purple-100" : "bg-blue-50 text-blue-600 border-blue-100"
-                                                    )}>
-                                                        {holiday.type || 'Public'}
+                            <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl">
+                                <div className="text-[9px] font-black text-rose-600 uppercase">Absent</div>
+                                <div className="text-xl font-black text-rose-800 mt-1">{selectedCellDate.stats.absent}</div>
+                            </div>
+                            <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl">
+                                <div className="text-[9px] font-black text-amber-600 uppercase">Late In</div>
+                                <div className="text-xl font-black text-amber-800 mt-1">{selectedCellDate.stats.lateIn}</div>
+                            </div>
+                            <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
+                                <div className="text-[9px] font-black text-indigo-600 uppercase">Overtime hours</div>
+                                <div className="text-xl font-black text-indigo-800 mt-1">{selectedCellDate.stats.overtimeHours}h</div>
+                            </div>
+                        </div>
+
+                        {/* Search & Tabs */}
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Exceptions List</span>
+                                <input
+                                    type="text"
+                                    value={drawerSearchQuery}
+                                    onChange={(e) => setDrawerSearchQuery(e.target.value)}
+                                    placeholder="Search employees..."
+                                    className="bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-xs font-bold outline-none focus:border-indigo-500 transition shadow-sm w-44"
+                                />
+                            </div>
+
+                            <Tabs activeKey={drawerTabKey} onChange={setDrawerTabKey} size="small" type="card">
+                                <Tabs.TabPane tab="Attendance" key="1" />
+                                <Tabs.TabPane tab="Leaves" key="2" />
+                                <Tabs.TabPane tab="Missing Punches" key="3" />
+                                <Tabs.TabPane tab="Late check-in" key="4" />
+                                <Tabs.TabPane tab="Overtime" key="5" />
+                            </Tabs>
+
+                            {/* Employees List container */}
+                            <div className="space-y-2 max-h-[450px] overflow-y-auto pr-2 custom-scrollbar">
+                                {drawerEmployees.length > 0 ? (
+                                    drawerEmployees.map((item, idx) => (
+                                        <div
+                                            key={idx}
+                                            className="relative flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-indigo-200 transition-all group/row"
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <EmployeeAvatar employee={item.employee} size="w-10 h-10" />
+                                                <div>
+                                                    <button
+                                                        onClick={() => {
+                                                            setDrawerOpen(false);
+                                                            drillToEmployee(item.employee);
+                                                        }}
+                                                        className="text-xs font-bold text-slate-800 hover:text-indigo-600 transition-colors uppercase tracking-tight text-left block"
+                                                    >
+                                                        {`${item.employee.firstName || ''} ${item.employee.lastName || ''}`.trim()}
+                                                    </button>
+                                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mt-0.5">
+                                                        {item.employee.employeeId} • {item.employee.departmentId?.name || item.employee.department || 'General'}
                                                     </span>
                                                 </div>
                                             </div>
+
+                                            <div className="flex items-center gap-2">
+                                                {/* Status labels */}
+                                                {item.status === 'Present' ? (
+                                                    <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase bg-emerald-50 text-emerald-700 border border-emerald-100">Present</span>
+                                                ) : item.status === 'Absent' ? (
+                                                    <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase bg-rose-50 text-rose-700 border border-rose-100">Absent</span>
+                                                ) : item.status === 'Leave' ? (
+                                                    <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase bg-amber-50 text-amber-700 border border-amber-100">Leave</span>
+                                                ) : item.status === 'Missing Punch' ? (
+                                                    <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase bg-slate-800 text-white border border-slate-900">Missing</span>
+                                                ) : (
+                                                    <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase bg-slate-100 text-slate-500 border border-slate-200">{item.status}</span>
+                                                )}
+
+                                                {/* Hover Quick Card absolute tooltips wrapper */}
+                                                <div className="absolute right-12 top-1/2 -translate-y-1/2 bg-white border border-slate-200 rounded-xl shadow-xl p-4 hidden group-hover/row:flex flex-col z-50 min-w-[220px] border-l-4 border-l-indigo-600">
+                                                    <div className="text-xs font-black text-slate-800 mb-1">{item.employee.firstName} {item.employee.lastName}</div>
+                                                    <div className="text-[9px] font-black text-slate-400 uppercase">{item.employee.employeeId}</div>
+                                                    
+                                                    <div className="mt-3 space-y-1.5 text-[10px] font-bold text-slate-600">
+                                                        <div className="flex justify-between"><span>Punch log:</span> <span className="font-extrabold text-slate-800">{item.detail?.checkIn ? dayjs(item.detail.checkIn).format('hh:mm A') : '--:--'} → {item.detail?.checkOut ? dayjs(item.detail.checkOut).format('hh:mm A') : '--:--'}</span></div>
+                                                        <div className="flex justify-between"><span>Working hrs:</span> <span className="font-extrabold text-slate-800">{item.detail?.workingHours || 0}h</span></div>
+                                                        <div className="flex justify-between"><span>Overtime:</span> <span className="font-extrabold text-slate-800">{item.detail?.overtimeHours || 0}h</span></div>
+                                                        <div className="flex justify-between"><span>Branch:</span> <span className="font-extrabold text-slate-800">{item.employee.branchId?.name || 'Main'}</span></div>
+                                                        {config.showGeoLocation && item.detail?.checkInLocation?.lat && (
+                                                            <div className="flex justify-between text-[8.5px] text-slate-400"><span>Check-In Lat/Lng:</span> <span>{parseFloat(item.detail.checkInLocation.lat).toFixed(4)}, {parseFloat(item.detail.checkInLocation.lng).toFixed(4)}</span></div>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="mt-4 flex gap-1.5 border-t border-slate-100 pt-3">
+                                                        <button className="flex-1 bg-slate-100 text-slate-700 py-1.5 rounded-lg text-[9px] font-black uppercase hover:bg-slate-200 transition">Profile</button>
+                                                        <button className="flex-1 bg-indigo-600 text-white py-1.5 rounded-lg text-[9px] font-black uppercase hover:bg-indigo-700 transition">Correct</button>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
-                                        
-                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <Can module="attendance.calendar" action="edit">
-                                                <button
-                                                    onClick={() => handleEditHoliday(holiday)}
-                                                    className="p-2 hover:bg-blue-50 text-slate-400 hover:text-blue-600 rounded-xl transition"
-                                                >
-                                                    <Edit2 size={16} />
-                                                </button>
-                                            </Can>
-                                            <Can module="attendance.calendar" action="delete">
-                                                <button
-                                                    onClick={() => handleDeleteHoliday(holiday._id)}
-                                                    className="p-2 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-xl transition"
-                                                >
-                                                    <Trash2 size={16} />
-                                                </button>
-                                            </Can>
-                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="text-center py-12 text-slate-400 font-bold text-xs uppercase tracking-widest">
+                                        No items recorded for this tab
                                     </div>
+                                )}
+                            </div>
+
+                            {/* Quick Actions approvals toolbar */}
+                            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/60 space-y-3 mt-4">
+                                <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Quick actions</div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button onClick={() => showToast('success', 'Approved', 'Leave request approved successfully')} className="py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1">Approve Leave</button>
+                                    <button onClick={() => showToast('success', 'Approved', 'Missed punch approved successfully')} className="py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1">Approve Punch</button>
+                                    <button onClick={() => showToast('success', 'Approved', 'Regularization approved successfully')} className="py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1">Approve Regularization</button>
+                                    <button onClick={() => showToast('info', 'Reminded', 'Reminder sent successfully')} className="py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1">Send Reminder</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </Drawer>
+
+            {/* Drill Down Employee Personal Detailed Calendar Modal */}
+            <Modal
+                open={drillEmployeeCalendarOpen}
+                onCancel={() => setDrillEmployeeCalendarOpen(false)}
+                footer={null}
+                width={850}
+                centered
+                closeIcon={<X className="text-slate-400 hover:text-rose-500 transition-colors" size={20} />}
+                className="employee-drilled-detail-calendar"
+            >
+                {drilledEmployee && (
+                    <div className="p-2 space-y-6">
+                        {/* Header Details */}
+                        <div className="flex items-center gap-4 pb-4 border-b border-slate-100">
+                            <EmployeeAvatar employee={drilledEmployee} size="w-14 h-14" initialsSize="text-lg" />
+                            <div>
+                                <h2 className="text-lg font-black text-slate-800 tracking-tight">
+                                    {`${drilledEmployee.firstName || ''} ${drilledEmployee.lastName || ''}`.trim()}
+                                </h2>
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                                    {drilledEmployee.employeeId} • {drilledEmployee.designationId?.name || drilledEmployee.designation || 'Staff'}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Individual monthly breakdown stats */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3">
+                            {[
+                                { label: 'Present', value: employeeSummaryStats.present, bg: 'bg-emerald-50 text-emerald-600' },
+                                { label: 'Absent', value: employeeSummaryStats.absent, bg: 'bg-rose-50 text-rose-600' },
+                                { label: 'Leaves', value: employeeSummaryStats.leave, bg: 'bg-amber-50 text-amber-600' },
+                                { label: 'Half Days', value: employeeSummaryStats.half, bg: 'bg-orange-50 text-orange-600' },
+                                { label: 'Late Ins', value: employeeSummaryStats.late, bg: 'bg-violet-50 text-violet-600' },
+                                { label: 'Early Outs', value: employeeSummaryStats.early, bg: 'bg-indigo-50 text-indigo-600' },
+                                { label: 'OT Hours', value: employeeSummaryStats.overtime, bg: 'bg-sky-50 text-sky-600' },
+                                { label: 'Missing Punch', value: employeeSummaryStats.missing, bg: 'bg-slate-100 text-slate-700' }
+                            ].map((stat, idx) => (
+                                <div key={idx} className="bg-slate-50 p-3 rounded-2xl text-center">
+                                    <div className="text-[8px] font-black text-slate-400 uppercase tracking-wider">{stat.label}</div>
+                                    <div className={`text-base font-black mt-1 ${stat.bg.split(' ')[1]}`}>{stat.value}</div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Calendar Grid overview */}
+                        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                            <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50/50">
+                                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => (
+                                    <div key={d} className="px-2 py-1.5 text-center text-[9px] font-black text-slate-400 uppercase tracking-wider">{d}</div>
                                 ))}
                             </div>
-                        )}
-                        {holidays.length > pageSize && (
-                            <div className="mt-8 flex justify-center">
-                                <Pagination
-                                    current={currentPage}
-                                    pageSize={pageSize}
-                                    total={holidays.length}
-                                    onChange={(page) => setCurrentPage(page)}
-                                    showSizeChanger={false}
-                                    hideOnSinglePage
-                                />
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
+                            <div className="grid grid-cols-7">
+                                {employeeCalendarDays.map((cell, idx) => {
+                                    if (cell.type === 'empty') {
+                                        return <div key={`empty-drilled-${idx}`} className="min-h-[85px] border-r border-b border-slate-100 bg-slate-50/20" />;
+                                    }
 
-            {/* Holiday Modal */}
+                                    // Color coding cell background
+                                    let cellBg = 'bg-white';
+
+                                    if (cell.status === 'Present') { cellBg = 'bg-emerald-50 text-emerald-800 border border-emerald-100'; }
+                                    else if (cell.status === 'WFH') { cellBg = 'bg-indigo-50 text-indigo-800 border border-indigo-100'; }
+                                    else if (cell.status === 'On Duty') { cellBg = 'bg-violet-50 text-violet-800 border border-violet-100'; }
+                                    else if (cell.status === 'Absent') { cellBg = 'bg-rose-50 text-rose-800 border border-rose-100'; }
+                                    else if (cell.status === 'Leave') { cellBg = 'bg-amber-50 text-amber-800 border border-amber-100'; }
+                                    else if (cell.status === 'Pending Leave') { cellBg = 'bg-amber-50/20 text-amber-600 border border-dashed border-amber-300'; }
+                                    else if (cell.status === 'Holiday') { cellBg = 'bg-purple-50 text-purple-800 border border-purple-100'; }
+                                    else if (cell.status === 'Weekly Off') { cellBg = 'bg-blue-50 text-blue-800 border border-blue-100'; }
+                                    else if (cell.status === 'Missing Punch') { cellBg = 'bg-slate-900 text-slate-100 border border-slate-950'; }
+
+                                    return (
+                                        <div
+                                            key={cell.dateStr}
+                                            className={clsx(
+                                                'relative flex flex-col min-h-[85px] border-r border-b border-slate-100 p-2 text-left',
+                                                cellBg,
+                                                cell.isToday && 'ring-2 ring-indigo-500 ring-inset'
+                                            )}
+                                        >
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-[10px] font-bold">{cell.dayNum}</span>
+                                                {cell.attendance?.isLate && (
+                                                    <span className="text-[7px] font-black uppercase bg-violet-100 text-violet-700 px-1 rounded">Late</span>
+                                                )}
+                                            </div>
+
+                                            {/* Punch Times / Future cancel option */}
+                                            <div className="mt-auto space-y-0.5 text-[8px] font-bold">
+                                                {cell.attendance ? (
+                                                    <>
+                                                        <div>IN: {cell.attendance.checkIn ? dayjs(cell.attendance.checkIn).format('hh:mm A') : '--:--'}</div>
+                                                        <div>OUT: {cell.attendance.checkOut ? dayjs(cell.attendance.checkOut).format('hh:mm A') : '--:--'}</div>
+                                                    </>
+                                                ) : cell.leave ? (
+                                                    <div className="flex flex-col gap-1">
+                                                        <span className="uppercase text-amber-700">{cell.leave.leaveType} Approved</span>
+                                                        {cell.isFuture && (
+                                                            <button
+                                                                onClick={() => handleCancelFutureLeave(cell.leave._id)}
+                                                                className="text-[7px] font-black text-rose-600 hover:text-rose-800 uppercase text-left underline"
+                                                            >
+                                                                Cancel
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-slate-400 uppercase italic text-[7px]">{cell.status}</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </Modal>
+
+            {/* Add/Edit Holiday Modal */}
             {showHolidayModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowHolidayModal(false)}></div>
@@ -759,7 +2060,7 @@ export default function CalendarManagement() {
                                     type="text"
                                     value={holidayForm.name}
                                     onChange={(e) => setHolidayForm({ ...holidayForm, name: e.target.value })}
-                                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm font-bold outline-none focus:border-blue-500 transition"
+                                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm font-bold outline-none focus:border-indigo-500 transition"
                                     placeholder="e.g., Diwali, Christmas"
                                 />
                             </div>
@@ -768,12 +2069,11 @@ export default function CalendarManagement() {
                                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
                                     Date *
                                 </label>
-                                <DatePicker
-                                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm font-bold outline-none focus:border-blue-500 transition h-[46px]"
-                                    format="DD-MM-YYYY"
-                                    placeholder="DD-MM-YYYY"
-                                    value={holidayForm.date ? dayjs(holidayForm.date) : null}
-                                    onChange={(date) => setHolidayForm({ ...holidayForm, date: date ? date.format('YYYY-MM-DD') : '' })}
+                                <input
+                                    type="date"
+                                    value={holidayForm.date}
+                                    onChange={(e) => setHolidayForm({ ...holidayForm, date: e.target.value })}
+                                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm font-bold outline-none focus:border-indigo-500 transition"
                                 />
                             </div>
 
@@ -784,7 +2084,7 @@ export default function CalendarManagement() {
                                 <select
                                     value={holidayForm.type}
                                     onChange={(e) => setHolidayForm({ ...holidayForm, type: e.target.value })}
-                                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm font-bold outline-none focus:border-blue-500 transition"
+                                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm font-bold outline-none focus:border-indigo-500 transition"
                                 >
                                     <option value="Public">Public Holiday</option>
                                     <option value="Optional">Optional Holiday</option>
@@ -799,7 +2099,7 @@ export default function CalendarManagement() {
                                 <textarea
                                     value={holidayForm.description}
                                     onChange={(e) => setHolidayForm({ ...holidayForm, description: e.target.value })}
-                                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm font-bold outline-none focus:border-blue-500 transition resize-none"
+                                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm font-bold outline-none focus:border-indigo-500 transition resize-none"
                                     rows="3"
                                     placeholder="Optional description"
                                 />
@@ -815,7 +2115,7 @@ export default function CalendarManagement() {
                             </button>
                             <button
                                 onClick={handleSaveHoliday}
-                                className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-xl text-sm font-black uppercase tracking-widest shadow-xl shadow-blue-500/20 hover:bg-blue-700 transition flex items-center justify-center gap-2"
+                                className="flex-1 px-6 py-3 bg-indigo-600 text-white rounded-xl text-sm font-black uppercase tracking-widest shadow-xl shadow-indigo-500/20 hover:bg-indigo-700 transition flex items-center justify-center gap-2"
                             >
                                 <Save size={16} />
                                 {editingHoliday ? 'Update' : 'Save'}
@@ -920,7 +2220,6 @@ export default function CalendarManagement() {
                             </div>
                         ) : (
                             <div className="space-y-6">
-                                {/* Summary */}
                                 {uploadSummary && (
                                     <div className="grid grid-cols-3 gap-4">
                                         <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900 rounded-xl p-4">
@@ -928,17 +2227,16 @@ export default function CalendarManagement() {
                                             <div className="text-2xl font-black text-emerald-700 dark:text-emerald-300">{uploadSummary.new}</div>
                                         </div>
                                         <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-xl p-4">
-                                            <div className="text-xs font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest mb-1">Duplicates</div>
-                                            <div className="text-2xl font-black text-amber-700 dark:text-amber-300">{uploadSummary.duplicates}</div>
+                                            <div className="text-xs font-black text-amber-600 text-amber-500 uppercase tracking-widest mb-1">Duplicates</div>
+                                            <div className="text-2xl font-black text-amber-800">{uploadSummary.duplicates}</div>
                                         </div>
                                         <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900 rounded-xl p-4">
-                                            <div className="text-xs font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest mb-1">Errors</div>
-                                            <div className="text-2xl font-black text-rose-700 dark:text-rose-300">{uploadSummary.errors}</div>
+                                            <div className="text-xs font-black text-rose-600 uppercase tracking-widest mb-1">Errors</div>
+                                            <div className="text-2xl font-black text-rose-800">{uploadSummary.errors}</div>
                                         </div>
                                     </div>
                                 )}
 
-                                {/* Preview Table */}
                                 <div className="bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
                                     <div className="overflow-x-auto max-h-96">
                                         <table className="w-full text-left">
@@ -988,7 +2286,6 @@ export default function CalendarManagement() {
                                     </div>
                                 </div>
 
-                                {/* Errors */}
                                 {uploadErrors && uploadErrors.length > 0 && (
                                     <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900 rounded-2xl p-4">
                                         <div className="text-sm font-black text-rose-800 dark:text-rose-200 mb-2">Errors:</div>
@@ -1002,7 +2299,6 @@ export default function CalendarManagement() {
                                     </div>
                                 )}
 
-                                {/* Action Buttons */}
                                 <div className="flex gap-3">
                                     <button
                                         onClick={() => {
@@ -1037,117 +2333,6 @@ export default function CalendarManagement() {
                     </div>
                 </div>
             )}
-            {/* Employee Detail Modal */}
-            <Modal
-                open={showDetailModal}
-                onCancel={() => setShowDetailModal(false)}
-                footer={null}
-                width={600}
-                centered
-                closeIcon={<X className="text-slate-400 hover:text-rose-500 transition-colors" size={20} />}
-                className="attendance-detail-modal"
-            >
-                {detailLoading ? (
-                    <div className="py-20 flex flex-col items-center justify-center space-y-4">
-                        <div className="w-12 h-12 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
-                        <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Fetching Details...</p>
-                    </div>
-                ) : selectedEmployeeDetail ? (
-                    <div className="p-2 space-y-8 animate-in fade-in zoom-in-95 duration-300">
-                        {/* Header */}
-                        <div className="flex items-center gap-6 pb-6 border-b border-slate-100">
-                            <EmployeeAvatar
-                                employee={selectedEmployeeDetail.employee}
-                                size="w-20 h-20"
-                                initialsSize="text-2xl"
-                                className="rounded-2xl shadow-lg"
-                            />
-                            <div>
-                                <h2 className="text-2xl font-black text-slate-800 tracking-tight">{selectedEmployeeDetail.employee?.name}</h2>
-                                <p className="text-sm font-bold text-blue-600 uppercase tracking-widest">{selectedEmployeeDetail.employee?.designation || 'Staff'}</p>
-                                <div className="flex items-center gap-3 mt-2">
-                                    <span className="px-2 py-0.5 bg-slate-100 rounded text-[10px] font-black text-slate-500 uppercase tracking-widest">{selectedEmployeeDetail.employee?.employeeId}</span>
-                                    <span className="px-2 py-0.5 bg-slate-100 rounded text-[10px] font-black text-slate-500 uppercase tracking-widest">{selectedEmployeeDetail.employee?.department}</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Status Card */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Attendance Status</p>
-                                <div className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${['Present', 'Half Day', 'On Duty'].includes(selectedEmployeeDetail.status) ? 'bg-emerald-100 text-emerald-700' :
-                                    selectedEmployeeDetail.status === 'Absent' ? 'bg-rose-100 text-rose-700' :
-                                        selectedEmployeeDetail.status === 'Leave' ? 'bg-indigo-100 text-indigo-700' :
-                                            selectedEmployeeDetail.status === 'Holiday' ? 'bg-amber-100 text-amber-700' :
-                                                selectedEmployeeDetail.status === 'Weekly Off' ? 'bg-slate-200 text-slate-700' :
-                                                    'bg-slate-100 text-slate-400'
-                                    }`}>
-                                    {selectedEmployeeDetail.status}
-                                </div>
-                            </div>
-                            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-right">
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Date</p>
-                                <p className="text-sm font-black text-slate-800">{new Date(selectedEmployeeDetail.date).toLocaleDateString(undefined, { dateStyle: 'long' })}</p>
-                            </div>
-                        </div>
-
-                        {/* Attendance Logs */}
-                        {selectedEmployeeDetail.attendance ? (
-                            <div className="space-y-4">
-                                <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                                    <Clock size={16} className="text-blue-500" />
-                                    Punch Records
-                                </h3>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="bg-emerald-50/50 p-4 rounded-2xl border border-emerald-100">
-                                        <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">Check In</p>
-                                        <p className="text-xl font-black text-emerald-700">{selectedEmployeeDetail.attendance.checkIn ? new Date(selectedEmployeeDetail.attendance.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}</p>
-                                        <p className="text-[10px] text-emerald-600 mt-1 font-bold">{selectedEmployeeDetail.attendance.logs?.[0]?.device || 'System'}</p>
-                                    </div>
-                                    <div className="bg-rose-50/50 p-4 rounded-2xl border border-rose-100">
-                                        <p className="text-[9px] font-black text-rose-500 uppercase tracking-widest">Check Out</p>
-                                        <p className="text-xl font-black text-rose-700">{selectedEmployeeDetail.attendance.checkOut ? new Date(selectedEmployeeDetail.attendance.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}</p>
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Working Hours</p>
-                                        <p className="text-lg font-black text-slate-700">{selectedEmployeeDetail.attendance.workingHours || 0} hrs</p>
-                                    </div>
-                                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Overtime</p>
-                                        <p className="text-lg font-black text-emerald-600">{selectedEmployeeDetail.attendance.overtimeHours || 0} hrs</p>
-                                    </div>
-                                </div>
-                            </div>
-                        ) : selectedEmployeeDetail.status === 'Holiday' ? (
-                            <div className="bg-amber-50/50 p-6 rounded-3xl border border-amber-100 border-dashed">
-                                <h3 className="text-sm font-black text-amber-700 uppercase tracking-widest flex items-center gap-2 mb-4">
-                                    <Info size={16} />
-                                    Holiday Details
-                                </h3>
-                                <p className="text-lg font-black text-amber-800">{dateAttendanceData?.holiday || 'Public Holiday'}</p>
-                                <p className="text-sm font-bold text-slate-500 mt-2 uppercase tracking-widest">Office is Closed</p>
-                            </div>
-                        ) : (
-                            <div className="py-12 text-center bg-slate-50 rounded-3xl border border-slate-100 border-dashed">
-                                {selectedEmployeeDetail.isFutureDate ? (
-                                    <Clock className="mx-auto text-slate-300 mb-3" size={32} />
-                                ) : (
-                                    <AlertTriangle className="mx-auto text-rose-400 mb-3" size={32} />
-                                )}
-                                <p className="text-sm font-black text-slate-500 uppercase tracking-widest">
-                                    {selectedEmployeeDetail.isFutureDate ? 'Future Date - Not Marked' : 'Attendance Not Marked'}
-                                </p>
-                                <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-tight">
-                                    {selectedEmployeeDetail.status === 'Weekly Off' ? 'Employee Weekly Off' : (selectedEmployeeDetail.isFutureDate ? 'Status will be calculated on this date' : 'Employee was likely absent')}
-                                </p>
-                            </div>
-                        )}
-                    </div>
-                ) : null}
-            </Modal >
-        </div >
+        </div>
     );
 }

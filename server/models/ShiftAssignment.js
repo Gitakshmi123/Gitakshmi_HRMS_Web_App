@@ -27,7 +27,7 @@ const shiftAssignmentSchema = new mongoose.Schema(
         // ── ASSIGNMENT TARGET HIERARCHY ───────────────────────────────────
         entityType: {
             type: String,
-            enum: ['Employee', 'Department', 'Designation', 'Branch', 'Company'],
+            enum: ['Employee', 'Department', 'Designation', 'Branch', 'Location', 'Grade', 'Company'],
             required: true
         },
         entityId: {

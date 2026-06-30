@@ -3,16 +3,21 @@ import dayjs from 'dayjs';
 
 const CUSTOM_DEPARTMENT_VALUE = '__custom_department__';
 
+import { TabularContainer, TabularRow, TabularField } from './TabularForm';
+import { User, Briefcase, FileCheck } from 'lucide-react';
+
 /**
  * Tab 4: Official Records — Employee ID (read-only), Department, Manager, Joining Date.
  * Uses existing form state; no logic change.
  */
-export default function OfficialRecordsTab({
+const OfficialRecordsTab = React.memo(function OfficialRecordsTab({
   employeeCode,
   employeeId,
   setEmployeeId,
   generationMode = 'AUTO',
   employee,
+  employeeCategory,
+  setEmployeeCategory,
   departmentId,
   setDepartmentId,
   department,
@@ -31,6 +36,9 @@ export default function OfficialRecordsTab({
   shiftId,
   setShiftId,
   shifts = [],
+  rosterId,
+  setRosterId,
+  rosters = [],
   jobType,
   setJobType,
   leavePolicy,
@@ -44,6 +52,18 @@ export default function OfficialRecordsTab({
   setBand,
   grades = [],
   mappings = [],
+  holidayCalendar,
+  setHolidayCalendar,
+  leaveGroup,
+  setLeaveGroup,
+  confirmationPeriod,
+  setConfirmationPeriod,
+  basic,
+  setBasic,
+  leaveTravelAllowance,
+  setLeaveTravelAllowance,
+  designation,
+  setDesignation,
   errors = {},
 }) {
   // Local state for joining date to allow typing
@@ -194,13 +214,16 @@ export default function OfficialRecordsTab({
   }, [joiningDate]);
 
   return (
-    <div className="animate-in fade-in duration-300 space-y-4">
-      <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-5 items-start`}>
-        {/* Employee ID */}
-        <div className="flex flex-col gap-2">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] pl-1 h-4 flex items-center whitespace-nowrap">
-            Employee ID <span className="text-rose-500 ml-1 font-bold">*</span></label>
-          <div className="relative group/field shadow-sm rounded-2xl overflow-hidden">
+    <div className="animate-in fade-in duration-300 space-y-6">
+      
+      {/* Official Details */}
+      <TabularContainer>
+        <div className="bg-slate-100 dark:bg-slate-800/80 p-3 text-xs font-bold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 flex items-center gap-2 uppercase">
+          <FileCheck className="w-4 h-4 text-indigo-500" /> Official Identifiers
+        </div>
+        
+        <TabularRow columns={4}>
+          <TabularField label="EMPLOYEE ID" required={generationMode === 'MANUAL'}>
             <input
               type="text"
               value={generationMode === 'MANUAL' ? (employeeId || '') : (employeeId || employeeCode || '—')}
@@ -208,228 +231,317 @@ export default function OfficialRecordsTab({
               placeholder={generationMode === 'MANUAL' ? "e.g. EMP001" : "Auto-Generated ID"}
               required={generationMode === 'MANUAL'}
               readOnly={generationMode !== 'MANUAL'}
-              className={`w-full h-[42px] px-4 bg-white dark:bg-slate-900 border-2 rounded-2xl outline-none text-sm font-bold text-slate-600 transition-all ${generationMode !== 'MANUAL' ? 'cursor-not-allowed bg-slate-50/50 dark:bg-slate-950/50 border-slate-100 dark:border-slate-800' : (errors.employeeId ? 'border-rose-200 focus:border-rose-500 shadow-sm shadow-rose-100' : 'border-slate-100 dark:border-slate-800 focus:border-slate-400')}`}
+              className={`w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium ${generationMode !== 'MANUAL' ? 'cursor-not-allowed text-slate-400' : 'text-slate-700 dark:text-slate-200'} placeholder:text-slate-400 ${errors.employeeId ? 'border-b-2 border-rose-400' : ''}`}
             />
-          </div>
-          {errors.employeeId && generationMode === 'MANUAL' && <p className="text-[9px] font-bold text-rose-500 uppercase tracking-widest pl-1 mt-1">{errors.employeeId}</p>}
+            {errors.employeeId && generationMode === 'MANUAL' && <p className="text-[10px] font-medium text-rose-500 mt-1">{errors.employeeId}</p>}
+          </TabularField>
+          <TabularField label="CATEGORY">
+            <select
+              value={employeeCategory}
+              onChange={(e) => setEmployeeCategory?.(e.target.value)}
+              className={`w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium text-slate-700 dark:text-slate-200 ${errors.employeeCategory ? 'border-b-2 border-rose-400' : ''}`}
+            >
+              <option value="">Select Category</option>
+              <option value="Unskilled">Unskilled</option>
+              <option value="Semi-Skilled">Semi-Skilled</option>
+              <option value="Skilled">Skilled</option>
+              <option value="Highly Skilled">Highly Skilled</option>
+              <option value="General / Management">General / Management</option>
+            </select>
+            {errors.employeeCategory && <p className="text-[10px] font-medium text-rose-500 mt-1">{errors.employeeCategory}</p>}
+          </TabularField>
+        </TabularRow>
+        <TabularRow columns={4}>
+          <TabularField label="DOJ (JOINING DATE)" required>
+            <input
+              type="text"
+              placeholder="DD/MM/YYYY"
+              maxLength={10}
+              value={joiningDateDisplay}
+              onChange={(e) => {
+                let v = e.target.value.replace(/\D/g, '').slice(0, 8);
+                let formatted = v;
+                if (v.length > 2) formatted = v.slice(0, 2) + '/' + v.slice(2);
+                if (v.length > 4) formatted = v.slice(0, 2) + '/' + v.slice(2, 4) + '/' + v.slice(4);
+                setJoiningDateDisplay(formatted);
+
+                if (v.length === 8) {
+                  const d = v.slice(0, 2);
+                  const m = v.slice(2, 4);
+                  const y = v.slice(4);
+                  setJoiningDate?.(`${y}-${m}-${d}`);
+                } else if (!v) {
+                  setJoiningDate?.('');
+                }
+              }}
+              className={`w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium text-slate-700 dark:text-slate-200 placeholder:text-slate-400 ${errors.joiningDate ? 'border-b-2 border-rose-400' : ''}`}
+            />
+            {errors.joiningDate && <p className="text-[10px] font-medium text-rose-500 mt-1">{errors.joiningDate}</p>}
+          </TabularField>
+          <TabularField label="EMPLOYEE TYPE" required>
+            <select
+              value={jobType}
+              onChange={(e) => setJobType?.(e.target.value)}
+              required
+              className={`w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium text-slate-700 dark:text-slate-200 ${errors.jobType ? 'border-b-2 border-rose-400' : ''}`}
+            >
+              <option value="">Select Type</option>
+              <option value="Permanent">Permanent</option>
+              <option value="Consultant">Consultant</option>
+              <option value="Contractual">Contractual</option>
+              <option value="Internship">Internship</option>
+            </select>
+            {errors.jobType && <p className="text-[10px] font-medium text-rose-500 mt-1">{errors.jobType}</p>}
+          </TabularField>
+        </TabularRow>
+      </TabularContainer>
+
+      {/* Role & Placement */}
+      <TabularContainer>
+        <div className="bg-slate-100 dark:bg-slate-800/80 p-3 text-xs font-bold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 flex items-center gap-2 uppercase">
+          <Briefcase className="w-4 h-4 text-indigo-500" /> Role & Placement
         </div>
-
-        {/* Shift Assignment */}
-        <div className="flex flex-col gap-2">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] pl-1 h-4 flex items-center whitespace-nowrap">
-            Shift Assignment</label>
-          <select
-            value={shiftId}
-            onChange={(e) => setShiftId?.(e.target.value)}
-            className={`w-full h-[42px] px-4 bg-white dark:bg-slate-900 border-2 rounded-2xl outline-none text-sm font-bold text-slate-700 transition-all ${errors.shiftId ? 'border-rose-200 focus:border-rose-500' : 'border-slate-100 dark:border-slate-800 focus:border-slate-400'}`}
-          >
-            <option value="">Select Shift (Optional)</option>
-            {(shifts || []).map((s) => (
-              <option key={s._id} value={s._id}>
-                {s.name} ({s.startTime} - {s.endTime})
-              </option>
-            ))}
-          </select>
-          {errors.shiftId && <p className="text-[9px] font-bold text-rose-500 uppercase tracking-widest pl-1 mt-1">{errors.shiftId}</p>}
-        </div>
-
-
-        {/* Grade selection */}
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between pl-1 h-4">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] flex items-center whitespace-nowrap">
-              Employee Grade <span className="text-rose-500 ml-1 font-bold">*</span>
-            </label>
-          </div>
-          <select
-            value={grade}
-            onChange={(e) => {
-              const val = e.target.value;
-              if (val === "") {
-                setGradeId?.('');
-                setGrade?.('');
-                setBand?.('');
-              } else {
-                setGradeId?.('');
-                setGrade?.(val);
-                
-                // Robust Auto-fill Band from Mapping or Central Grade
-                const normalizedVal = String(val).trim().toUpperCase();
-                const foundGrade = dropdownGrades.find(g => String(g.code).trim().toUpperCase() === normalizedVal);
-                
-                if (foundGrade && foundGrade.band) {
-                  console.log(`[AUTO_BAND] Found via dropdownGrades: ${foundGrade.band}`);
-                  setBand?.(foundGrade.band);
+        <TabularRow columns={4}>
+          <TabularField label="DEPARTMENT" required>
+            <select
+              value={departmentId || (department ? CUSTOM_DEPARTMENT_VALUE : '')}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === CUSTOM_DEPARTMENT_VALUE) {
+                  setDepartmentId?.('');
                 } else {
-                  const linkedBand = gradeToBandMap.get(normalizedVal);
-                  if (linkedBand) {
-                    console.log(`[AUTO_BAND] Found via map: ${linkedBand}`);
-                    setBand?.(linkedBand);
+                  setDepartmentId?.(val);
+                  setDepartment?.('');
+                }
+              }}
+              required
+              disabled={departmentsLoading}
+              className={`w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium text-slate-700 dark:text-slate-200 ${errors.departmentId ? 'border-b-2 border-rose-400' : ''}`}
+            >
+              <option value="">Select Department</option>
+              {departments.map((dept) => (
+                <option key={dept._id} value={dept._id}>{dept.name}</option>
+              ))}
+              <option value={CUSTOM_DEPARTMENT_VALUE}>Other (Custom Department)</option>
+            </select>
+            {errors.departmentId && <p className="text-[10px] font-medium text-rose-500 mt-1">{errors.departmentId}</p>}
+          </TabularField>
+
+          {(!departmentId && department !== undefined) || departmentId === '' ? (
+            <TabularField label="CUSTOM DEPARTMENT" required>
+              <input
+                type="text"
+                placeholder="Enter custom department"
+                value={department}
+                onChange={(e) => setDepartment?.(e.target.value)}
+                required
+                className={`w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium text-slate-700 dark:text-slate-200 placeholder:text-slate-400 ${errors.department ? 'border-b-2 border-rose-400' : ''}`}
+              />
+              {errors.department && <p className="text-[10px] font-medium text-rose-500 mt-1">{errors.department}</p>}
+            </TabularField>
+          ) : <TabularField label="" />}
+        </TabularRow>
+
+        <TabularRow columns={4}>
+          <TabularField label="MANAGER">
+            <select
+              value={manager}
+              onChange={(e) => setManager?.(e.target.value)}
+              className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium text-slate-700 dark:text-slate-200"
+            >
+              <option value="">Select Manager</option>
+              {managers.filter(m => m._id !== employee?._id).map((m) => (
+                <option key={m._id} value={m._id}>{m.name || `${m.firstName} ${m.lastName}`} ({m.employeeId || 'No ID'})</option>
+              ))}
+            </select>
+          </TabularField>
+          <TabularField label="SHIFT">
+            <select
+              value={shiftId}
+              onChange={(e) => setShiftId?.(e.target.value)}
+              className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium text-slate-700 dark:text-slate-200"
+            >
+              <option value="">Default Shift</option>
+              {(shifts || []).map((s) => (
+                <option key={s._id} value={s._id}>{s.name} ({s.startTime} - {s.endTime})</option>
+              ))}
+            </select>
+          </TabularField>
+          <TabularField label="ROSTER">
+            <select
+              value={rosterId}
+              onChange={(e) => setRosterId?.(e.target.value)}
+              className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium text-slate-700 dark:text-slate-200"
+            >
+              <option value="">No Roster</option>
+              {(rosters || []).map((r) => (
+                <option key={r._id} value={r._id}>{r.rosterName} {r.shiftCycle ? `(${r.shiftCycle.length} Days)` : ''}</option>
+              ))}
+            </select>
+          </TabularField>
+        </TabularRow>
+
+        <TabularRow columns={4}>
+          <TabularField label="EMPLOYEE GRADE">
+            <select
+              value={grade}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === "") {
+                  setGradeId?.('');
+                  setGrade?.('');
+                  setBand?.('');
+                } else {
+                  setGradeId?.('');
+                  setGrade?.(val);
+                  
+                  // Robust Auto-fill Band from Mapping or Central Grade
+                  const normalizedVal = String(val).trim().toUpperCase();
+                  const foundGrade = dropdownGrades.find(g => String(g.code).trim().toUpperCase() === normalizedVal);
+                  
+                  if (foundGrade && foundGrade.band) {
+                    console.log(`[AUTO_BAND] Found via dropdownGrades: ${foundGrade.band}`);
+                    setBand?.(foundGrade.band);
+                  } else {
+                    const linkedBand = gradeToBandMap.get(normalizedVal);
+                    if (linkedBand) {
+                      console.log(`[AUTO_BAND] Found via map: ${linkedBand}`);
+                      setBand?.(linkedBand);
+                    }
                   }
                 }
-              }
-            }}
-            className={`w-full h-[42px] px-4 bg-white dark:bg-slate-900 border-2 rounded-2xl outline-none text-sm font-bold text-slate-700 transition-all ${errors.grade ? 'border-rose-200 focus:border-rose-500 shadow-sm shadow-rose-100' : 'border-slate-100 dark:border-slate-800 focus:border-slate-400'}`}
-          >
-            <option value="">Select Grade</option>
-            {dropdownGrades.map((g) => (
-              <option key={g.code} value={g.code}>
-                Grade {g.code} {!g.isActive ? '[Inactive]' : ''}
-              </option>
-            ))}
-          </select>
-          {errors.grade && <p className="text-[9px] font-bold text-rose-500 uppercase tracking-widest pl-1 mt-1">{errors.grade}</p>}
-        </div>
-
-        {/* Band selection */}
-        <div className="flex flex-col gap-2">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] pl-1 h-4 flex items-center whitespace-nowrap">
-            Employee Band <span className="text-rose-500 ml-1 font-bold">*</span></label>
-            <input
-              type="text"
-              list="band-options"
-              placeholder="Enter or select a band (e.g. A, B)"
-              value={band}
-              onChange={(e) => setBand?.(e.target.value)}
-              className={`w-full h-[42px] px-4 bg-white dark:bg-slate-900 border-2 rounded-2xl outline-none text-sm font-bold text-slate-700 transition-all ${errors.band ? 'border-rose-200 focus:border-rose-500 shadow-sm shadow-rose-100' : 'border-slate-100 dark:border-slate-800 focus:border-slate-400'}`}
-            />
-            <datalist id="band-options">
-              {[...new Set(mappings.filter(m => m.isActive !== false).map(m => m.band).filter(Boolean))].sort().map(b => (
-                <option key={b} value={b} />
-              ))}
-              {/* Fallback mock bands if no mappings exist */}
-              {mappings.length === 0 && (
-                <>
-                  <option value="A" />
-                  <option value="B" />
-                  <option value="C" />
-                  <option value="D" />
-                </>
-              )}
-            </datalist>
-          {errors.band && <p className="text-[9px] font-bold text-rose-500 uppercase tracking-widest pl-1 mt-1">{errors.band}</p>}
-        </div>
-
-        {/* Department */}
-        <div className="flex flex-col gap-2">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] pl-1 h-4 flex items-center">
-            Department <span className="text-rose-500 ml-1">*</span></label>
-          <select
-            value={departmentSelectValue}
-            onChange={(e) => {
-              const value = e.target.value;
-              if (value === CUSTOM_DEPARTMENT_VALUE) {
-                setIsCustomDepartment(true);
-                setDepartmentId?.('');
-                setDepartment?.('');
-                return;
-              }
-              setIsCustomDepartment(false);
-              const selectedDept = departments.find((d) => String(d?._id || d) === value);
-              setDepartmentId?.(value);
-              setDepartment?.(typeof selectedDept === 'string' ? selectedDept : selectedDept?.name || '');
-            }}
-            required
-            disabled={departmentsLoading}
-            className={`w-full h-[42px] px-4 bg-white dark:bg-slate-900 border-2 rounded-2xl outline-none text-sm font-bold text-slate-700 transition-all ${errors.department ? 'border-rose-200 focus:border-rose-500' : 'border-slate-100 dark:border-slate-800 focus:border-slate-400'}`}
-          >
-            <option value="">{departmentsLoading ? 'Loading...' : 'Select Dept'}</option>
-            {(departments || []).map((d) => (
-              <option key={d._id || d} value={d._id || d}>
-                {typeof d === 'string' ? d : d.name}
-              </option>
-            ))}
-            <option value={CUSTOM_DEPARTMENT_VALUE}>Custom</option>
-          </select>
-          {isCustomDepartment && (
-            <input
-              type="text"
-              value={department}
-              onChange={(e) => {
-                setDepartmentId?.('');
-                setDepartment?.(e.target.value);
               }}
-              placeholder="Type department name"
-              required
-              maxLength={50}
-              className={`w-full h-[42px] px-4 bg-white dark:bg-slate-900 border-2 rounded-2xl outline-none text-sm font-bold text-slate-700 transition-all ${errors.department ? 'border-rose-200 focus:border-rose-500' : 'border-slate-100 dark:border-slate-800 focus:border-slate-400'}`}
-            />
-          )}
-          {errors.department && <p className="text-[9px] font-bold text-rose-500 uppercase tracking-widest pl-1 mt-1">{errors.department}</p>}
-        </div>
-
-
-        {/* Job Type / Employee Type */}
-        <div className="flex flex-col gap-2">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] pl-1 h-4 flex items-center whitespace-nowrap">
-            Employee Type <span className="text-rose-500 ml-1">*</span></label>
-          <select
-            value={jobType}
-            onChange={(e) => setJobType?.(e.target.value)}
-            required
-            className={`w-full h-[42px] px-4 bg-white dark:bg-slate-900 border-2 rounded-2xl outline-none text-sm font-bold text-slate-700 transition-all ${errors.jobType ? 'border-rose-200 focus:border-rose-500 shadow-sm shadow-rose-100' : 'border-slate-100 dark:border-slate-800 focus:border-slate-400'}`}
-          >
-            <option value="">Select Type</option>
-            <option value="Full-Time">Full-Time</option>
-            <option value="Part-Time">Part-Time</option>
-            <option value="Internship">Internship</option>
-            <option value="Contract">Contract</option>
-            <option value="Consultant">Consultant</option>
-          </select>
-          {errors.jobType && <p className="text-[9px] font-bold text-rose-500 uppercase tracking-widest pl-1 mt-1">{errors.jobType}</p>}
-        </div>
-
-        {/* Manager */}
-        <div className="flex flex-col gap-2">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] pl-1 h-4 flex items-center">
-            Manager Details</label>
-          <select
-            value={manager}
-            onChange={(e) => setManager?.(e.target.value)}
-            className="w-full h-[42px] px-4 bg-white dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 rounded-2xl outline-none focus:border-slate-400 text-sm font-bold text-slate-700 transition-all"
-          >
-            <option value="">No Manager</option>
-            {(managers || [])
-              .map((m) => (
-                <option key={m._id} value={m._id}>
-                  {[m.firstName, m.lastName].filter(Boolean).join(' ')} ({m.department || 'General'})
+              className={`w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium text-slate-700 dark:text-slate-200 ${errors.grade ? 'border-b-2 border-rose-400' : ''}`}
+            >
+              <option value="">Select Grade</option>
+              {dropdownGrades.map((g) => (
+                <option key={g.code} value={g.code}>
+                  Grade {g.code} {!g.isActive ? '[Inactive]' : ''}
                 </option>
               ))}
-          </select>
-        </div>
+            </select>
+            {errors.grade && <p className="text-[10px] font-medium text-rose-500 mt-1">{errors.grade}</p>}
+          </TabularField>
+          <TabularField label="EMPLOYEE BAND">
+            <input
+              type="text"
+              value={band}
+              onChange={(e) => setBand?.(e.target.value)}
+              placeholder="e.g. L1, L2..."
+              className={`w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium text-slate-700 dark:text-slate-200 placeholder:text-slate-400 ${errors.band ? 'border-b-2 border-rose-400' : ''}`}
+            />
+            {errors.band && <p className="text-[10px] font-medium text-rose-500 mt-1">{errors.band}</p>}
+          </TabularField>
+        </TabularRow>
 
-        {/* Joining Date */}
-        <div className="flex flex-col gap-2">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] pl-1 h-4 flex items-center">
-            Joining Date <span className="text-rose-500 ml-1">*</span></label>
-          <input
-            type="text"
-            placeholder="DD-MM-YYYY"
-            maxLength={10}
-            value={joiningDateDisplay}
-            onChange={(e) => {
-              let v = e.target.value.replace(/\D/g, '').slice(0, 8);
-              
-              // Apply mask
-              let formatted = v;
-              if (v.length > 2) formatted = v.slice(0, 2) + '/' + v.slice(2);
-              if (v.length > 4) formatted = v.slice(0, 2) + '/' + v.slice(2, 4) + '/' + v.slice(4);
-              setJoiningDateDisplay(formatted);
+        <TabularRow columns={4}>
+          <TabularField label="LEAVE CONFIGURATION">
+            <select
+              value={leavePolicy}
+              onChange={(e) => setLeavePolicy?.(e.target.value)}
+              className={`w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium text-slate-700 dark:text-slate-200 ${errors.leavePolicy ? 'border-b-2 border-rose-400' : ''}`}
+            >
+              <option value="">Select Leave Policy</option>
+              {applicablePolicies.map((p) => (
+                <option key={p._id} value={p._id}>{p.name}</option>
+              ))}
+            </select>
+            {errors.leavePolicy && <p className="text-[10px] font-medium text-rose-500 mt-1">{errors.leavePolicy}</p>}
+          </TabularField>
+          <TabularField label="PAY GRADE">
+            <select
+              value={gradeId || ''}
+              onChange={(e) => {
+                const val = e.target.value;
+                setGradeId?.(val);
+                if (val) {
+                  const selected = allGrades.find(g => (g.isCustom ? g.code : g.code) === val);
+                  if (selected) {
+                    setGrade?.(selected.name);
+                    if (selected.band && setBand) {
+                      setBand(selected.band);
+                    }
+                  }
+                } else {
+                  setGrade?.('');
+                  if (setBand) setBand('');
+                }
+              }}
+              className={`w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium text-slate-700 dark:text-slate-200 ${errors.gradeId ? 'border-b-2 border-rose-400' : ''}`}
+            >
+              <option value="">Select Pay Grade</option>
+              {allGrades.map((g, idx) => (
+                <option key={`${g.code}-${idx}`} value={g.code}>
+                  {g.code} {g.name ? `- ${g.name}` : ''} {g.band ? `[${g.band}]` : ''} {!g.isActive ? '(Inactive)' : ''}
+                </option>
+              ))}
+            </select>
+            {errors.gradeId && <p className="text-[10px] font-medium text-rose-500 mt-1">{errors.gradeId}</p>}
+          </TabularField>
+        </TabularRow>
+      </TabularContainer>
 
-              if (v.length === 8) {
-                const d = v.slice(0, 2);
-                const m = v.slice(2, 4);
-                const y = v.slice(4);
-                setJoiningDate?.(`${y}-${m}-${d}`);
-              } else if (!v) {
-                setJoiningDate?.('');
-              }
-            }}
-            className={`w-full h-[42px] px-4 bg-white dark:bg-slate-900 border-2 rounded-2xl outline-none text-sm font-bold text-slate-700 transition-all ${errors.joiningDate ? 'border-rose-200 focus:border-rose-500' : 'border-slate-100 dark:border-slate-800 focus:border-slate-400'}`}
-          />
-          {errors.joiningDate && <p className="text-[9px] font-bold text-rose-500 uppercase tracking-widest pl-1 mt-1">{errors.joiningDate}</p>}
+      {/* Compensation & Additional */}
+      <TabularContainer>
+        <div className="bg-slate-100 dark:bg-slate-800/80 p-3 text-xs font-bold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 flex items-center gap-2 uppercase">
+          <User className="w-4 h-4 text-indigo-500" /> Compensation & Benefits
         </div>
-      </div>
+        <TabularRow columns={4}>
+          <TabularField label="HOLIDAY CALENDAR">
+            <select
+              value={holidayCalendar}
+              onChange={(e) => setHolidayCalendar?.(e.target.value)}
+              className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium text-slate-700 dark:text-slate-200"
+            >
+              <option value="">Standard Calendar</option>
+              <option value="Regional">Regional Calendar</option>
+              <option value="Custom">Custom Calendar</option>
+            </select>
+          </TabularField>
+          <TabularField label="" />
+        </TabularRow>
+        <TabularRow columns={4}>
+          <TabularField label="CONFIRMATION PERIOD (MONTHS)">
+            <input
+              type="number"
+              value={confirmationPeriod || ''}
+              onChange={(e) => setConfirmationPeriod?.(e.target.value)}
+              placeholder="e.g. 6"
+              className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
+            />
+          </TabularField>
+          <TabularField label="LTA ALLOWANCE (₹)">
+            <input
+              type="number"
+              value={leaveTravelAllowance || ''}
+              onChange={(e) => setLeaveTravelAllowance?.(e.target.value)}
+              placeholder="Amount per year"
+              className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
+            />
+          </TabularField>
+        </TabularRow>
+        <TabularRow columns={4}>
+          <TabularField label="DESIGNATION" required>
+            <input
+              type="text"
+              value={designation || ''}
+              onChange={(e) => setDesignation?.(e.target.value)}
+              placeholder="e.g. Software Engineer"
+              className={`w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium text-slate-700 dark:text-slate-200 placeholder:text-slate-400 ${errors.designation ? 'border-b-2 border-rose-400' : ''}`}
+            />
+            {errors.designation && <p className="text-[10px] font-medium text-rose-500 mt-1">{errors.designation}</p>}
+          </TabularField>
+          <TabularField label="BASIC SALARY (₹)">
+            <input
+              type="number"
+              value={basic || ''}
+              onChange={(e) => setBasic?.(e.target.value)}
+              placeholder="Monthly Basic Salary"
+              className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
+            />
+          </TabularField>
+        </TabularRow>
+      </TabularContainer>
 
       {(assignmentPreview?.grade || assignmentPreview?.band || assignmentPreview?.payrollTemplate) && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4">
@@ -464,4 +576,6 @@ export default function OfficialRecordsTab({
 
     </div>
   );
-}
+});
+
+export default OfficialRecordsTab;

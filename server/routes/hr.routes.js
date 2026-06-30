@@ -12,7 +12,9 @@ router.use('/hr', hrCheck);
 const empCtrl = require('../controllers/hr.employee.controller');
 const deptCtrl = require('../controllers/hr.department.controller');
 const policyCtrl = require('../controllers/leavePolicy.controller');
+const leaveTypeCtrl = require('../controllers/leaveType.controller');
 const requestCtrl = require('../controllers/leaveRequest.controller');
+const leaveAnalyticsCtrl = require('../controllers/leaveAnalytics.controller');
 const applicantCtrl = require('../controllers/applicant.controller');
 const trackerCtrl = require('../controllers/trackerController');
 const reqCtrl = require('../controllers/requirement.controller');
@@ -72,6 +74,7 @@ router.post('/hr/departments', auth.authenticate, checkPermission('people.depart
 router.put('/hr/departments/:id', auth.authenticate, checkPermission('people.departments', 'edit'), deptCtrl.update);
 router.delete('/hr/departments/:id', auth.authenticate, checkPermission('people.departments', 'delete'), deptCtrl.remove);
 router.get('/hr/departments/hierarchy/full', auth.authenticate, checkPermission('people.departments', 'view'), auth.requireHr, deptCtrl.getFullOrgHierarchy);
+router.post('/hr/departments/bulk-upload', auth.authenticate, checkPermission('people.departments', 'create'), deptCtrl.bulkUploadDepartments);
 
 /* -----------------------------------------
    LEAVES
@@ -84,6 +87,11 @@ router.get('/hr/leave-policies/test', auth.requireHr, (req, res) => {
    res.json({ message: 'Test route works', user: req.user, tenantId: req.tenantId });
 });
 
+// Formula Simulation & Explanation Routes
+const formulaSimCtrl = require('../controllers/formulaSimulationController');
+router.post('/hr/formula/simulate', auth.authenticate, checkPermission('leave.policies', 'view'), formulaSimCtrl.simulateFormula);
+router.post('/hr/formula/explain', auth.authenticate, checkPermission('leave.policies', 'view'), formulaSimCtrl.explainFormula);
+
 router.post('/hr/leave-policies', auth.authenticate, checkPermission('leave.policies', 'create'), policyCtrl.createPolicy);
 router.get('/hr/leave-policies', auth.authenticate, checkPermission('leave.policies', 'view'), policyCtrl.getPolicies);
 router.get('/hr/leave-policies/custom/mappings', auth.authenticate, checkPermission('leave.policies', 'view'), policyCtrl.getCustomMappings);
@@ -94,6 +102,12 @@ router.post('/hr/leave-policies/custom/apply', auth.authenticate, checkPermissio
 router.get('/hr/leave-policies/:id', auth.authenticate, checkPermission('leave.policies', 'view'), policyCtrl.getPolicyById);
 router.put('/hr/leave-policies/:id', auth.authenticate, checkPermission('leave.policies', 'edit'), auth.requireHr, policyCtrl.updatePolicy);
 router.post('/hr/leave-policies/:id/sync', auth.authenticate, checkPermission('leave.policies', 'edit'), auth.requireHr, policyCtrl.syncPolicy);
+// Leave Types
+router.post('/hr/leave-types', auth.authenticate, checkPermission('leave.policies', 'create'), auth.requireHr, leaveTypeCtrl.createLeaveType);
+router.get('/hr/leave-types', auth.authenticate, checkPermission('leave.policies', 'view'), leaveTypeCtrl.getLeaveTypes);
+router.put('/hr/leave-types/:id', auth.authenticate, checkPermission('leave.policies', 'edit'), auth.requireHr, leaveTypeCtrl.updateLeaveType);
+router.delete('/hr/leave-types/:id', auth.authenticate, checkPermission('leave.policies', 'delete'), auth.requireHr, leaveTypeCtrl.deleteLeaveType);
+
 router.post('/hr/leave-policies/apply-existing', auth.authenticate, checkPermission('leave.policies', 'edit'), auth.requireHr, policyCtrl.applyPolicyToExistingEmployees);
 router.patch('/hr/leave-policies/:id/status', auth.authenticate, checkPermission('leave.policies', 'edit'), auth.requireHr, policyCtrl.togglePolicyStatus);
 router.delete('/hr/leave-policies/:id', auth.authenticate, checkPermission('leave.policies', 'delete'), auth.requireHr, policyCtrl.deletePolicy);
@@ -121,6 +135,30 @@ router.get('/hr/leaves/requests', auth.authenticate, checkPermission('leave.requ
 router.post('/hr/leaves/requests/:id/approve', auth.authenticate, checkPermission('leave.requests', 'edit'), requestCtrl.approveLeave);
 router.post('/hr/leaves/requests/:id/reject', auth.authenticate, checkPermission('leave.requests', 'edit'), requestCtrl.rejectLeave);
 
+// Leave Analytics Endpoints
+router.get('/hr/leaves/analytics/policy-assignments', auth.authenticate, checkPermission('leave.policies', 'view'), leaveAnalyticsCtrl.getPolicyAssignmentAnalytics);
+router.get('/hr/leaves/analytics/policy-assignments/:policyId/employees', auth.authenticate, checkPermission('leave.policies', 'view'), leaveAnalyticsCtrl.getEmployeesForPolicy);
+router.get('/hr/leaves/analytics/balances', auth.authenticate, checkPermission('leave.policies', 'view'), leaveAnalyticsCtrl.getLeaveBalanceAnalytics);
+router.get('/hr/leaves/analytics/utilization', auth.authenticate, checkPermission('leave.policies', 'view'), leaveAnalyticsCtrl.getLeaveUtilizationReport);
+router.get('/hr/leaves/analytics/pending', auth.authenticate, checkPermission('leave.requests', 'view'), leaveAnalyticsCtrl.getPendingLeaveReport);
+router.get('/hr/leaves/analytics/ledger-audit', auth.authenticate, checkPermission('leave.policies', 'view'), leaveAnalyticsCtrl.getLeaveLedgerAuditReport);
+router.get('/hr/leaves/analytics/monthly-trends', auth.authenticate, checkPermission('leave.policies', 'view'), leaveAnalyticsCtrl.getMonthlyLeaveTrends);
+router.get('/hr/leaves/analytics/high-users', auth.authenticate, checkPermission('leave.policies', 'view'), leaveAnalyticsCtrl.getHighLeaveUsers);
+router.get('/hr/leaves/analytics/sick-leave', auth.authenticate, checkPermission('leave.policies', 'view'), leaveAnalyticsCtrl.getSickLeaveAnalysis);
+router.get('/hr/leaves/analytics/liability', auth.authenticate, checkPermission('leave.policies', 'view'), leaveAnalyticsCtrl.getLeaveLiability);
+router.get('/hr/leaves/analytics/all-requests', auth.authenticate, checkPermission('leave.requests', 'view'), leaveAnalyticsCtrl.getAllLeaveRequestsReport);
+router.get('/hr/leaves/analytics/employee-summary', auth.authenticate, checkPermission('leave.policies', 'view'), leaveAnalyticsCtrl.getEmployeeLeaveSummary);
+router.get('/hr/leaves/analytics/master-report', auth.authenticate, checkPermission('leave.policies', 'view'), leaveAnalyticsCtrl.getMasterLeaveReport);
+router.post('/hr/leaves/analytics/import-opening-balances', auth.authenticate, checkPermission('leave.policies', 'edit'), auth.requireHr, leaveAnalyticsCtrl.importOpeningBalances);
+
+// Leave Encashment (HR)
+const encashmentCtrl = require('../controllers/leaveEncashment.controller');
+router.get('/hr/leaves/encashment/config', auth.authenticate, checkPermission('leave.policies', 'view'), encashmentCtrl.getConfig);
+router.post('/hr/leaves/encashment/config', auth.authenticate, checkPermission('leave.policies', 'edit'), auth.requireHr, encashmentCtrl.saveConfig);
+router.get('/hr/leaves/encashment/requests', auth.authenticate, checkPermission('leave.requests', 'view'), encashmentCtrl.getAllRequests);
+router.post('/hr/leaves/encashment/requests/:id/approve', auth.authenticate, checkPermission('leave.requests', 'edit'), auth.requireHr, encashmentCtrl.approveRequest);
+router.post('/hr/leaves/encashment/requests/:id/reject', auth.authenticate, checkPermission('leave.requests', 'edit'), auth.requireHr, encashmentCtrl.rejectRequest);
+
 // Calendar (HR) - Month overview and day detail
 const calendarCtrl = require('../controllers/calendar.controller');
 if (calendarCtrl && typeof calendarCtrl.getCalendar === 'function') {
@@ -135,6 +173,10 @@ if (calendarCtrl && typeof calendarCtrl.getAttendanceCalendar === 'function') {
 if (calendarCtrl && typeof calendarCtrl.getAttendanceCalendarDetail === 'function') {
    router.get('/hr/attendance-calendar/detail', auth.authenticate, checkPermission('attendance.calendar', 'view'), auth.requireHr, calendarCtrl.getAttendanceCalendarDetail);
 }
+if (calendarCtrl && typeof calendarCtrl.getWorkforceAnalyticsCalendar === 'function') {
+   router.get('/hr/workforce-analytics-calendar', auth.authenticate, checkPermission('attendance.calendar', 'view'), auth.requireHr, calendarCtrl.getWorkforceAnalyticsCalendar);
+}
+
 
 // Offer Templates
 router.use('/hr/offer-templates', require('./offerTemplate.routes'));

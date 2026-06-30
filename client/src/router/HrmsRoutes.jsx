@@ -39,6 +39,7 @@ const HRDashboard = lazy(() => import('../pages/HR/HRDashboard'));
 const Employees = lazy(() => import('../pages/HR/Employees'));
 const EmployeeProfile = lazy(() => import('../pages/HR/EmployeeProfile'));
 const EmployeeFormPage = lazy(() => import('../pages/HR/EmployeeFormPage'));
+const ExternalRecords = lazy(() => import('../pages/HR/ExternalRecords'));
 const Departments = lazy(() => import('../pages/HR/Departments'));
 const LeavePolicies = lazy(() => import('../pages/HR/LeavePolicies'));
 const LeaveApprovals = lazy(() => import('../pages/HR/LeaveApprovals'));
@@ -62,6 +63,20 @@ const FaceUpdateRequests = lazy(() => import('../pages/HR/FaceUpdateRequests'));
 const Compensation = lazy(() => import('../pages/HR/Compensation'));
 const OfferJoiningManager = lazy(() => import('../pages/HR/OfferJoiningManager'));
 const ShiftManagement = lazy(() => import('../pages/ShiftManagement'));
+
+// New Attendance Modules
+const AttendanceLayout = lazy(() => import('../layouts/AttendanceLayout'));
+const AttendanceDashboard = lazy(() => import('../pages/HR/Attendance/AttendanceDashboard'));
+const AttendanceSheet = lazy(() => import('../pages/HR/Attendance/AttendanceSheet'));
+const DailyAttendance = lazy(() => import('../pages/HR/Attendance/DailyAttendance'));
+const AttendanceSummary = lazy(() => import('../pages/HR/Attendance/AttendanceSummary'));
+const RegularizationRequest = lazy(() => import('../pages/HR/Attendance/RegularizationRequest'));
+const AttendanceApproval = lazy(() => import('../pages/HR/Attendance/AttendanceApproval'));
+const AttendanceLock = lazy(() => import('../pages/HR/Attendance/AttendanceLock'));
+const HolidayCalendar = lazy(() => import('../pages/HR/Attendance/HolidayCalendar'));
+const ShiftRoster = lazy(() => import('../pages/HR/Attendance/ShiftRoster'));
+const AttendanceReports = lazy(() => import('../pages/HR/Attendance/AttendanceReports'));
+const MusterRoll = lazy(() => import('../pages/HR/Attendance/MusterRoll'));
 
 // Letter modules
 const LetterDashboard = lazy(() => import('../pages/HR/Letters/LetterDashboard'));
@@ -110,6 +125,18 @@ const Payslips = lazy(() => import('../pages/HR/Payroll/Payslips'));
 const ProcessPayroll = lazy(() => import('../pages/HR/Payroll/ProcessPayroll'));
 const PayrollDashboard = lazy(() => import('../pages/HR/Payroll/PayrollDashboard'));
 const SalaryAssignmentExcel = lazy(() => import('../pages/HR/Payroll/SalaryAssignmentExcel'));
+const MinimumWageMaster = lazy(() => import('../pages/HR/Payroll/MinimumWageMaster'));
+const PayrollReport = lazy(() => import('../pages/HR/Payroll/PayrollReport'));
+const EmployeePayroll = lazy(() => import('../pages/HR/Payroll/SalaryAssignmentExcel'));
+const PayslipView = lazy(() => import('../pages/HR/Payroll/PayslipView'));
+const Arrears = lazy(() => import('../pages/HR/Payroll/Arrears'));
+const Reimbursements = lazy(() => import('../pages/HR/Payroll/Reimbursements'));
+const LoansAdvances = lazy(() => import('../pages/HR/Payroll/LoansAdvances'));
+const DeductionEntry = lazy(() => import('../pages/HR/Payroll/DeductionEntry'));
+const TdsDeclarations = lazy(() => import('../pages/HR/Payroll/TdsDeclarations'));
+const OtherEarnings = lazy(() => import('../pages/HR/Payroll/OtherEarnings'));
+const Form16 = lazy(() => import('../pages/HR/Payroll/Form16'));
+const SalaryRevision = lazy(() => import('../pages/HR/Compensation'));
 
 // Employee Self-Service
 const ESSPayslips = lazy(() => import('../pages/ESS/Payslips'));
@@ -121,6 +148,7 @@ const OnboardingTemplates = lazy(() => import('../pages/Onboarding/OnboardingTem
 const OnboardingTaskBoard = lazy(() => import('../pages/Onboarding/OnboardingTaskBoard'));
 const EmployeeOnboardingForm = lazy(() => import('../pages/Onboarding/EmployeeOnboardingForm'));
 const HRApprovalPage = lazy(() => import('../pages/Onboarding/HRApprovalPage'));
+const ApprovalsDashboard = lazy(() => import('../pages/Approvals/ApprovalsDashboard'));
 
 // 🔥 NEW: BGV Pages
 const MyTasks = lazy(() => import('../pages/HR/BGV/MyTasks'));
@@ -413,6 +441,7 @@ export default function HrmsRoutes() {
         <Route path="social-media" element={<Navigate to="/hr/settings/social-media" replace />} />
         <Route path="settings" element={<Navigate to="/hr/settings/company" replace />} />
         <Route path="settings/company" element={<CompanySettings />} />
+        <Route path="settings/dms-integration" element={<CompanySettings forceTab="dms" />} />
         <Route path="settings/email-templates" element={<EmailTemplates />} />
         <Route path="settings/social-media" element={<ProtectedModule module="socialMediaIntegration" permissionKey="socialMedia.dashboard"><SocialMediaPage /></ProtectedModule>} />
         <Route
@@ -442,6 +471,7 @@ export default function HrmsRoutes() {
         {/* --- HR MODULE --- */}
         <Route element={<ProtectedModule module="hr"><Outlet /></ProtectedModule>}>
           <Route path="employees" element={<Employees />} />
+          <Route path="external-records" element={<ExternalRecords />} />
           <Route path="employees/new" element={<EmployeeFormPage />} />
           <Route path="employees/:employeeId/profile" element={<EmployeeProfile />} />
           <Route path="employees/:employeeId/edit" element={<EmployeeFormPage />} />
@@ -450,12 +480,13 @@ export default function HrmsRoutes() {
           <Route path="leaves" element={<Navigate to="leave-approvals" replace />} />
           <Route path="leave-approvals" element={<ProtectedModule module="leave" permissionKey="leave.requests"><LeaveApprovals /></ProtectedModule>} />
           <Route path="leave-approvals/regularization" element={<ProtectedModule module="leave" permissionKey="leave.requests"><RegularizationApprovals category="Leave" /></ProtectedModule>} />
-          <Route path="leave-policies" element={<ProtectedModule module="leave" permissionKey="leave.policies"><LeavePolicies /></ProtectedModule>} />
-          <Route path="leave-policies/custom" element={<ProtectedModule module="leave" permissionKey="leave.custom"><LeavePolicies initialView="custom" /></ProtectedModule>} />
-          <Route path="organization-policies" element={<ProtectedModule module="leave" permissionKey="leave.policies"><LeavePolicies /></ProtectedModule>} />
+          <Route path="leave-policies" element={<ProtectedModule module="leave" permissionKey="leave.policies"><LeavePolicies mode="master" /></ProtectedModule>} />
+          <Route path="leave-policies/custom" element={<ProtectedModule module="leave" permissionKey="leave.custom"><LeavePolicies mode="master" initialView="custom" /></ProtectedModule>} />
+          <Route path="organization-policies" element={<ProtectedModule module="leave" permissionKey="leave.policies"><LeavePolicies mode="config" /></ProtectedModule>} />
           <Route path="org" element={<OrgStructure />} />
           <Route path="org-tree" element={<CeoOrg />} />
           <Route path="access" element={<ProtectedModule module="accessControl" permissionKey="configuration.access"><AccessControl /></ProtectedModule>} />
+          <Route path="approvals" element={<ProtectedModule module="hr" permissionKey="approval.view"><ApprovalsDashboard /></ProtectedModule>} />
           <Route path="sidebar-customization" element={<ProtectedModule module="hr" permissionKey="configuration.access"><SidebarCustomizationPage /></ProtectedModule>} />
           <Route path="settings/company" element={<SmartSettingsRoute forceTab="company" />} />
           <Route path="settings/sequences" element={<SmartSettingsRoute forceTab="sequences" />} />
@@ -471,10 +502,28 @@ export default function HrmsRoutes() {
 
           <Route path="my-tasks" element={<ProtectedModule module="backgroundVerification"><MyTasks /></ProtectedModule>} />
           <Route path="payslip-templates" element={<ProtectedModule module="payroll" permissionKey="payroll.payslips"><PayslipTemplates /></ProtectedModule>} />
+          
+          <Route path="manpower-requisition" element={<ProtectedModule module="recruitment" permissionKey="hiring.createReq"><ManpowerRequisitionList /></ProtectedModule>} />
+          <Route path="manpower-requisition/:id" element={<ProtectedModule module="recruitment" permissionKey="hiring.createReq"><ManpowerRequisitionForm /></ProtectedModule>} />
+          <Route path="manpower_requisition" element={<Navigate to="manpower-requisition" replace />} />
         </Route>
 
         {/* --- ATTENDANCE MODULE --- */}
-        <Route element={<ProtectedModule module="attendance"><Outlet /></ProtectedModule>}>
+        <Route element={<ProtectedModule module="attendance"><AttendanceLayout /></ProtectedModule>}>
+          {/* New Modules */}
+          <Route path="attendance-dashboard" element={<AttendanceDashboard />} />
+          <Route path="attendance-sheet" element={<AttendanceSheet />} />
+          <Route path="daily-attendance" element={<DailyAttendance />} />
+          <Route path="attendance-summary" element={<AttendanceSummary />} />
+          <Route path="regularization-request" element={<RegularizationRequest />} />
+          <Route path="attendance-approval" element={<AttendanceApproval />} />
+          <Route path="attendance-lock" element={<AttendanceLock />} />
+          <Route path="muster-roll" element={<MusterRoll />} />
+          <Route path="holiday-calendar" element={<HolidayCalendar />} />
+          <Route path="shift-roster" element={<ShiftRoster />} />
+          <Route path="attendance-reports" element={<AttendanceReports />} />
+          
+          {/* Legacy Modules Preserved */}
           <Route path="shift-management" element={<ShiftManagement />} />
           <Route path="attendance" element={<AttendanceAdmin />} />
           <Route path="attendance/live-tracking" element={<AttendanceAdmin forceView="liveTracking" />} />
@@ -546,11 +595,23 @@ export default function HrmsRoutes() {
           <Route path="payroll/benefits/edit/:id" element={<NewBenefit />} />
           <Route path="payroll/salary-templates/new" element={<NewSalaryTemplate />} />
           <Route path="payroll/rules" element={<PayrollRules />} />
+          <Route path="payroll/minimum-wage" element={<MinimumWageMaster />} />
           <Route path="payroll/process" element={<ProcessPayroll />} />
           <Route path="payroll/run" element={<RunPayroll />} />
           <Route path="payroll/payslips" element={<Payslips />} />
+          <Route path="payroll/reports" element={<PayrollReport />} />
           <Route path="payroll/payslip-templates" element={<PayslipTemplates />} />
           <Route path="payroll/salary-assignment-excel" element={<SalaryAssignmentExcel />} />
+          <Route path="payroll/employee-payroll" element={<EmployeePayroll />} />
+          <Route path="payroll/payslip-view" element={<PayslipView />} />
+          <Route path="payroll/arrears" element={<Arrears />} />
+          <Route path="payroll/reimbursements" element={<Reimbursements />} />
+          <Route path="payroll/loans" element={<LoansAdvances />} />
+          <Route path="payroll/deduction-entry" element={<DeductionEntry />} />
+          <Route path="payroll/tds-declaration" element={<TdsDeclarations />} />
+          <Route path="payroll/other-earnings" element={<OtherEarnings />} />
+          <Route path="payroll/form16" element={<Form16 />} />
+          <Route path="payroll/salary-revision" element={<SalaryRevision />} />
 
           {/* Payslip Builder */}
           <Route
@@ -674,17 +735,18 @@ export default function HrmsRoutes() {
           }
         />
         <Route element={<ProtectedModule module="hr"><Outlet /></ProtectedModule>}>
-          <Route path="employees" element={<EmployeePermissionRoute module="hr" permissionKey="people.employees"><Employees /></EmployeePermissionRoute>} />
-          <Route path="employees/new" element={<EmployeePermissionRoute module="hr" permissionKey="people.employees" action="create"><EmployeeFormPage /></EmployeePermissionRoute>} />
+          <Route path="employees" element={<EmployeePermissionRoute module="hr" permissionKey={['people.employees', 'people.directory']}><Employees /></EmployeePermissionRoute>} />
+          <Route path="external-records" element={<EmployeePermissionRoute module="hr" permissionKey={['people.employees', 'people.directory']}><ExternalRecords /></EmployeePermissionRoute>} />
+          <Route path="employees/new" element={<EmployeePermissionRoute module="hr" permissionKey={['people.employees']}><EmployeeFormPage /></EmployeePermissionRoute>} />
           <Route path="employees/:employeeId/profile" element={<EmployeePermissionRoute module="hr" permissionKey="people.employees"><EmployeeProfile /></EmployeePermissionRoute>} />
           <Route path="employees/:employeeId/edit" element={<EmployeePermissionRoute module="hr" permissionKey="people.employees" action="edit"><EmployeeFormPage /></EmployeePermissionRoute>} />
           <Route path="departments" element={<EmployeePermissionRoute module="hr" permissionKey="people.departments"><Departments /></EmployeePermissionRoute>} />
           <Route path="org" element={<EmployeePermissionRoute module="hr" permissionKey="people.org"><OrgStructure /></EmployeePermissionRoute>} />
           <Route path="users" element={<EmployeePermissionRoute module="hr" permissionKey="people.users"><UserManagement /></EmployeePermissionRoute>} />
           <Route path="leave-approvals" element={<EmployeePermissionRoute module="hr" permissionKey="leave.requests"><LeaveApprovals /></EmployeePermissionRoute>} />
-          <Route path="leave-policies" element={<EmployeePermissionRoute module="hr" permissionKey="leave.policies"><LeavePolicies /></EmployeePermissionRoute>} />
-          <Route path="leave-policies/custom" element={<EmployeePermissionRoute module="hr" permissionKey="leave.custom"><LeavePolicies initialView="custom" /></EmployeePermissionRoute>} />
-          <Route path="organization-policies" element={<EmployeePermissionRoute module="hr" permissionKey="leave.policies"><LeavePolicies /></EmployeePermissionRoute>} />
+          <Route path="leave-policies" element={<EmployeePermissionRoute module="hr" permissionKey="leave.policies"><LeavePolicies mode="master" /></EmployeePermissionRoute>} />
+          <Route path="leave-policies/custom" element={<EmployeePermissionRoute module="hr" permissionKey="leave.custom"><LeavePolicies mode="master" initialView="custom" /></EmployeePermissionRoute>} />
+          <Route path="organization-policies" element={<EmployeePermissionRoute module="hr" permissionKey="leave.policies"><LeavePolicies mode="config" /></EmployeePermissionRoute>} />
           <Route path="exit-management" element={<EmployeePermissionRoute module="hr" permissionKey="offboarding.exit"><ExitManagement /></EmployeePermissionRoute>} />
           <Route path="reports" element={<EmployeePermissionRoute module="hr" permissionKey="reports.staffing"><PersonnelReports /></EmployeePermissionRoute>} />
           <Route path="reports/replacements" element={<RBACRoute module="reports.movements"><PersonnelReports /></RBACRoute>} />
@@ -694,6 +756,7 @@ export default function HrmsRoutes() {
           <Route path="sub-companies/new" element={<Navigate to="/hr/organization" replace />} />
           <Route path="organization" element={<EmployeePermissionRoute module="hr" permissionKey={['company.subCompanies', 'people.subCompanies', 'organization.view', 'people.org']}><Organization /></EmployeePermissionRoute>} />
           <Route path="grades" element={<EmployeePermissionRoute module="hr" permissionKey={['people.org', 'people.departments']}><GradeManagement /></EmployeePermissionRoute>} />
+          <Route path="approvals" element={<EmployeePermissionRoute module="hr" permissionKey="approval.view"><ApprovalsDashboard /></EmployeePermissionRoute>} />
         </Route>
         <Route element={<ProtectedModule module="attendance"><Outlet /></ProtectedModule>}>
           <Route path="management-attendance" element={<EmployeePermissionRoute module="attendance" permissionKey="attendance.dashboard"><AttendanceAdmin /></EmployeePermissionRoute>} />
@@ -742,6 +805,7 @@ export default function HrmsRoutes() {
         <Route path="resignation" element={<EmployeePermissionRoute permissionKey="employee.exit"><EmployeeExit /></EmployeePermissionRoute>} />
         <Route path="manpower-requisition" element={<EmployeePermissionRoute permissionKey="employee.manpowerRequisition"><ManpowerRequisitionList /></EmployeePermissionRoute>} />
         <Route path="manpower-requisition/:id" element={<EmployeePermissionRoute permissionKey="employee.manpowerRequisition"><ManpowerRequisitionForm /></EmployeePermissionRoute>} />
+        <Route path="manpower_requisition" element={<Navigate to="../manpower-requisition" replace />} />
         <Route
           path="payslips"
           element={

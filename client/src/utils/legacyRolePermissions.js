@@ -39,7 +39,7 @@ const MANAGER_KEYS = [
 ];
 
 const EMPLOYEE_KEYS = [
-  'employee.dashboard', 'employee.attendance', 'employee.payslips', 'employee.documents', 'employee.jobs', 'employee.tickets', 'employee.exit',
+  'employee.dashboard', 'employee.attendance', 'employee.payslips', 'employee.documents', 'employee.jobs', 'employee.tickets', 'employee.exit', 'employee.manpowerRequisition',
 ];
 
 const HR_KEYS = [
@@ -76,7 +76,7 @@ export function getLegacyPermissionMap(roleRaw) {
   if (role === 'manager') {
     return toMap(MANAGER_KEYS, fullActions);
   }
-  return toMap(EMPLOYEE_KEYS, readOnlyActions);
+  return toMap(EMPLOYEE_KEYS, fullActions);
 }
 
 export function normalizeActionKey(action = 'view') {

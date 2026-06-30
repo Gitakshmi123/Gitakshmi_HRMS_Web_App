@@ -16,6 +16,7 @@ router.post('/auth/login', attachPublicTenant, publicCandidateController.login);
 router.get('/profile', authenticatePublicCandidate, publicCandidateController.getProfile);
 router.get('/applications', authenticatePublicCandidate, publicCandidateController.getApplications);
 router.get('/applications/:id', authenticatePublicCandidate, publicCandidateController.getApplicationById);
+router.post('/applications/:id/submit-profile', authenticatePublicCandidate, publicCandidateController.submitApplicationProfile);
 router.delete('/applications/:id', authenticatePublicCandidate, publicCandidateController.withdrawApplication);
 
 module.exports = router;

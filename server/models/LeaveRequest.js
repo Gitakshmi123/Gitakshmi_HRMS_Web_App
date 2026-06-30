@@ -42,6 +42,8 @@ const LeaveRequestSchema = new mongoose.Schema({
   halfDayTarget: { type: String, enum: ['Start', 'End'], default: 'Start' },
   halfDaySession: { type: String, enum: ['First Half', 'Second Half'], trim: true },
 
+  medicalCertUrl: { type: String, trim: true },
+
   meta: { type: Object, default: {} }
 }, { timestamps: true });
 

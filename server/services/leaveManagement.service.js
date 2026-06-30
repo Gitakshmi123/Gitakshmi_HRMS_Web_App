@@ -73,43 +73,137 @@ function getApplicableYear(joiningDate = new Date()) {
     return new Date(joiningDate).getFullYear();
 }
 
-function calculateProratedLeave(yearlyLeave, joiningDate) {
-    const validJoiningDate = validateJoiningDate(joiningDate);
-    const joiningMonth = validJoiningDate.getMonth() + 1;
-    const remainingMonths = 12 - joiningMonth + 1;
-    const calculatedLeave = roundLeaveValue((Number(yearlyLeave || 0) / 12) * remainingMonths);
-    console.log(`[LEAVE_PRORATION] joiningMonth=${joiningMonth}, remainingMonths=${remainingMonths}, yearlyLeave=${yearlyLeave}, calculatedLeave=${calculatedLeave}`);
-    return calculatedLeave;
+async function getEmployeeJoiningMonthPayableDays(employee, tenantId, tenantDB, year) {
+    if (!employee?.joiningDate) return 0;
+    
+    const doj = new Date(employee.joiningDate);
+    const joinYear = doj.getFullYear();
+    const joinMonth = doj.getMonth(); // 0-indexed
+    
+    const startOfMonth = new Date(Date.UTC(joinYear, joinMonth, 1, 0, 0, 0));
+    const endOfMonth = new Date(Date.UTC(joinYear, joinMonth + 1, 0, 23, 59, 59, 999));
+    
+    let AttendanceModel;
+    try {
+        const dbConnection = tenantDB || employee.db || employee.constructor.db || mongoose.connection;
+        AttendanceModel = dbConnection.model('Attendance');
+    } catch (err) {
+        console.warn('[LEAVE_PRORATION] Attendance model not found on connection, using default connection:', err.message);
+        try {
+            AttendanceModel = mongoose.connection.model('Attendance');
+        } catch (e) {
+            console.error('[LEAVE_PRORATION] Failed to resolve Attendance model:', e.message);
+            return 0;
+        }
+    }
+    
+    if (!AttendanceModel) return 0;
+    
+    const records = await AttendanceModel.find({
+        tenant: tenantId || employee.tenant,
+        employee: employee._id,
+        date: { $gte: startOfMonth, $lte: endOfMonth }
+    }).lean();
+    
+    const totalDaysInMonth = new Date(joinYear, joinMonth + 1, 0).getDate();
+    const maxPossibleDays = totalDaysInMonth - doj.getDate() + 1;
+    
+    if (maxPossibleDays < 20) {
+        console.log('[LEAVE_PRORATION] Employee ' + employee._id + ' joining date ' + employee.joiningDate + ' allows max ' + maxPossibleDays + ' payable days (< 20). Eligible days set to 0.');
+        return 0;
+    }
+    
+    const currentDate = new Date();
+    const isCurrentOrFutureMonth = (joinYear > currentDate.getFullYear()) || 
+        (joinYear === currentDate.getFullYear() && joinMonth >= currentDate.getMonth());
+        
+    if (isCurrentOrFutureMonth || records.length === 0) {
+        console.log('[LEAVE_PRORATION] Employee ' + employee._id + ' is current/future month or has 0 records. Defaulting payableDays to 20 for initialization.');
+        return 20;
+    }
+    
+    let payableDays = 0;
+    for (const record of records) {
+        const isPresent = record.status === 'present';
+        const isHalfDay = record.status === 'half_day';
+        const isOD = record.isOnDuty === true || record.isWFH === true;
+        const isCO = record.isCompOffDay === true;
+        const isPH = record.status === 'holiday';
+        
+        if (isPresent || isOD || isCO || isPH) {
+            payableDays += 1;
+        } else if (isHalfDay) {
+            payableDays += 0.5;
+        }
+    }
+    
+    console.log('[LEAVE_PRORATION] Employee ' + employee._id + ' joining month ' + joinYear + '-' + (joinMonth+1) + ' attendance records: ' + records.length + ', calculated payableDays: ' + payableDays);
+    return payableDays;
 }
 
-function calculateProratedLeaveForYear(yearlyLeave, joiningDate, year, leaveCycleStartMonth = 0) {
+function calculateProratedLeave(yearlyLeave, joiningDate, leaveKey = null, joiningPayableDays = null, year = new Date().getFullYear()) {
+    if (!joiningDate) {
+        return roundLeaveValue(yearlyLeave);
+    }
+    const validJoiningDate = validateJoiningDate(joiningDate);
+    const effectiveYear = Number(year);
+    const cycleStart = new Date(effectiveYear, 0, 1, 0, 0, 0, 0);
+    const joinDateMidnight = new Date(validJoiningDate.getFullYear(), validJoiningDate.getMonth(), validJoiningDate.getDate(), 0, 0, 0, 0);
+    
+    if (joinDateMidnight < cycleStart) {
+        return roundLeaveValue(yearlyLeave);
+    }
+    
+    const isClOrSl = leaveKey && ['CL', 'SL'].includes(leaveKey.toUpperCase());
+    if (isClOrSl) {
+        const payableDays = joiningPayableDays !== null ? joiningPayableDays : 20;
+        if (payableDays < 20) {
+            console.log('[LEAVE_PRORATION] CL/SL proration resulting in 0 due to payableDays=' + payableDays + ' < 20');
+            return 0;
+        }
+    }
+    
+    const joiningMonth = validJoiningDate.getMonth() + 1;
+    const remainingMonths = 12 - joiningMonth + 1;
+    const calculated = (Number(yearlyLeave || 0) / 12) * remainingMonths;
+    return isClOrSl ? Number(calculated.toFixed(2)) : roundLeaveValue(calculated);
+}
+
+function calculateProratedLeaveForYear(yearlyLeave, joiningDate, year, leaveCycleStartMonth = 0, leaveKey = null, joiningPayableDays = null) {
     if (!joiningDate) {
         return roundLeaveValue(yearlyLeave);
     }
 
     const validJoiningDate = validateJoiningDate(joiningDate);
     const effectiveYear = Number(year) || new Date().getFullYear();
-    const cycleStart = new Date(effectiveYear, leaveCycleStartMonth, 1);
-    const cycleEnd = new Date(effectiveYear + 1, leaveCycleStartMonth, 0);
+    const cycleStart = new Date(effectiveYear, leaveCycleStartMonth, 1, 0, 0, 0, 0);
+    const cycleEnd = new Date(effectiveYear + 1, leaveCycleStartMonth, 0, 23, 59, 59, 999);
+    const joinDateMidnight = new Date(validJoiningDate.getFullYear(), validJoiningDate.getMonth(), validJoiningDate.getDate(), 0, 0, 0, 0);
 
-    if (validJoiningDate > cycleEnd) {
+    if (joinDateMidnight > cycleEnd) {
         return 0;
     }
 
-    if (validJoiningDate <= cycleStart) {
-        return roundLeaveValue(yearlyLeave);
+    if (joinDateMidnight < cycleStart) {
+        const isClOrSl = leaveKey && ['CL', 'SL'].includes(leaveKey.toUpperCase());
+        return isClOrSl ? Number(Number(yearlyLeave).toFixed(2)) : roundLeaveValue(yearlyLeave);
     }
 
-    const monthsRemaining = Math.max(
-        0,
-        ((cycleEnd.getFullYear() - validJoiningDate.getFullYear()) * 12) +
-        (cycleEnd.getMonth() - validJoiningDate.getMonth()) +
-        1
-    );
+    const isClOrSl = leaveKey && ['CL', 'SL'].includes(leaveKey.toUpperCase());
+    if (isClOrSl) {
+        const payableDays = joiningPayableDays !== null ? joiningPayableDays : 20;
+        if (payableDays < 20) {
+            console.log('[LEAVE_PRORATION] CL/SL proration resulting in 0 due to payableDays=' + payableDays + ' < 20');
+            return 0;
+        }
+    }
 
-    const result = roundLeaveValue((Number(yearlyLeave || 0) / 12) * monthsRemaining);
-    console.log(`[LEAVE_PRORATION_DIAG] yearlyLeave=${yearlyLeave} monthsRemaining=${monthsRemaining} result=${result}`);
-    return result;
+    const joiningMonth = validJoiningDate.getMonth() + 1;
+    const remainingMonths = 12 - joiningMonth + 1;
+    const result = (Number(yearlyLeave || 0) / 12) * remainingMonths;
+    const roundedResult = isClOrSl ? Number(result.toFixed(2)) : roundLeaveValue(result);
+    console.log('[LEAVE_PRORATION_DIAG] leaveKey=' + leaveKey + ' yearlyLeave=' + yearlyLeave + ' remainingMonths=' + remainingMonths + ' result=' + roundedResult);
+    return roundedResult;
 }
 
 function buildPolicyLeaveMap(policy, employee = null, grade = null) {
@@ -134,7 +228,7 @@ function buildPolicyLeaveMap(policy, employee = null, grade = null) {
     return balance;
 }
 
-function calculateEmployeeLeaveBalance(policy, joiningDate, { prorate = true, employee = null, grade = null } = {}) {
+function calculateEmployeeLeaveBalance(policy, joiningDate, { prorate = true, employee = null, grade = null, joiningPayableDays = null, year = new Date().getFullYear() } = {}) {
     const balance = {};
     for (const key of DEFAULT_LEAVE_KEYS) {
         balance[key] = 0;
@@ -150,8 +244,8 @@ function calculateEmployeeLeaveBalance(policy, joiningDate, { prorate = true, em
 
         const yearlyLeave = roundLeaveValue(rule.totalPerYear);
         balance[leaveKey] = prorate && rule.prorateForNewJoiners === true
-            ? calculateProratedLeave(yearlyLeave, joiningDate)
-            : yearlyLeave;
+            ? calculateProratedLeave(yearlyLeave, joiningDate, leaveKey, joiningPayableDays, year)
+            : (['CL', 'SL'].includes(leaveKey.toUpperCase()) ? Number(Number(rule.totalPerYear).toFixed(2)) : yearlyLeave);
     }
 
     return balance;
@@ -211,7 +305,8 @@ function buildExpectedPolicyBalanceSnapshot({
     grade = null,
     year,
     prorate = true,
-    leaveCycleStartMonth = 0
+    leaveCycleStartMonth = 0,
+    joiningPayableDays = null
 }) {
     const rules = gradeLeavePolicyService.resolvePolicyRulesForEmployee({ policy, employee, grade });
     const expectedSnapshot = {};
@@ -224,11 +319,12 @@ function buildExpectedPolicyBalanceSnapshot({
 
         const eligibility = evaluatePolicyRuleEligibility(employee, policy, rule);
         const shouldProrateRule = prorate && rule.prorateForNewJoiners === true;
+        const isClOrSl = ['CL', 'SL'].includes(leaveKey.toUpperCase());
         const total = eligibility.eligible
             ? (
                 shouldProrateRule
-                    ? calculateProratedLeaveForYear(rule.totalPerYear, employee?.joiningDate, year, leaveCycleStartMonth)
-                    : roundLeaveValue(rule.totalPerYear)
+                    ? calculateProratedLeaveForYear(rule.totalPerYear, employee?.joiningDate, year, leaveCycleStartMonth, leaveKey, joiningPayableDays)
+                    : (isClOrSl ? Number(Number(rule.totalPerYear).toFixed(2)) : roundLeaveValue(rule.totalPerYear))
             )
             : 0;
 
@@ -331,6 +427,56 @@ function isPolicyApplicableToEmployee(policy, employee, resolvedGrade = null) {
         const match = ['intern', 'internship'].includes(String(employee.employeeType || employee.role || '').toLowerCase());
         console.log(`[POLICY_MATCH] Intern match: ${match}`);
         return match;
+    }
+
+    if (policy.applicableTo === 'Custom') {
+        // Evaluate Branch Match
+        if (Array.isArray(policy.branchIds) && policy.branchIds.length > 0) {
+            const empBranchId = employee.branchId?._id || employee.branchId;
+            if (!empBranchId || !policy.branchIds.some(id => String(id) === String(empBranchId))) {
+                console.log(`[POLICY_MATCH] Custom match failed: Branch mismatch`);
+                return false;
+            }
+        }
+        // Evaluate Department Match
+        if (Array.isArray(policy.departmentIds) && policy.departmentIds.length > 0) {
+            const empDepartmentId = employee.departmentId?._id || employee.departmentId;
+            if (!empDepartmentId || !policy.departmentIds.some(id => String(id) === String(empDepartmentId))) {
+                console.log(`[POLICY_MATCH] Custom match failed: Department mismatch`);
+                return false;
+            }
+        }
+        // Evaluate Designation Match
+        if (Array.isArray(policy.designations) && policy.designations.length > 0) {
+            const empDesignation = String(employee.designation || employee.role || '').toLowerCase().trim();
+            if (!empDesignation || !policy.designations.some(d => String(d).toLowerCase().trim() === empDesignation)) {
+                console.log(`[POLICY_MATCH] Custom match failed: Designation mismatch`);
+                return false;
+            }
+        }
+        // Evaluate Grade Match
+        if ((Array.isArray(policy.gradeIds) && policy.gradeIds.length > 0) || (Array.isArray(policy.gradeCodes) && policy.gradeCodes.length > 0)) {
+            const empGradeValue = String(resolvedGrade?.gradeCode || resolvedGrade?.gradeValue || employee.grade || '').toLowerCase().trim();
+            const empGradeId = employee.gradeId?._id || employee.gradeId || resolvedGrade?._id;
+            
+            const idMatch = Array.isArray(policy.gradeIds) && policy.gradeIds.length > 0 && empGradeId && policy.gradeIds.some(id => String(id) === String(empGradeId));
+            const codeMatch = Array.isArray(policy.gradeCodes) && policy.gradeCodes.length > 0 && empGradeValue && policy.gradeCodes.some(c => String(c).toLowerCase().trim() === empGradeValue);
+            
+            if (!idMatch && !codeMatch) {
+                console.log(`[POLICY_MATCH] Custom match failed: Grade mismatch`);
+                return false;
+            }
+        }
+        // Evaluate Employee Type Match
+        if (Array.isArray(policy.applicableEmployeeTypes) && policy.applicableEmployeeTypes.length > 0) {
+            const empType = String(employee.employeeType || '').toLowerCase().trim();
+            if (!empType || !policy.applicableEmployeeTypes.some(t => String(t).toLowerCase().trim() === empType)) {
+                console.log(`[POLICY_MATCH] Custom match failed: EmployeeType mismatch`);
+                return false;
+            }
+        }
+        console.log(`[POLICY_MATCH] Custom match: true (All criteria satisfied)`);
+        return true;
     }
 
     console.log(`[POLICY_MATCH] No match found for applicableTo="${policy.applicableTo}"`);
@@ -451,6 +597,11 @@ async function resolveLeavePolicyForEmployee({ LeavePolicy, tenantId, employee, 
         return null;
     }
 
+    const assignedPolicy = await getAssignedLeavePolicyForEmployee({ LeavePolicy, tenantId, employee });
+    if (assignedPolicy) {
+        return assignedPolicy;
+    }
+
     const activePolicies = Array.isArray(policies)
         ? policies
         : await getActiveLeavePolicies({ LeavePolicy, tenantId });
@@ -463,12 +614,7 @@ async function resolveLeavePolicyForEmployee({ LeavePolicy, tenantId, employee, 
         date: new Date()
     });
 
-    const bestMatchingPolicy = selectBestPolicyForEmployee({ policies: activePolicies, employee, grade: resolvedGrade });
-    if (bestMatchingPolicy) {
-        return bestMatchingPolicy;
-    }
-
-    return getAssignedLeavePolicyForEmployee({ LeavePolicy, tenantId, employee });
+    return selectBestPolicyForEmployee({ policies: activePolicies, employee, grade: resolvedGrade });
 }
 
 async function syncEmployeeLeaveSnapshotFromDocuments({ employee, tenantId, LeaveBalance, year }) {
@@ -525,7 +671,21 @@ async function syncEmployeeLeaveDocuments({
         date: new Date(effectiveYear, 0, 1)
     });
     const effectiveRules = gradeLeavePolicyService.resolvePolicyRulesForEmployee({ policy, employee, grade });
-    const computedBalance = calculateEmployeeLeaveBalance(policy, employee.joiningDate, { prorate, employee, grade });
+    
+    // Calculate joining month payable days if it is the joining year
+    const isJoiningYear = employee.joiningDate && new Date(employee.joiningDate).getFullYear() === effectiveYear;
+    let joiningPayableDays = null;
+    if (prorate && isJoiningYear) {
+        joiningPayableDays = await getEmployeeJoiningMonthPayableDays(employee, tenantId, LeaveBalance.db, effectiveYear);
+    }
+
+    const computedBalance = calculateEmployeeLeaveBalance(policy, employee.joiningDate, {
+        prorate,
+        employee,
+        grade,
+        joiningPayableDays,
+        year: effectiveYear
+    });
     const policyLeaveKeys = Array.from(new Set(
         effectiveRules
             .map((rule) => normalizeLeaveKey(rule?.leaveType))
@@ -536,7 +696,8 @@ async function syncEmployeeLeaveDocuments({
         employee,
         grade,
         year: effectiveYear,
-        prorate
+        prorate,
+        joiningPayableDays
     });
 
     employee.leavePolicy = policy._id;
@@ -567,19 +728,27 @@ async function syncEmployeeLeaveDocuments({
             ? new Date(effectiveYear, 0 + Number(rule.expiryMonths), 0)
             : null;
         const maxLeaveCap = Number(rule.maxLeaveCap || 0);
-
         if (existing) {
             const used = existing.used || 0;
             const pending = existing.pending || 0;
-            const totalWithUsage = expected.locked ? Math.max(total, used + pending) : total;
+            
             existing.policy = policy._id;
             existing.leaveType = leaveKey;
-            existing.total = totalWithUsage;
-            if (!expected.locked && maxLeaveCap > 0) {
-                existing.total = Math.max(used + pending, Math.min(totalWithUsage, maxLeaveCap));
+            
+            if (existing.isOpeningManual) {
+                // Keep existing.opening and accrued
+                existing.total = existing.opening + (existing.accrued || 0);
+            } else {
+                const totalWithUsage = expected.locked ? Math.max(total, used + pending) : total;
+                existing.opening = expected.locked ? Math.max(total, used + pending) : total;
+                existing.total = existing.opening + (existing.accrued || 0);
+                if (!expected.locked && maxLeaveCap > 0) {
+                    existing.total = Math.max(used + pending, Math.min(existing.total, maxLeaveCap));
+                }
             }
+            
             existing.available = Math.max(0, existing.total - used - pending);
-            if (!expected.locked && maxLeaveCap > 0) {
+            if (!existing.isOpeningManual && !expected.locked && maxLeaveCap > 0) {
                 existing.available = Math.min(existing.available, maxLeaveCap);
             }
             if (expected.locked) {
@@ -597,7 +766,6 @@ async function syncEmployeeLeaveDocuments({
             try {
                 await existing.save();
             } catch (saveErr) {
-                // If the document was deleted concurrently by another sync process, ignore it.
                 if (saveErr.name === 'DocumentNotFoundError' || saveErr.message.includes('No document found')) {
                     console.warn(`[LEAVE_SYNC] Balance document ${existing._id} was removed concurrently. Skipping save.`);
                 } else {
@@ -608,16 +776,20 @@ async function syncEmployeeLeaveDocuments({
             continue;
         }
 
-        await LeaveBalance.create({
+        const initialTotal = !expected.locked && maxLeaveCap > 0 ? Math.min(total, maxLeaveCap) : total;
+        const newBalDoc = await LeaveBalance.create({
             tenant: tenantId,
             employee: employee._id,
             policy: policy._id,
             leaveType: leaveKey,
             year: effectiveYear,
-            total: !expected.locked && maxLeaveCap > 0 ? Math.min(total, maxLeaveCap) : total,
+            opening: initialTotal,
+            accrued: 0,
+            isOpeningManual: false,
+            total: initialTotal,
             used: 0,
             pending: 0,
-            available: expected.locked ? 0 : (!expected.locked && maxLeaveCap > 0 ? Math.min(total, maxLeaveCap) : total),
+            available: expected.locked ? 0 : initialTotal,
             locked: expected.locked,
             eligibleFrom: expected.eligibleFrom,
             expiresAt: expiryAt,
@@ -627,6 +799,24 @@ async function syncEmployeeLeaveDocuments({
                 quotaSource: grade ? 'grade' : 'policy'
             }
         });
+
+        try {
+            const LeaveLedger = LeaveBalance.db.model('LeaveLedger');
+            await LeaveLedger.create({
+                tenant: tenantId,
+                employee: employee._id,
+                leaveType: leaveKey,
+                year: effectiveYear,
+                actionType: 'Opening',
+                days: initialTotal,
+                previousBalance: 0,
+                newBalance: expected.locked ? 0 : initialTotal,
+                remarks: `Initial policy balance allocation`,
+                date: new Date()
+            });
+        } catch (ledgerErr) {
+            console.error('[SYNC_DOCS_LEDGER_ERROR]', ledgerErr.message);
+        }
     }
 
     if (docsByType.size > 0) {
@@ -651,7 +841,8 @@ async function repairZeroLeaveBalancesFromPolicy({
     tenantId,
     models,
     year,
-    prorate = true
+    prorate = true,
+    joiningPayableDays = null
 }) {
     const { LeaveBalance, Grade } = models;
     if (!employee || !policy || !LeaveBalance) {
@@ -683,7 +874,7 @@ async function repairZeroLeaveBalancesFromPolicy({
         }
 
         const total = prorate && rule.prorateForNewJoiners === true
-            ? calculateProratedLeaveForYear(ruleTotal, employee?.joiningDate, effectiveYear)
+            ? calculateProratedLeaveForYear(ruleTotal, employee?.joiningDate, effectiveYear, 0, leaveKey, joiningPayableDays)
             : ruleTotal;
         if (total <= 0) {
             continue;
@@ -896,7 +1087,7 @@ async function ensureEmployeeLeaveBalanceForYear({
     });
     const bestMatchingPolicy = selectBestPolicyForEmployee({ policies: activePolicies, employee, grade });
     const assignedPolicy = await getAssignedLeavePolicyForEmployee({ LeavePolicy, tenantId, employee });
-    let targetPolicy = policy || bestMatchingPolicy || assignedPolicy;
+    let targetPolicy = policy || assignedPolicy || bestMatchingPolicy;
     
     if (targetPolicy && String(targetPolicy.tenant) !== String(tenantId)) {
         console.log(`[LEAVE_SYNC] Target policy ${targetPolicy._id} tenant mismatch: ${targetPolicy.tenant} vs ${tenantId}.`);
@@ -936,18 +1127,26 @@ async function ensureEmployeeLeaveBalanceForYear({
             .filter(Boolean)
     ));
     const isJoiningYear = employee.joiningDate && new Date(employee.joiningDate).getFullYear() === Number(year);
+    
+    // Calculate joining month payable days if it is the joining year
+    let joiningPayableDays = null;
+    if (isJoiningYear) {
+        joiningPayableDays = await getEmployeeJoiningMonthPayableDays(employee, tenantId, tenantDB, year);
+    }
+
     const expectedSnapshot = buildExpectedPolicyBalanceSnapshot({
         policy: targetPolicy,
         employee,
         grade,
         year,
-        prorate: isJoiningYear
+        prorate: isJoiningYear,
+        joiningPayableDays
     });
     const existingBalances = await LeaveBalance.find({
         tenant: tenantId,
         employee: employee._id,
         year
-    }).select('leaveType policy total locked eligibleFrom').lean();
+    }).select('leaveType policy total locked eligibleFrom isOpeningManual').lean();
     const existingLeaveKeys = new Set(existingBalances.map((balance) => normalizeLeaveKey(balance.leaveType)));
     const hasMissingBalances = policyLeaveKeys.some((leaveKey) => !existingLeaveKeys.has(leaveKey));
     const hasExtraBalances = existingBalances.some((balance) => !policyLeaveKeys.includes(normalizeLeaveKey(balance.leaveType)));
@@ -960,6 +1159,10 @@ async function ensureEmployeeLeaveBalanceForYear({
         const expected = expectedSnapshot[leaveKey];
 
         if (!expected) {
+            return false;
+        }
+
+        if (balance.isOpeningManual) {
             return false;
         }
 
@@ -1037,5 +1240,6 @@ module.exports = {
     evaluatePolicyRuleEligibility,
     getAssignedLeavePolicyForEmployee,
     isPolicyEnabled,
-    validateJoiningDate
+    validateJoiningDate,
+    getJoiningMonthPayableDays: getEmployeeJoiningMonthPayableDays
 };

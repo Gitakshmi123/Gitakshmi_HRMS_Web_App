@@ -1,0 +1,374 @@
+=== STEP 5166 ===
+Tool: multi_replace_file_content
+Instruction: Insert slab builder grid, add/delete slab controls, formula preview container, and custom attendance accrual text tags inside LeavePolicies.jsx.
+Chunk 0 Target:
+                                                                {ruleForm.accrualDependsOnAttendance && (
+                                                                    <div className="col-span-2 space-y-4 bg-slate-50 rounded-xl p-3 border border-slate-100/50 animate-in fade-in duration-200">
+                                                                        <div className="space-y-1.5">
+                                                                            <label className="text-[8px] font-bold text-slate-400 uppercase tracking-widest ml-1">Minimum Attendance Days</label>
+                                                                            <input
+                                                                                type="number"
+                                                                                placeholder="20"
+                                                                                value={ruleForm.minAttendanceDays !== undefined && ruleForm.minAttendanceDays !== null ? ruleForm.minAttendanceDays : 20}
+                                                                                onChange={e => setRuleForm({ ...ruleForm, minAttendanceDays: parseInt(e.target.value) || 0 })}
+                                                                                className="w-full h-10 bg-white border border-slate-200 rounded-xl px-4 text-xs font-bold text-slate-700 outline-none focus:border-indigo-500 transition-all"
+                                                                            />
+                                                                        </div>
+
+                                                                        <div className="space-y-2">
+                                                                            <label className="text-[8px] font-bold text-slate-400 uppercase tracking-widest ml-1 block">Count As Working Days</label>
+                                                                            <div className="grid grid-cols-2 gap-2">
+                                                                                <label className="flex items-center gap-2 cursor-pointer select-none">
+                                                                                    <input
+                                                                                        type="checkbox"
+                                                                                        checked={ruleForm.countPresent !== false}
+                                                                                        onChange={e => setRuleForm({ ...ruleForm, countPresent: e.target.checked })}
+                                                                                        className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                                                                    />
+                                                                                    <span className="text-xs font-medium text-slate-600">Present</span>
+                                                                                </label>
+                                                                                <label className="flex items-center gap-2 cursor-pointer select-none">
+                                                                                    <input
+                                                                                        type="checkbox"
+                                                                                        checked={ruleForm.countOnDuty !== false}
+                                                                                        onChange={e => setRuleForm({ ...ruleForm, countOnDuty: e.target.checked })}
+                                                                                        className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                                                                    />
+                                                                                    <span className="text-xs font-medium text-slate-600">On Duty</span>
+                                                                                </label>
+                                                                                <label className="flex items-center gap-2 cursor-pointer select-none">
+                                                                                    <input
+                                                                                        type="checkbox"
+                                                                                        checked={ruleForm.countCompOff !== false}
+                                                                                        onChange={e => setRuleForm({ ...ruleForm, countCompOff: e.target.checked })}
+                                                                                        className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                                                                    />
+                                                                                    <span className="text-xs font-medium text-slate-600">Comp Off</span>
+                                                                                </label>
+                                                                                <label className="flex items-center gap-2 cursor-pointer select-none">
+                                                                                    <input
+                                                                                        type="checkbox"
+                                                                                        checked={ruleForm.countHoliday !== false}
+                                                                                        onChange={e => setRuleForm({ ...ruleForm, countHoliday: e.target.checked })}
+                                                                                        className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                                                                    />
+                                                                                    <span className="text-xs font-medium text-slate-600">Paid Holiday</span>
+                                                                                </label>
+                                                                                <label className="flex items-center gap-2 cursor-pointer select-none">
+                                                                                    <input
+                                                                                        type="checkbox"
+                                                                                        checked={ruleForm.countWeeklyOff !== false}
+                                                                                        onChange={e => setRuleForm({ ...ruleForm, countWeeklyOff: e.target.checked })}
+                                                                                        className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                                                                    />
+                                                                                    <span className="text-xs font-medium text-slate-600">Weekly Off</span>
+                                                                                </label>
+                                                                                <label className="flex items-center gap-2 cursor-pointer select-none">
+                                                                                    <input
+                                                                                        type="checkbox"
+                                                                                        checked={!!ruleForm.countPaidLeave}
+                                                                                        onChange={e => setRuleForm({ ...ruleForm, countPaidLeave: e.target.checked })}
+                                                                                        className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                                                                    />
+                                                                                    <span className="text-xs font-medium text-slate-600">Paid Leave</span>
+                                                                                </label>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+Chunk 0 Replacement:
+                                                                {ruleForm.accrualDependsOnAttendance && (
+                                                                    <div className="col-span-2 space-y-4 bg-slate-50 rounded-xl p-3.5 border border-slate-100/50 animate-in fade-in duration-200">
+                                                                        {/* Slabs list & form */}
+                                                                        <div className="space-y-2">
+                                                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">Accrual Slabs Matrix</label>
+                                                                            <div className="bg-white border border-slate-100 rounded-xl p-3 space-y-2">
+                                                                                {(ruleForm.accrualSlabs || []).length === 0 ? (
+                                                                                    <p className="text-[10px] text-slate-400 font-medium italic">No custom slabs configured. Single threshold of {ruleForm.minAttendanceDays || 20} days (Credit: {ruleForm.monthlyAccrualRate || 1.75}) will be used.</p>
+                                                                                ) : (
+                                                                                    <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                                                                                        {(ruleForm.accrualSlabs || []).map((slab, sIdx) => (
+                                                                                            <div key={sIdx} className="flex items-center justify-between bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100">
+                                                                                                <span className="text-xs font-bold text-slate-700">Eligible Days &ge; {slab.minAttendanceDays} days</span>
+                                                                                                <div className="flex items-center gap-3">
+                                                                                                    <span className="text-xs font-black text-indigo-600">Credit {slab.creditDays} EL</span>
+                                                                                                    <button
+                                                                                                        type="button"
+                                                                                                        onClick={() => {
+                                                                                                            const newSlabs = (ruleForm.accrualSlabs || []).filter((_, i) => i !== sIdx);
+                                                                                                            setRuleForm({ ...ruleForm, accrualSlabs: newSlabs });
+                                                                                                        }}
+                                                                                                        className="text-rose-500 hover:text-rose-700 p-0.5"
+                                                                                                    >
+                                                                                                        <Trash2 size={12} />
+                                                                                                    </button>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                )}
+
+                                                                                {/* Add Slab Form */}
+                                                                                <div className="flex gap-2 items-end pt-2 border-t border-slate-50">
+                                                                                    <div className="flex-1 space-y-1">
+                                                                                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider block ml-1">Days &ge;</span>
+                                                                                        <input
+                                                                                            type="number"
+                                                                                            id="newSlabDays"
+                                                                                            placeholder="20"
+                                                                                            className="w-full h-8 bg-slate-50 border border-slate-200 rounded-lg px-2 text-xs font-bold text-slate-700 outline-none focus:border-indigo-500"
+                                                                                        />
+                                                                                    </div>
+                                                                                    <div className="flex-1 space-y-1">
+                                                                                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider block ml-1">Credit Days</span>
+                                                                                        <input
+                                                                                            type="number"
+                                                                                            step="0.01"
+                                                                                            id="newSlabCredit"
+                                                                                            placeholder="1.75"
+                                                                                            className="w-full h-8 bg-slate-50 border border-slate-200 rounded-lg px-2 text-xs font-bold text-slate-700 outline-none focus:border-indigo-500"
+                                                                                        />
+                                                                                    </div>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => {
+                                                                                            const daysInput = document.getElementById('newSlabDays');
+                                                                                            const creditInput = document.getElementById('newSlabCredit');
+                                                                                            const minDays = parseInt(daysInput?.value);
+                                                                                            const credit = parseFloat(creditInput?.value);
+                                                                                            if (!isNaN(minDays) && !isNaN(credit)) {
+                                                                                                const newSlab = { minAttendanceDays: minDays, creditDays: credit };
+                                                                                                const existingSlabs = ruleForm.accrualSlabs || [];
+                                                                                                setRuleForm({
+                                                                                                    ...ruleForm,
+                                                                                                    accrualSlabs: [...existingSlabs, newSlab].sort((a, b) => b.minAttendanceDays - a.minAttendanceDays)
+                                                                                                });
+                                                                                                if (daysInput) daysInput.value = '';
+                                                                                                if (creditInput) creditInput.value = '';
+                                                                                            }
+                                                                                        }}
+                                                                                        className="h-8 px-3 bg-slate-900 text-white rounded-lg text-[10px] font-black uppercase tracking-wider hover:bg-black transition-all"
+                                                                                    >
+                                                                                        Add Slab
+                                                                                    </button>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* Count options */}
+                                                                        <div className="space-y-2">
+                                                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">Count As Working Days</label>
+                                                                            <div className="grid grid-cols-3 gap-2 bg-white border border-slate-100 rounded-xl p-3">
+                                                                                <label className="flex items-center gap-2 cursor-pointer select-none">
+                                                                                    <input
+                                                                                        type="checkbox"
+                                                                                        checked={ruleForm.countPresent !== false}
+                                                                                        onChange={e => setRuleForm({ ...ruleForm, countPresent: e.target.checked })}
+                                                                                        className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                                                                    />
+                                                                                    <span className="text-xs font-semibold text-slate-600">Present</span>
+                                                                                </label>
+                                                                                <label className="flex items-center gap-2 cursor-pointer select-none">
+                                                                                    <input
+                                                                                        type="checkbox"
+                                                                                        checked={ruleForm.countOnDuty !== false}
+                                                                                        onChange={e => setRuleForm({ ...ruleForm, countOnDuty: e.target.checked })}
+                                                                                        className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                                                                    />
+                                                                                    <span className="text-xs font-semibold text-slate-600">On Duty</span>
+                                                                                </label>
+                                                                                <label className="flex items-center gap-2 cursor-pointer select-none">
+                                                                                    <input
+                                                                                        type="checkbox"
+                                                                                        checked={ruleForm.countCompOff !== false}
+                                                                                        onChange={e => setRuleForm({ ...ruleForm, countCompOff: e.target.checked })}
+                                                                                        className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                                                                    />
+                                                                                    <span className="text-xs font-semibold text-slate-600">Comp Off</span>
+                                                                                </label>
+                                                                                <label className="flex items-center gap-2 cursor-pointer select-none">
+                                                                                    <input
+                                                                                        type="checkbox"
+                                                                                        checked={ruleForm.countHoliday !== false}
+                                                                                        onChange={e => setRuleForm({ ...ruleForm, countHoliday: e.target.checked })}
+                                                                                        className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                                                                    />
+                                                                                    <span className="text-xs font-semibold text-slate-600">Paid Holiday</span>
+                                                                                </label>
+                                                                                <label className="flex items-center gap-2 cursor-pointer select-none">
+                                                                                    <input
+                                                                                        type="checkbox"
+                                                                                        checked={ruleForm.countWeeklyOff !== false}
+                                                                                        onChange={e => setRuleForm({ ...ruleForm, countWeeklyOff: e.target.checked })}
+                                                                                        className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                                                                    />
+                                                                                    <span className="text-xs font-semibold text-slate-600">Weekly Off</span>
+                                                                                </label>
+                                                                                <label className="flex items-center gap-2 cursor-pointer select-none">
+                                                                                    <input
+                                                                                        type="checkbox"
+                                                                                        checked={!!ruleForm.countPaidLeave}
+                                                                                        onChange={e => setRuleForm({ ...ruleForm, countPaidLeave: e.target.checked })}
+                                                                                        className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                                                                    />
+                                                                                    <span className="text-xs font-semibold text-slate-600">Paid Leave</span>
+                                                                                </label>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* Formula Preview Display */}
+                                                                        <div className="space-y-1.5 bg-indigo-50/50 border border-indigo-100/50 rounded-xl p-3">
+                                                                            <span className="text-[9px] font-black text-indigo-600 uppercase tracking-widest block mb-1">Formula Preview</span>
+                                                                            <div className="grid grid-cols-3 gap-y-1 text-[10px] font-bold text-slate-500">
+                                                                                <div>Present = <span className="text-slate-800">18</span></div>
+                                                                                <div>OD = <span className="text-slate-800">1</span></div>
+                                                                                <div>PH = <span className="text-slate-800">2</span></div>
+                                                                                <div>WO = <span className="text-slate-800">4</span></div>
+                                                                                <div>CO = <span className="text-slate-800">0</span></div>
+                                                                                <div>Leave = <span className="text-slate-800">0</span></div>
+                                                                            </div>
+                                                                            <div className="mt-2 pt-2 border-t border-indigo-100/40 flex justify-between items-center">
+                                                                                <span className="text-[10px] font-extrabold text-slate-700">
+                                                                                    Eligible Days: <span className="text-indigo-600">
+                                                                                        {(ruleForm.countPresent !== false ? 18 : 0) +
+                                                                                         (ruleForm.countOnDuty !== false ? 1 : 0) +
+                                                                                         (ruleForm.countHoliday !== false ? 2 : 0) +
+                                                                                         (ruleForm.countWeeklyOff !== false ? 4 : 0) +
+                                                                                         (ruleForm.countCompOff !== false ? 0 : 0) +
+                                                                                         (ruleForm.countPaidLeave ? 0 : 0)}
+                                                                                    </span>
+                                                                                </span>
+                                                                                <span className="text-[10px] font-black text-indigo-700 bg-indigo-100/80 px-2 py-0.5 rounded uppercase">
+                                                                                    EL Credit = {(() => {
+                                                                                        const totalEd = (ruleForm.countPresent !== false ? 18 : 0) +
+                                                                                                        (ruleForm.countOnDuty !== false ? 1 : 0) +
+                                                                                                        (ruleForm.countHoliday !== false ? 2 : 0) +
+                                                                                                        (ruleForm.countWeeklyOff !== false ? 4 : 0);
+                                                                                        
+                                                                                        const slabs = ruleForm.accrualSlabs || [];
+                                                                                        const activeSlabs = slabs.length > 0 
+                                                                                            ? slabs 
+                                                                                            : [{ minAttendanceDays: (ruleForm.minAttendanceDays !== undefined && ruleForm.minAttendanceDays !== null ? ruleForm.minAttendanceDays : 20), creditDays: ruleForm.monthlyAccrualRate || 1.75 }];
+                                                                                        
+                                                                                        const sortedSlabs = [...activeSlabs].sort((a, b) => b.minAttendanceDays - a.minAttendanceDays);
+                                                                                        const matched = sortedSlabs.find(s => totalEd >= s.minAttendanceDays);
+                                                                                        return matched ? matched.creditDays : 0;
+                                                                                    })()}
+                                                                                </span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+Chunk 1 Target:
+                                                             {r.accrualType === 'monthly' || r.monthlyAccrual ? (
+                                                                 <span className="text-[8px] font-bold bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded uppercase tracking-wider">Accrual ({r.monthlyAccrualRate || (r.totalPerYear/12).toFixed(2)}/mo)</span>
+                                                              ) : (
+                                                                 <span className="text-[8px] font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded uppercase tracking-wider">Yearly</span>
+                                                             )}
+Chunk 1 Replacement:
+                                                             {r.accrualType === 'monthly' || r.monthlyAccrual ? (
+                                                                 r.accrualDependsOnAttendance ? (
+                                                                     <span className="text-[8px] font-bold bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded uppercase tracking-wider" title={r.accrualSlabs && r.accrualSlabs.length > 0 ? r.accrualSlabs.map(s => `>=${s.minAttendanceDays}d -> ${s.creditDays} EL`).join(' | ') : `>=${r.minAttendanceDays || 20}d -> ${r.monthlyAccrualRate || 1.75} EL`}>
+                                                                         Attendance Accrual (
+                                                                             {r.accrualSlabs && r.accrualSlabs.length > 0
+                                                                                 ? r.accrualSlabs.map(s => `>=${s.minAttendanceDays}d:${s.creditDays}`).join('/')
+                                                                                 : `>=${r.minAttendanceDays || 20}d:${r.monthlyAccrualRate || 1.75}`
+                                                                             }
+                                                                         )
+                                                                     </span>
+                                                                 ) : (
+                                                                     <span className="text-[8px] font-bold bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded uppercase tracking-wider">Accrual ({r.monthlyAccrualRate || (r.totalPerYear/12).toFixed(2)}/mo)</span>
+                                                                 )
+                                                             ) : (
+                                                                 <span className="text-[8px] font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded uppercase tracking-wider">Yearly</span>
+                                                             )}
+
+=== STEP 5223 ===
+Tool: replace_file_content
+Instruction: Restore the mapping structure of form.rules to properly render each leave policy rule and include a custom badge for attendance-based monthly accrual.
+Target:
+                                             ) : (
+                                                                 <button type="button" onClick={() => removeRule(i)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-all" title="Delete Rule">
+                                                                     <Trash2 size={15} />
+                                                                 </button>
+                                                             </div>
+                                                         </div>
+                                                         <div className="flex flex-wrap gap-1.5 mt-3 border-t border-slate-50 pt-2">
+                                                             {r.accrualType === 'monthly' || r.monthlyAccrual ? (
+                                                                 <span className="text-[8px] font-bold bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded uppercase tracking-wider">Accrual ({r.monthlyAccrualRate || (r.totalPerYear/12).toFixed(2)}/mo)</span>
+Replacement:
+                                             ) : (
+                                                 (form.rules || []).map((r, i) => (
+                                                     <div key={i} className="group border border-slate-100 rounded-xl p-3.5 bg-slate-50/50 hover:bg-white hover:border-slate-200 transition-all shadow-sm hover:shadow-md">
+                                                         <div className="flex items-center justify-between">
+                                                             <div className="flex items-center gap-2">
+                                                                 <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: r.color || '#3b82f6' }} />
+                                                                 <span className="text-xs font-black uppercase tracking-wider text-slate-700">{r.leaveType}</span>
+                                                                 <span className="text-[10px] font-bold text-slate-400">Total: {r.totalPerYear} Days</span>
+                                                             </div>
+                                                             <div className="flex items-center gap-1">
+                                                                 <button type="button" onClick={() => removeRule(i)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-all" title="Delete Rule">
+                                                                     <Trash2 size={15} />
+                                                                 </button>
+                                                             </div>
+                                                         </div>
+                                                         <div className="flex flex-wrap gap-1.5 mt-3 border-t border-slate-50 pt-2">
+                                                             {r.accrualDependsOnAttendance && (
+                                                                 <span className="text-[8px] font-bold bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                                                     Attendance-Based ({(r.accrualSlabs || []).length > 0 ? r.accrualSlabs.map(s => `>=${s.minAttendanceDays}d → ${s.creditDays}`).join(', ') : `>=${r.minAttendanceDays || 20}d → ${r.monthlyAccrualRate || 1.75}`})
+                                                                 </span>
+                                                             )}
+                                                             {r.accrualType === 'monthly' || r.monthlyAccrual ? (
+                                                                 <span className="text-[8px] font-bold bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded uppercase tracking-wider">Accrual ({r.monthlyAccrualRate || (r.totalPerYear/12).toFixed(2)}/mo)</span>
+
+=== STEP 5236 ===
+Tool: replace_file_content
+Instruction: Introduce the outer map block for form.rules and its corresponding wrapper elements.
+Target:
+                                             ) : (
+                                                                 <button type="button" onClick={() => removeRule(i)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-all" title="Delete Rule">
+                                                                     <Trash2 size={15} />
+                                                                 </button>
+                                                             </div>
+                                                         </div>
+                                                         <div className="flex flex-wrap gap-1.5 mt-3 border-t border-slate-50 pt-2">
+                                                             {r.accrualType === 'monthly' || r.monthlyAccrual ? (
+                                                                 <span className="text-[8px] font-bold bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded uppercase tracking-wider">Accrual ({r.monthlyAccrualRate || (r.totalPerYear/12).toFixed(2)}/mo)</span>
+Replacement:
+                                             ) : (
+                                                 (form.rules || []).map((r, i) => (
+                                                     <div key={i} className="group border border-slate-100 rounded-xl p-3.5 bg-slate-50/50 hover:bg-white hover:border-slate-200 transition-all shadow-sm hover:shadow-md">
+                                                         <div className="flex items-center justify-between">
+                                                             <div className="flex items-center gap-2">
+                                                                 <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: r.color || '#3b82f6' }} />
+                                                                 <span className="text-xs font-black uppercase tracking-wider text-slate-700">{r.leaveType}</span>
+                                                                 <span className="text-[10px] font-bold text-slate-400">Total: {r.totalPerYear} Days</span>
+                                                             </div>
+                                                             <div className="flex items-center gap-1">
+                                                                 <button type="button" onClick={() => removeRule(i)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-all" title="Delete Rule">
+                                                                     <Trash2 size={15} />
+                                                                 </button>
+                                                             </div>
+                                                         </div>
+                                                         <div className="flex flex-wrap gap-1.5 mt-3 border-t border-slate-50 pt-2">
+                                                             {r.accrualDependsOnAttendance && (
+                                                                 <span className="text-[8px] font-bold bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                                                     Attendance-Based ({(r.accrualSlabs || []).length > 0 ? r.accrualSlabs.map(s => `>=${s.minAttendanceDays}d → ${s.creditDays}`).join(', ') : `>=${r.minAttendanceDays || 20}d → ${r.monthlyAccrualRate || 1.75}`})
+                                                                 </span>
+                                                             )}
+                                                             {r.accrualType === 'monthly' || r.monthlyAccrual ? (
+                                                                 <span className="text-[8px] font-bold bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded uppercase tracking-wider">Accrual ({r.monthlyAccrualRate || (r.totalPerYear/12).toFixed(2)}/mo)</span>
+
+=== STEP 5287 ===
+Tool: replace_file_content
+Instruction: Insert the missing )} closing delimiter for the rules subtab expression.
+Target:
+                                                     </div>
+                                                 </div>
+                                             {form.rules.length === 0 ? (
+Replacement:
+                                                     </div>
+                                                 </div>
+                                             )}
+                                             {form.rules.length === 0 ? (
+

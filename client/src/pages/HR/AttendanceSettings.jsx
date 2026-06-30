@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { notification } from '../../utils/antdGlobal';
 import usePagePermissions from '../../hooks/usePagePermissions';
-import { Eye } from 'lucide-react';
+import { Eye, Search as SearchIcon } from 'lucide-react';
 import api from '../../utils/api';
+import { loadExternalScript, loadExternalStylesheet } from '../../utils/runtimeAssets';
+import { APIProvider, useMapsLibrary } from '@vis.gl/react-google-maps';
 import {
     Save,
     Clock,
@@ -35,6 +37,9 @@ export default function AttendanceSettings({ onShiftFormChange }) {
     const hasEditAccess = canEdit || canCreate;
     const [shiftFormActive, setShiftFormActive] = useState(false);
 
+    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+    const hasValidKey = apiKey && apiKey !== 'YOUR_GOOGLE_MAPS_API_KEY_HERE';
+
     useEffect(() => {
         if (onShiftFormChange) onShiftFormChange(shiftFormActive);
     }, [shiftFormActive, onShiftFormChange]);
@@ -61,6 +66,12 @@ export default function AttendanceSettings({ onShiftFormChange }) {
         officeLatitude: null,
         officeLongitude: null,
         allowedRadiusMeters: 100,
+        geofenceMode: 'polygon',
+        officeGeofence: {
+            enabled: false,
+            name: 'Main Office',
+            points: []
+        },
         ipRestrictionEnabled: false,
         allowedIPs: [],
         allowedIPRanges: [],
@@ -145,6 +156,292 @@ export default function AttendanceSettings({ onShiftFormChange }) {
     });
     const [saving, setSaving] = useState(false);
 
+    const [mapReady, setMapReady] = useState(false);
+    const [addressSearch, setAddressSearch] = useState('');
+    const [searchingAddress, setSearchingAddress] = useState(false);
+    const [suggestions, setSuggestions] = useState([]);
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+
+    const handleSelectSuggestion = (item) => {
+        const lat = Number(item.lat);
+        const lng = Number(item.lon);
+        
+        setAddressSearch(item.display_name);
+        setSettings(prev => ({
+            ...prev,
+            officeLatitude: Number(lat.toFixed(6)),
+            officeLongitude: Number(lng.toFixed(6))
+        }));
+        
+        if (mapInstanceRef.current) {
+            mapInstanceRef.current.setView([lat, lng], 17);
+        }
+        
+        setSuggestions([]);
+        setShowSuggestions(false);
+    };
+
+    useEffect(() => {
+        if (!addressSearch || addressSearch.trim().length < 3) {
+            setSuggestions([]);
+            setShowSuggestions(false);
+            return;
+        }
+
+        const delayDebounce = setTimeout(async () => {
+            try {
+                setLoadingSuggestions(true);
+                const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=in&q=${encodeURIComponent(addressSearch)}`);
+                const data = await response.json();
+                if (data && Array.isArray(data)) {
+                    setSuggestions(data);
+                    setShowSuggestions(data.length > 0);
+                } else {
+                    setSuggestions([]);
+                    setShowSuggestions(false);
+                }
+            } catch (e) {
+                console.error("Failed to fetch suggestions", e);
+            } finally {
+                setLoadingSuggestions(false);
+            }
+        }, 400);
+
+        return () => clearTimeout(delayDebounce);
+    }, [addressSearch]);
+    const mapContainerRef = useRef(null);
+    const mapInstanceRef = useRef(null);
+    const markerInstanceRef = useRef(null);
+    const circleInstanceRef = useRef(null);
+    const LeafletInstanceRef = useRef(null);
+
+    useEffect(() => {
+        if (settings.geofenceMode !== 'radius' || !settings.geoFencingEnabled) {
+            // Clean up map if switched off
+            if (mapInstanceRef.current) {
+                mapInstanceRef.current.remove();
+                mapInstanceRef.current = null;
+                markerInstanceRef.current = null;
+                circleInstanceRef.current = null;
+            }
+            setMapReady(false);
+            return;
+        }
+
+        let isMounted = true;
+        const loadMap = async () => {
+            try {
+                await loadExternalStylesheet('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css');
+                await loadExternalScript('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js', 'L');
+                if (!isMounted || !mapContainerRef.current) return;
+                
+                const L = window.L;
+                LeafletInstanceRef.current = L;
+                
+                // Fix Leaflet default marker path issues
+                delete L.Icon.Default.prototype._getIconUrl;
+                L.Icon.Default.mergeOptions({
+                    iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+                    iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+                    shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+                });
+
+                const initialLat = Number(settings.officeLatitude) || 23.02155;
+                const initialLng = Number(settings.officeLongitude) || 72.55480;
+                const initialZoom = settings.officeLatitude ? 17 : 13;
+
+                const map = L.map(mapContainerRef.current, {
+                    center: [initialLat, initialLng],
+                    zoom: initialZoom
+                });
+
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; OpenStreetMap contributors'
+                }).addTo(map);
+
+                mapInstanceRef.current = map;
+
+                const marker = L.marker([initialLat, initialLng], {
+                    draggable: true
+                }).addTo(map);
+                markerInstanceRef.current = marker;
+
+                const radius = Number(settings.allowedRadiusMeters || 100);
+                const circle = L.circle([initialLat, initialLng], {
+                    radius: radius,
+                    color: '#3b82f6',
+                    fillColor: '#3b82f6',
+                    fillOpacity: 0.15
+                }).addTo(map);
+                circleInstanceRef.current = circle;
+
+                // Sync marker drag coordinates with state
+                marker.on('dragend', () => {
+                    const position = marker.getLatLng();
+                    setSettings(prev => ({
+                        ...prev,
+                        officeLatitude: Number(position.lat.toFixed(6)),
+                        officeLongitude: Number(position.lng.toFixed(6))
+                    }));
+                    circle.setLatLng(position);
+                });
+
+                // Move marker on map click
+                map.on('click', (e) => {
+                    const position = e.latlng;
+                    marker.setLatLng(position);
+                    circle.setLatLng(position);
+                    setSettings(prev => ({
+                        ...prev,
+                        officeLatitude: Number(position.lat.toFixed(6)),
+                        officeLongitude: Number(position.lng.toFixed(6))
+                    }));
+                });
+
+                setMapReady(true);
+            } catch (e) {
+                console.error("Leaflet map load error", e);
+            }
+        };
+
+        loadMap();
+
+        return () => {
+            isMounted = false;
+            if (mapInstanceRef.current) {
+                mapInstanceRef.current.remove();
+                mapInstanceRef.current = null;
+                markerInstanceRef.current = null;
+                circleInstanceRef.current = null;
+            }
+        };
+    }, [settings.geofenceMode, settings.geoFencingEnabled]);
+
+    // Update map circle radius dynamically when allowedRadiusMeters changes
+    useEffect(() => {
+        if (circleInstanceRef.current && settings.allowedRadiusMeters) {
+            circleInstanceRef.current.setRadius(Number(settings.allowedRadiusMeters));
+        }
+    }, [settings.allowedRadiusMeters]);
+
+    // Update map marker/circle position dynamically if coordinates are manually typed
+    useEffect(() => {
+        if (mapInstanceRef.current && markerInstanceRef.current && circleInstanceRef.current && settings.officeLatitude && settings.officeLongitude) {
+            const lat = Number(settings.officeLatitude);
+            const lng = Number(settings.officeLongitude);
+            const currentLatLng = markerInstanceRef.current.getLatLng();
+            
+            // Check if coordinates are different to avoid recursion loop on drag
+            if (Math.abs(currentLatLng.lat - lat) > 0.0001 || Math.abs(currentLatLng.lng - lng) > 0.0001) {
+                markerInstanceRef.current.setLatLng([lat, lng]);
+                circleInstanceRef.current.setLatLng([lat, lng]);
+                mapInstanceRef.current.setView([lat, lng], 17);
+            }
+        }
+    }, [settings.officeLatitude, settings.officeLongitude]);
+
+    const handleLocateMe = () => {
+        if (!navigator.geolocation) {
+            notification.error({ message: 'Error', description: 'Geolocation is not supported by your browser.', placement: 'topRight' });
+            return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+            async (position) => {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+                
+                // Update marker & circle settings
+                setSettings(prev => ({
+                    ...prev,
+                    officeLatitude: Number(lat.toFixed(6)),
+                    officeLongitude: Number(lng.toFixed(6))
+                }));
+                
+                if (mapInstanceRef.current) {
+                    mapInstanceRef.current.setView([lat, lng], 17);
+                }
+                
+                // Fetch reverse geocoded address
+                try {
+                    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+                    const data = await response.json();
+                    if (data && data.display_name) {
+                        setAddressSearch(data.display_name);
+                    }
+                } catch (e) {
+                    console.error("Reverse geocoding failed", e);
+                }
+            },
+            (error) => {
+                console.error("Error getting location", error);
+                notification.error({ message: 'Error', description: 'Failed to retrieve your current location. Please grant permission.', placement: 'topRight' });
+            },
+            { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+        );
+    };
+
+    const handleAddressSearch = async () => {
+        if (!addressSearch.trim()) return;
+        try {
+            setSearchingAddress(true);
+            let currentQuery = addressSearch.trim();
+            let attempts = 0;
+            let success = false;
+            let data = [];
+
+            while (attempts < 5) {
+                const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&countrycodes=in&q=${encodeURIComponent(currentQuery)}`);
+                data = await response.json();
+                if (data && data.length > 0) {
+                    success = true;
+                    break;
+                }
+                
+                // If it fails, try stripping the first segment separated by comma
+                const parts = currentQuery.split(',').map(p => p.trim()).filter(Boolean);
+                if (parts.length <= 1) {
+                    // No more commas, or only one part left, cannot simplify further
+                    break;
+                }
+                parts.shift(); // remove the most specific part (e.g. company name, office numbers)
+                currentQuery = parts.join(', ');
+                attempts++;
+            }
+
+            if (success && data.length > 0) {
+                const lat = Number(data[0].lat);
+                const lng = Number(data[0].lon);
+                
+                setSettings(prev => ({
+                    ...prev,
+                    officeLatitude: Number(lat.toFixed(6)),
+                    officeLongitude: Number(lng.toFixed(6))
+                }));
+                
+                if (mapInstanceRef.current) {
+                    mapInstanceRef.current.setView([lat, lng], 17);
+                }
+
+                if (attempts > 0) {
+                    notification.info({
+                        message: 'Address Simplified',
+                        description: `Could not find exact location. Found nearby: "${currentQuery}"`,
+                        placement: 'topRight'
+                    });
+                }
+            } else {
+                notification.warning({ message: 'No results found', description: 'Address not found on map.', placement: 'topRight' });
+            }
+        } catch (e) {
+            console.error("Address search failed", e);
+            notification.error({ message: 'Search Error', description: 'Failed to search address.', placement: 'topRight' });
+        } finally {
+            setSearchingAddress(false);
+        }
+    };
+
     useEffect(() => {
         fetchSettings();
     }, []);
@@ -152,7 +449,18 @@ export default function AttendanceSettings({ onShiftFormChange }) {
     const fetchSettings = async () => {
         try {
             const res = await api.get('/attendance/settings');
-            if (res.data) setSettings(res.data);
+            if (res.data) {
+                setSettings(prev => ({
+                    ...prev,
+                    ...res.data,
+                    officeGeofence: {
+                        enabled: false,
+                        name: 'Main Office',
+                        points: [],
+                        ...(res.data.officeGeofence || {})
+                    }
+                }));
+            }
         } catch (err) {
             console.error("Failed to load settings", err);
         }
@@ -324,14 +632,325 @@ export default function AttendanceSettings({ onShiftFormChange }) {
                         Location Restrictions
                     </h3>
 
-                    <div className="space-y-6">
-                        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                            Location based restrictions (Geo / IP) are currently disabled for this tenant.
-                            Use the advanced policy rules below to control attendance through working hours,
-                            late marks, WFH and OD rules instead.
-                        </p>
+                    <div className="space-y-8">
+                        {/* Core Toggles for Location Restrictions */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <ToggleItem
+                                label="Geo-Fencing (GPS Based)"
+                                description="Restrict attendance punches to configured geofence"
+                                active={settings.geoFencingEnabled}
+                                onClick={() => setSettings(prev => {
+                                    const nextVal = !prev.geoFencingEnabled;
+                                    return {
+                                        ...prev,
+                                        geoFencingEnabled: nextVal,
+                                        officeGeofence: {
+                                            ...(prev.officeGeofence || {}),
+                                            enabled: nextVal && prev.geofenceMode === 'polygon'
+                                        }
+                                    };
+                                })}
+                            />
+                            <ToggleItem
+                                label="IP-Based Restriction"
+                                description="Restrict attendance to specific IP addresses or CIDR ranges"
+                                active={settings.ipRestrictionEnabled}
+                                onClick={() => setSettings(prev => ({ ...prev, ipRestrictionEnabled: !prev.ipRestrictionEnabled }))}
+                            />
+                        </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {/* Geo-Fencing Configuration Section */}
+                        {settings.geoFencingEnabled && (
+                            <div className="p-6 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-100 dark:border-slate-850 space-y-6">
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
+                                    <div>
+                                        <h4 className="text-sm font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider">Geofence Configuration</h4>
+                                        <p className="text-xs font-semibold text-slate-400">Choose between polygon shape or circular radius geofence</p>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setSettings(prev => ({
+                                                ...prev,
+                                                geofenceMode: 'polygon',
+                                                officeGeofence: {
+                                                    ...(prev.officeGeofence || {}),
+                                                    enabled: true
+                                                }
+                                            }))}
+                                            className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition ${
+                                                settings.geofenceMode === 'polygon'
+                                                    ? 'bg-slate-900 text-white dark:bg-slate-850'
+                                                    : 'bg-white border border-slate-200 text-slate-500 hover:text-slate-700 dark:bg-slate-900 dark:border-slate-800'
+                                            }`}
+                                        >
+                                            4-Point Polygon
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setSettings(prev => ({
+                                                ...prev,
+                                                geofenceMode: 'radius',
+                                                officeGeofence: {
+                                                    ...(prev.officeGeofence || {}),
+                                                    enabled: false
+                                                }
+                                            }))}
+                                            className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition ${
+                                                settings.geofenceMode === 'radius'
+                                                    ? 'bg-slate-900 text-white dark:bg-slate-850'
+                                                    : 'bg-white border border-slate-200 text-slate-500 hover:text-slate-700 dark:bg-slate-900 dark:border-slate-800'
+                                            }`}
+                                        >
+                                            Circular Radius
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {settings.geofenceMode === 'radius' && (
+                                    <div className="space-y-6">
+                                        {/* Address Search Bar */}
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Search Address on Map</label>
+                                            <div className="flex gap-2 relative">
+                                                <div className="relative flex-grow">
+                                                    {hasValidKey ? (
+                                                        <APIProvider apiKey={apiKey}>
+                                                            <GoogleAutocompleteInput
+                                                                value={addressSearch}
+                                                                onChange={(e) => setAddressSearch(e.target.value)}
+                                                                onPlaceSelect={(place) => {
+                                                                    if (place.geometry && place.geometry.location) {
+                                                                        const lat = place.geometry.location.lat();
+                                                                        const lng = place.geometry.location.lng();
+                                                                        const address = place.formatted_address || place.name;
+                                                                        setAddressSearch(address);
+                                                                        setSettings(prev => ({
+                                                                            ...prev,
+                                                                            officeLatitude: Number(lat.toFixed(6)),
+                                                                            officeLongitude: Number(lng.toFixed(6))
+                                                                        }));
+                                                                        if (mapInstanceRef.current) {
+                                                                            mapInstanceRef.current.setView([lat, lng], 17);
+                                                                        }
+                                                                    }
+                                                                }}
+                                                            />
+                                                        </APIProvider>
+                                                    ) : (
+                                                        <div className="relative w-full">
+                                                            <input
+                                                                type="text"
+                                                                value={addressSearch}
+                                                                onChange={(e) => setAddressSearch(e.target.value)}
+                                                                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddressSearch(); } }}
+                                                                onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+                                                                onBlur={() => {
+                                                                    setTimeout(() => setShowSuggestions(false), 250);
+                                                                }}
+                                                                placeholder="Enter address, city, or landmark..."
+                                                                className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 pl-10 rounded-xl text-sm font-bold outline-none focus:border-indigo-500 transition text-slate-800 dark:text-white"
+                                                            />
+                                                            <SearchIcon className="absolute left-3 top-3.5 text-slate-400 h-4 w-4" />
+
+                                                            {/* Autocomplete Suggestions Dropdown */}
+                                                            {showSuggestions && (
+                                                                <div className="absolute left-0 right-0 mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl z-[999] overflow-hidden max-h-60 overflow-y-auto">
+                                                                    {loadingSuggestions && (
+                                                                        <div className="p-3 text-xs text-slate-400 font-bold dark:text-slate-500">
+                                                                            Fetching suggestions...
+                                                                        </div>
+                                                                    )}
+                                                                    {suggestions.map((item, index) => {
+                                                                        const parts = item.display_name.split(',');
+                                                                        const primary = parts[0];
+                                                                        const secondary = parts.slice(1).join(',').trim();
+                                                                        return (
+                                                                            <div
+                                                                                key={index}
+                                                                                onClick={() => handleSelectSuggestion(item)}
+                                                                                className="p-3 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer border-b border-slate-100 dark:border-slate-800 last:border-0 transition flex flex-col gap-0.5"
+                                                                            >
+                                                                                <span className="font-extrabold text-slate-800 dark:text-white text-xs">{primary}</span>
+                                                                                {secondary && <span className="font-semibold text-slate-400 text-[10px]">{secondary}</span>}
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleLocateMe}
+                                                    title="Use Current Location"
+                                                    className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-4 py-3 rounded-xl transition flex items-center justify-center border border-slate-200 dark:border-slate-700"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                                                        <circle cx="12" cy="12" r="7" />
+                                                        <line x1="12" y1="1" x2="12" y2="5" />
+                                                        <line x1="12" y1="19" x2="12" y2="23" />
+                                                        <line x1="8" y1="12" x2="1" y2="12" />
+                                                        <line x1="23" y1="12" x2="16" y2="12" />
+                                                    </svg>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    disabled={searchingAddress}
+                                                    onClick={handleAddressSearch}
+                                                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider px-6 py-3 rounded-xl transition disabled:opacity-50"
+                                                >
+                                                    {searchingAddress ? 'Searching...' : 'Search'}
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Interactive Map */}
+                                        <div className="relative">
+                                            <div
+                                                ref={mapContainerRef}
+                                                className="h-64 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden relative z-[1]"
+                                                style={{ minHeight: '260px' }}
+                                            />
+                                            {!mapReady && (
+                                                <div className="absolute inset-0 bg-slate-100 dark:bg-slate-900 flex items-center justify-center text-xs font-bold text-slate-500 rounded-xl border border-slate-200 dark:border-slate-800">
+                                                    Loading interactive map assets...
+                                                </div>
+                                            )}
+                                        </div>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">
+                                            * Drag the blue marker or click on the map to set the office center location.
+                                        </p>
+
+                                        {/* Coordinate Inputs */}
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                            <InputGroup
+                                                label="Office Latitude"
+                                                type="number"
+                                                step="0.000001"
+                                                value={settings.officeLatitude || ''}
+                                                onChange={(e) => setSettings(prev => ({ ...prev, officeLatitude: parseFloat(e.target.value) || null }))}
+                                            />
+                                            <InputGroup
+                                                label="Office Longitude"
+                                                type="number"
+                                                step="0.000001"
+                                                value={settings.officeLongitude || ''}
+                                                onChange={(e) => setSettings(prev => ({ ...prev, officeLongitude: parseFloat(e.target.value) || null }))}
+                                            />
+                                            <InputGroup
+                                                label="Allowed Radius (Meters)"
+                                                type="number"
+                                                value={settings.allowedRadiusMeters || 100}
+                                                onChange={(e) => setSettings(prev => ({ ...prev, allowedRadiusMeters: parseInt(e.target.value) || 0 }))}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {settings.geofenceMode === 'polygon' && (
+                                    <div className="space-y-6">
+                                        <div className="p-4 bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-300 text-xs font-bold rounded-xl border border-amber-100 dark:border-amber-900/30">
+                                            ⚠️ 4-Point Polygon geofence mode is active. Enter the coordinates of the 4 bounding corners of your geofence. Ensure all points are unique and sequential.
+                                        </div>
+                                        
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            {[0, 1, 2, 3].map(idx => {
+                                                const pt = settings.officeGeofence?.points?.[idx] || settings.geofance?.[idx] || { lat: '', lng: '' };
+                                                return (
+                                                    <div key={idx} className="p-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 space-y-3">
+                                                        <h5 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Corner Point {idx + 1}</h5>
+                                                        <div className="grid grid-cols-2 gap-3">
+                                                            <InputGroup
+                                                                label={`Latitude ${idx + 1}`}
+                                                                type="number"
+                                                                step="0.000001"
+                                                                value={pt.lat}
+                                                                onChange={(e) => {
+                                                                    const val = parseFloat(e.target.value) || '';
+                                                                    const updatedPoints = [...(settings.officeGeofence?.points || settings.geofance || [])];
+                                                                    while (updatedPoints.length <= idx) updatedPoints.push({ lat: null, lng: null });
+                                                                    updatedPoints[idx] = { ...updatedPoints[idx], lat: val };
+                                                                    setSettings(prev => ({
+                                                                        ...prev,
+                                                                        officeGeofence: {
+                                                                            ...(prev.officeGeofence || {}),
+                                                                            enabled: true,
+                                                                            points: updatedPoints
+                                                                        },
+                                                                        geofance: updatedPoints
+                                                                    }));
+                                                                }}
+                                                            />
+                                                            <InputGroup
+                                                                label={`Longitude ${idx + 1}`}
+                                                                type="number"
+                                                                step="0.000001"
+                                                                value={pt.lng}
+                                                                onChange={(e) => {
+                                                                    const val = parseFloat(e.target.value) || '';
+                                                                    const updatedPoints = [...(settings.officeGeofence?.points || settings.geofance || [])];
+                                                                    while (updatedPoints.length <= idx) updatedPoints.push({ lat: null, lng: null });
+                                                                    updatedPoints[idx] = { ...updatedPoints[idx], lng: val };
+                                                                    setSettings(prev => ({
+                                                                        ...prev,
+                                                                        officeGeofence: {
+                                                                            ...(prev.officeGeofence || {}),
+                                                                            enabled: true,
+                                                                            points: updatedPoints
+                                                                        },
+                                                                        geofance: updatedPoints
+                                                                    }));
+                                                                }}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* IP restrictions */}
+                        {settings.ipRestrictionEnabled && (
+                            <div className="p-6 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-100 dark:border-slate-855 space-y-6">
+                                <h4 className="text-sm font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800 pb-4">IP Restrictions</h4>
+                                <div className="space-y-4">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Allowed IP Addresses</label>
+                                        <textarea
+                                            value={Array.isArray(settings.allowedIPs) ? settings.allowedIPs.join(', ') : ''}
+                                            onChange={(e) => {
+                                                const ips = e.target.value.split(',').map(ip => ip.trim());
+                                                setSettings(prev => ({ ...prev, allowedIPs: ips }));
+                                            }}
+                                            placeholder="e.g. 192.168.1.5, 203.0.113.195 (comma separated)"
+                                            rows={2}
+                                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm font-bold outline-none focus:border-indigo-500 transition text-slate-800 dark:text-white"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Allowed CIDR IP Ranges</label>
+                                        <textarea
+                                            value={Array.isArray(settings.allowedIPRanges) ? settings.allowedIPRanges.join(', ') : ''}
+                                            onChange={(e) => {
+                                                const ranges = e.target.value.split(',').map(r => r.trim());
+                                                setSettings(prev => ({ ...prev, allowedIPRanges: ranges }));
+                                            }}
+                                            placeholder="e.g. 192.168.1.0/24, 10.0.0.0/8 (comma separated)"
+                                            rows={2}
+                                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-xl text-sm font-bold outline-none focus:border-indigo-500 transition text-slate-800 dark:text-white"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* General Thresholds */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-slate-100 dark:border-slate-800 pt-6">
                             <InputGroup
                                 label="Full Day Threshold (Hrs)"
                                 type="number"
@@ -1905,10 +2524,68 @@ function ShiftsSection({ onStateChange, hasEditAccess }) {
     );
 }
 
+function GoogleAutocompleteInput({ value, onChange, onPlaceSelect }) {
+    const inputRef = useRef(null);
+    const placesLibrary = useMapsLibrary('places');
+    const [autocomplete, setAutocomplete] = useState(null);
 
+    useEffect(() => {
+        if (!placesLibrary || !inputRef.current) return;
 
+        const options = {
+            fields: ['geometry', 'name', 'formatted_address'],
+            componentRestrictions: { country: 'in' }
+        };
 
+        const ac = new placesLibrary.Autocomplete(inputRef.current, options);
+        setAutocomplete(ac);
+    }, [placesLibrary]);
 
+    useEffect(() => {
+        if (!autocomplete) return;
+
+        const listener = autocomplete.addListener('place_changed', () => {
+            const place = autocomplete.getPlace();
+            if (place.geometry) {
+                onPlaceSelect(place);
+            }
+        });
+
+        // Prevent form submission if the user presses Enter while selecting a place
+        const handleKeyDown = (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+            }
+        };
+        const inputEl = inputRef.current;
+        if (inputEl) {
+            inputEl.addEventListener('keydown', handleKeyDown);
+        }
+
+        return () => {
+            if (listener) {
+                google.maps.event.removeListener(listener);
+            }
+            if (inputEl) {
+                inputEl.removeEventListener('keydown', handleKeyDown);
+            }
+        };
+    }, [autocomplete, onPlaceSelect]);
+
+    return (
+        <div className="relative w-full">
+            <input
+                ref={inputRef}
+                type="text"
+                value={value}
+                onChange={onChange}
+                placeholder="Enter address, city, or landmark..."
+                className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 pl-10 rounded-xl text-sm font-bold outline-none focus:border-indigo-500 transition text-slate-800 dark:text-white"
+            />
+            <SearchIcon className="absolute left-3 top-3.5 text-slate-400 h-4 w-4" />
+        </div>
+    );
+}
 
 function InputGroup({ label, ...props }) {
     if (props.type === 'time') {

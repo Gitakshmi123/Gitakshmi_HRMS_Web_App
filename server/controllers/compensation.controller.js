@@ -430,7 +430,7 @@ exports.setupInitialCompensation = async (req, res) => {
             
             let minWageAmount = 0;
             if (state && category) {
-                const MinimumWage = req.tenantDB.model('MinimumWage');
+                const MinimumWage = req.tenantDB.models.MinimumWage || req.tenantDB.model('MinimumWage', require('../models/MinimumWage'));
                 const mwDoc = await MinimumWage.findOne({ 
                     tenantId, 
                     state: { $regex: new RegExp(`^${state}$`, 'i') },
@@ -460,8 +460,7 @@ exports.setupInitialCompensation = async (req, res) => {
             // Convert engine results back to saveable components
             components = [
                 ...result.earnings,
-                ...result.employerContributions,
-                ...result.retirementBenefits
+                ...result.benefits
             ].map(c => ({
                 name: c.name,
                 code: c.code,
@@ -591,5 +590,98 @@ exports.getCompensationHistory = async (req, res) => {
             success: false,
             message: error.message || 'Failed to fetch history'
         });
+    }
+};
+
+exports.bulkSetupCompensation = async (req, res) => {
+    try {
+        const tenantId = getTenantId(req);
+        const userId = req.user?.id || req.user?._id || null;
+        const { Employee, EmployeeCtcVersion } = getModels(req);
+        const canonicalPayroll = require('../services/canonicalPayroll.service');
+        const SalaryCalculationEngine = require('../services/salaryCalculationEngine');
+        const payrollPhase1 = require('../services/payrollPhase1.service');
+        const MinimumWage = req.tenantDB.models.MinimumWage || req.tenantDB.model('MinimumWage', require('../models/MinimumWage'));
+
+        const { employees } = req.body;
+        if (!Array.isArray(employees) || employees.length === 0) {
+            return res.status(400).json({ success: false, message: 'Valid employees array is required' });
+        }
+
+        const results = {
+            successCount: 0,
+            failedCount: 0,
+            errors: []
+        };
+
+        for (const [index, row] of employees.entries()) {
+            try {
+                const { employeeId, totalCTC, state, employeeCategory, effectiveFrom: rowEffectiveFrom } = row;
+                
+                if (!employeeId || !totalCTC) {
+                    throw new Error('Employee ID and Proposed CTC are required');
+                }
+
+                // Match by _id or employeeId string (e.g. EMP-001)
+                const empIdStr = String(employeeId).trim();
+                const query = { $or: [] };
+                if (empIdStr.match(/^[0-9a-fA-F]{24}$/)) {
+                    query.$or.push({ _id: empIdStr });
+                }
+                query.$or.push({ employeeId: empIdStr });
+
+                const employee = await Employee.findOne(query).select('firstName lastName employeeId email joiningDate createdAt workState').lean();
+                if (!employee) throw new Error(`Employee ${empIdStr} not found`);
+
+                const effectiveFrom = startOfDay(rowEffectiveFrom ? new Date(rowEffectiveFrom) : (employee.joiningDate || employee.createdAt || new Date()));
+                const resolvedCTC = normalizeMoney(totalCTC);
+                const category = employeeCategory || 'GENERAL';
+                const empState = state || employee.workState || '';
+
+                const existingVersion = await canonicalPayroll.resolveEffectiveSalaryVersion(req.tenantDB, tenantId, employee._id, effectiveFrom, effectiveFrom);
+                if (existingVersion) throw new Error('Active salary version already exists for this employee');
+
+                let minWageAmount = 0;
+                if (empState && category) {
+                    const mwDoc = await MinimumWage.findOne({ 
+                        tenantId, 
+                        state: { $regex: new RegExp(`^${empState}$`, 'i') },
+                        category: { $regex: new RegExp(`^${category}$`, 'i') }
+                    });
+                    if (mwDoc) minWageAmount = mwDoc.monthlyAmount;
+                }
+
+                const ruleSet = await payrollPhase1.resolveStatutoryRuleSet(req.tenantDB, tenantId, effectiveFrom, effectiveFrom, { country: 'IN', workState: empState });
+                const result = SalaryCalculationEngine.calculateSalary({
+                    annualCTC: resolvedCTC,
+                    employeeCategory: category,
+                    minWageAmount,
+                    payrollContext: {
+                        applyStatutory: true,
+                        locationPolicy: ruleSet ? payrollPhase1.buildStatutoryRuleSnapshot(ruleSet) : undefined
+                    }
+                });
+
+                const components = [...result.earnings, ...result.benefits].map(c => ({
+                    name: c.name, code: c.code, type: result.earnings.includes(c) ? 'EARNING' : 'BENEFIT',
+                    monthlyAmount: c.monthly, annualAmount: c.yearly, isTaxable: true, isProRata: true, enabled: true
+                }));
+
+                await canonicalPayroll.createSalaryVersion(req.tenantDB, tenantId, employee._id, {
+                    effectiveFrom, totalCTC: resolvedCTC, components, source: 'MANUAL',
+                    revisionType: 'INITIAL', reason: 'Bulk Salary Setup'
+                }, userId);
+
+                results.successCount++;
+            } catch (err) {
+                results.failedCount++;
+                results.errors.push({ row: index + 1, employeeId: row.employeeId, error: err.message });
+            }
+        }
+
+        res.json({ success: true, message: `Bulk setup complete. Success: ${results.successCount}, Failed: ${results.failedCount}`, data: results });
+    } catch (error) {
+        console.error('Bulk Setup Error:', error);
+        res.status(500).json({ success: false, message: error.message });
     }
 };

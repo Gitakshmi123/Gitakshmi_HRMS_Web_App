@@ -416,10 +416,14 @@ exports.createCompany = async (req, res) => {
       });
     }
 
+    // Default: all modules enabled for new companies. If the caller explicitly
+    // sends an enabledModules object or a modules array, honour it; otherwise
+    // onboard the tenant with every module active so they don't hit an
+    // "Unauthorized" wall on first login.
     const normalizedEnabledModules = Array.isArray(modules)
       ? enabledModulesFromArray(modules)
       : (enabledModules && typeof enabledModules === 'object' && !Array.isArray(enabledModules)
-        ? normalizeEnabledModulesObject(enabledModules, defaultEnabledModules(false))
+        ? normalizeEnabledModulesObject(enabledModules, defaultEnabledModules(true))
         : defaultEnabledModules(true));
 
     const company = new Tenant({
@@ -779,10 +783,14 @@ exports.getMyModules = async (req, res, next) => {
         modules: enabledModulesToArray(defaultEnabledModules(true)) 
       });
     }
+    // If the tenant has no enabledModules configured (legacy tenant),
+    // default ALL modules to true so employees/HR don't hit Unauthorized.
+    const hasConfiguredModules = t.enabledModules && typeof t.enabledModules === 'object' && Object.keys(t.enabledModules).length > 0;
+    const effectiveEnabledModules = hasConfiguredModules ? t.enabledModules : defaultEnabledModules(true);
     const resolvedModules = Array.isArray(t.modules) && t.modules.length > 0
       ? t.modules
-      : enabledModulesToArray(t.enabledModules || {});
-    res.json({ enabledModules: t.enabledModules || {}, modules: resolvedModules });
+      : enabledModulesToArray(effectiveEnabledModules);
+    res.json({ enabledModules: effectiveEnabledModules, modules: resolvedModules });
   } catch (err) { next(err); }
 };
 
@@ -833,10 +841,10 @@ exports.getMyTenant = async (req, res, next) => {
         logo: t.logo || t.meta?.logo,
         code: t.code,
         status: t.status,
-        enabledModules: t.enabledModules || {},
+        enabledModules: (t.enabledModules && Object.keys(t.enabledModules).length > 0) ? t.enabledModules : defaultEnabledModules(true),
         modules: (Array.isArray(t.modules) && t.modules.length > 0)
           ? t.modules
-          : enabledModulesToArray(t.enabledModules || {})
+          : enabledModulesToArray((t.enabledModules && Object.keys(t.enabledModules).length > 0) ? t.enabledModules : defaultEnabledModules(true))
       });
     }
 
@@ -847,7 +855,7 @@ exports.getMyTenant = async (req, res, next) => {
 
 exports.updateTenant = async (req, res, next) => {
   try {
-    const { name, companyName, companyEmail, ownerName, phone, domain, emailDomain, plan, status, meta, modules, enabledModules, code, subCompanyLimit, userLimit, logo, password } = req.body;
+    const { name, companyName, companyEmail, ownerName, phone, domain, emailDomain, plan, status, meta, modules, enabledModules, code, subCompanyLimit, userLimit, logo, password, dmsCompanyId } = req.body;
 
     const existing = await Tenant.findById(req.params.id);
     if (!existing) return res.status(404).json({ error: 'not_found' });
@@ -864,6 +872,7 @@ exports.updateTenant = async (req, res, next) => {
     if (emailDomain !== undefined) updates.emailDomain = emailDomain?.trim() || null;
     if (plan !== undefined) updates.plan = plan;
     if (status !== undefined) updates.status = status;
+    if (dmsCompanyId !== undefined) updates.dmsCompanyId = dmsCompanyId ? dmsCompanyId.trim() : null;
     
     if (Array.isArray(modules)) {
       const normalizedEnabledModules = enabledModulesFromArray(modules);
@@ -1187,5 +1196,141 @@ exports.updateTenantPassword = async (req, res, next) => {
   } catch (err) {
     console.error("Update tenant password error:", err);
     next(err);
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DMS INTEGRATION SETTINGS — GET & SAVE dmsCompanyId
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/tenants/dms-integration
+ * Returns the current dmsCompanyId for the authenticated company (tenant).
+ */
+exports.getDmsIntegration = async (req, res) => {
+  try {
+    // Resolve the tenant's Tenant document from the main DB
+    const tenantId = req.tenantId || req.user?.tenantId || req.user?.companyId;
+    if (!tenantId) {
+      return res.status(400).json({ success: false, message: 'Could not determine tenant ID.' });
+    }
+
+    let tenant = null;
+    if (mongoose.Types.ObjectId.isValid(tenantId)) {
+      tenant = await Tenant.findById(tenantId).select('companyName dmsCompanyId').lean();
+    }
+    if (!tenant) {
+      tenant = await Tenant.findOne({ tenantId }).select('companyName dmsCompanyId').lean();
+    }
+    if (!tenant) {
+      return res.status(404).json({ success: false, message: 'Tenant not found.' });
+    }
+
+    return res.json({
+      success: true,
+      dmsCompanyId: tenant.dmsCompanyId || '',
+      companyName: tenant.companyName || ''
+    });
+  } catch (err) {
+    console.error('[DMS Integration] getDmsIntegration error:', err.message);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+/**
+ * PUT /api/tenants/dms-integration
+ * Body: { dmsCompanyId: "..." }
+ * Sets the dmsCompanyId for the authenticated company (tenant).
+ */
+exports.saveDmsIntegration = async (req, res) => {
+  try {
+    const { dmsCompanyId } = req.body;
+    if (typeof dmsCompanyId !== 'string') {
+      return res.status(400).json({ success: false, message: 'dmsCompanyId must be a string' });
+    }
+
+    // Resolve tenant ID from the authenticated user
+    const tenantId = req.tenantId || req.user?.tenantId || req.user?.companyId;
+    if (!tenantId) {
+      return res.status(400).json({ success: false, message: 'Could not determine tenant ID.' });
+    }
+
+    let tenant = null;
+    if (mongoose.Types.ObjectId.isValid(tenantId)) {
+      tenant = await Tenant.findByIdAndUpdate(
+        tenantId,
+        { $set: { dmsCompanyId: dmsCompanyId.trim() } },
+        { new: true }
+      ).select('companyName dmsCompanyId').lean();
+    }
+    if (!tenant) {
+      tenant = await Tenant.findOneAndUpdate(
+        { tenantId },
+        { $set: { dmsCompanyId: dmsCompanyId.trim() } },
+        { new: true }
+      ).select('companyName dmsCompanyId').lean();
+    }
+    if (!tenant) {
+      return res.status(404).json({ success: false, message: 'Tenant not found.' });
+    }
+
+    console.log(`[DMS Integration] dmsCompanyId set to: "${tenant.dmsCompanyId}" for "${tenant.companyName}"`);
+    
+    // 🔥 Background Sync: Automatically push all existing open/active positions to DMS
+    if (tenant.dmsCompanyId) {
+        setImmediate(async () => {
+            try {
+                const getTenantDB = require('../utils/tenantDB');
+                const db = await getTenantDB(tenant._id);
+                if (!db.models.Requirement) {
+                    db.model('Requirement', require('../models/Requirement'));
+                }
+                const Requirement = db.model('Requirement');
+                // Find open or active requirements
+                const requirements = await Requirement.find({ status: { $in: ['Open', 'Active'] } }).lean();
+                
+                const axios = require('axios');
+                const dmsUrl = process.env.DMS_URL;
+                const dmsToken = process.env.DMS_SECURE_TOKEN;
+                
+                if (dmsUrl && dmsToken && requirements.length > 0) {
+                    console.log(`[DMS Sync] Auto-syncing ${requirements.length} positions for tenant ${tenant.companyName}...`);
+                    for (const req of requirements) {
+                        const positionId = req.jobOpeningId || String(req._id);
+                        const positionName = req.jobTitle || 'Unknown Position';
+                        try {
+                            await axios.post(
+                                `${dmsUrl}/api/v1/hrms/hiring/positions`,
+                                {
+                                    companyId: tenant.dmsCompanyId,
+                                    positionId: positionId,
+                                    positionName: positionName
+                                },
+                                {
+                                    headers: { 'x-hrms-secure-token': dmsToken },
+                                    timeout: 10000
+                                }
+                            );
+                            console.log(`[DMS Sync] ✅ Auto-synced position ${positionId}`);
+                        } catch (err) {
+                            console.error(`[DMS Sync] ❌ Failed to auto-sync position ${positionId}:`, err.response?.data?.message || err.message);
+                        }
+                    }
+                }
+            } catch (syncErr) {
+                console.error('[DMS Sync] Auto-sync background task failed:', syncErr.message);
+            }
+        });
+    }
+
+    return res.json({
+      success: true,
+      message: 'DMS Company ID saved successfully.',
+      dmsCompanyId: tenant.dmsCompanyId,
+      companyName: tenant.companyName
+    });
+  } catch (err) {
+    console.error('[DMS Integration] saveDmsIntegration error:', err.message);
+    return res.status(500).json({ success: false, message: err.message });
   }
 };

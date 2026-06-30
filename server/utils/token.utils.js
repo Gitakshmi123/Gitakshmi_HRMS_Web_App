@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 
-const ACCESS_TOKEN_TTL = process.env.JWT_ACCESS_EXPIRES_IN || '15m';
+const ACCESS_TOKEN_TTL = process.env.JWT_ACCESS_EXPIRES_IN || '12h';
 const REFRESH_TOKEN_TTL = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
 const ACCESS_TOKEN_SECRET =
   process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET || 'access_secret_123';

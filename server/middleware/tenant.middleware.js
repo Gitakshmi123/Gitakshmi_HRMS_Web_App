@@ -31,7 +31,8 @@ module.exports = async function tenantResolver(req, res, next) {
       req.path === '/api/health' ||
       req.path === '/health' ||
       req.path === '/api/auth/sso-login' ||
-      AUTH_TENANT_SKIP_PATHS.has(req.path)
+      AUTH_TENANT_SKIP_PATHS.has(req.path) ||
+      AUTH_TENANT_SKIP_PATHS.has('/api' + req.path)
     ) {
       return next();
     }
@@ -46,7 +47,11 @@ module.exports = async function tenantResolver(req, res, next) {
     }
 
     // 2. Handle Public Routes Discovery (paths are /api/public/... in this app)
-    if (req.path.startsWith('/api/public/') || req.path.startsWith('/public/')) {
+    const isPublicPath = req.path.startsWith('/api/public/') || 
+                         req.path.startsWith('/public/') || 
+                         req.path.includes('/document-upload/');
+
+    if (isPublicPath) {
       let tenantId = req.headers["x-tenant-id"] || req.query.tenantId;
 
       // Extract from path if token starts with a valid ObjectId followed by underscore
@@ -54,6 +59,23 @@ module.exports = async function tenantResolver(req, res, next) {
         const offerMatch = req.path.match(/\/offer\/([a-f0-9]{24})_/i);
         if (offerMatch) {
           tenantId = offerMatch[1];
+        }
+      }
+
+      if (!tenantId) {
+        const candidateDocMatch = req.path.match(/(?:\/candidate-documents\/|\/document-upload\/)(?:token\/|save-draft\/|submit\/|upload\/|reference-data\/|draft\/)?([a-f0-9]{24})_/i);
+        if (candidateDocMatch) {
+          tenantId = candidateDocMatch[1];
+        }
+      }
+
+      if (!tenantId) {
+        // Matches /candidate/document-upload/{tenantId}_{rest}/{action}
+        // e.g. /candidate/document-upload/6649abc...def_xyz123.../reference-data
+        const empFormMatch = req.path.match(/\/candidate\/document-upload\/([a-f0-9]{24})_/i) ||
+                             req.path.match(/\/document-upload\/([a-f0-9]{24})_/i);
+        if (empFormMatch) {
+          tenantId = empFormMatch[1];
         }
       }
 
@@ -97,9 +119,17 @@ module.exports = async function tenantResolver(req, res, next) {
       if (token) {
         try {
           const payload = verifyJwtWithCandidates(token);
+          const role = String(payload.role || '').toLowerCase();
+          const isSuperAdmin = ['psa', 'superadmin', 'super_admin'].includes(role);
+          
           // An explicit tenant header comes from the currently selected company in the HRMS UI.
-          // Do not let an old/stale bearer token silently switch the request back to another tenant.
-          tenantId = explicitTenantHeader || payload.tenantId || payload.tenant || payload.companyId || tenantId;
+          // Do not let an old/stale bearer token silently switch the request back to another tenant,
+          // BUT ONLY allow this override for PSA/Superadmin.
+          if (isSuperAdmin && explicitTenantHeader) {
+            tenantId = explicitTenantHeader;
+          } else {
+            tenantId = payload.tenantId || payload.tenant || payload.companyId || tenantId;
+          }
           tokenCompanyCode = payload.companyCode || payload.company_code || tokenCompanyCode;
         } catch (e) {
           // Token might be invalid or expire, but we continue to check other identity methods

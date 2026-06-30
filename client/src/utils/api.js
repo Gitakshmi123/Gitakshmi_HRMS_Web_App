@@ -1,5 +1,6 @@
 import axios from "axios";
 import { getToken } from "./token";
+import GitakshmiLogo from "../assets/gitakshmi-hr-logo.svg";
 
 import APP_CONFIG from "./appConfig";
 
@@ -56,7 +57,7 @@ export const ssoApi = null;
  * Reusable Axios instance for HRMS service
  */
 export const hrmsApi = axios.create({
-  baseURL: HRMS_API_ROOT ? `${HRMS_API_ROOT}/api` : "/api",
+  baseURL: "/api",
   withCredentials: true,
   timeout: 30000,
 });
@@ -96,19 +97,18 @@ const shouldSkipStoredAuthHeader = (config) => {
 };
 
 const attachStoredAuthHeader = (config) => {
-  if (shouldSkipStoredAuthHeader(config)) {
-    return config;
-  }
-
-  const token = readStoredAuthToken();
   const headers = { ...(config.headers || {}) };
-  if (token && !headers.Authorization && !headers.authorization) {
-    headers.Authorization = `Bearer ${token}`;
+
+  if (!shouldSkipStoredAuthHeader(config)) {
+    const token = readStoredAuthToken();
+    if (token && !headers.Authorization && !headers.authorization) {
+      headers.Authorization = `Bearer ${token}`;
+    }
   }
 
   try {
-    const tenantId = String(window.localStorage.getItem('tenantId') || window.localStorage.getItem('companyId') || '').trim();
-    const companyCode = String(window.localStorage.getItem('companyCode') || '').trim();
+    const tenantId = String(window.localStorage.getItem('tenantId') || window.localStorage.getItem('companyId') || window.localStorage.getItem('candidate_tenantId') || '').trim();
+    const companyCode = String(window.localStorage.getItem('companyCode') || window.localStorage.getItem('candidate_company') || '').trim();
     if (tenantId && !headers['X-Tenant-ID'] && !headers['x-tenant-id']) {
       headers['X-Tenant-ID'] = tenantId;
     }
@@ -200,7 +200,7 @@ export const parseAxiosError = (error) => {
  */
 export const resolveTenantLogoUrl = (tenant) => {
   const rawLogo = String(tenant?.logo || tenant?.meta?.logo || "").trim();
-  if (!rawLogo) return null;
+  if (!rawLogo) return GitakshmiLogo;
   if (/^(https?:)?\/\//i.test(rawLogo) || rawLogo.startsWith("data:")) {
     return resolveBrowserSafeAssetUrl(rawLogo);
   }

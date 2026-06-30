@@ -336,12 +336,14 @@ function dedupeObjectIds(values = []) {
     const result = [];
 
     for (const value of values) {
-        const objectId = toObjectId(value);
-        if (!objectId) continue;
-        const key = String(objectId);
+        if (!value) continue;
+        const key = String(value);
         if (seen.has(key)) continue;
         seen.add(key);
-        result.push(objectId);
+        
+        // Return original value or ObjectId if possible
+        const objId = toObjectId(value);
+        result.push(objId || String(value));
     }
 
     return result;
@@ -1430,6 +1432,15 @@ async function runPayroll(db, tenantId, month, year, initiatedBy, options = {}) 
 
     for (const employee of employees) {
         try {
+            const { getHolidaysForEmployee } = require('../utils/holidayHelper');
+            const empHolidays = await getHolidaysForEmployee({
+                employeeId: employee._id,
+                year,
+                tenantDB: db,
+                tenantId
+            });
+            const empHolidayDates = new Set(empHolidays.map(h => new Date(h.date).toISOString().split('T')[0]));
+
             const payslip = await calculateEmployeePayroll(
                 db,
                 tenantId,
@@ -1439,7 +1450,7 @@ async function runPayroll(db, tenantId, month, year, initiatedBy, options = {}) 
                 payPeriodStart,
                 payPeriodEnd,
                 daysInMonth,
-                holidayDates,
+                empHolidayDates,
                 payrollRun._id,
                 null,
                 false,

@@ -1,38 +1,33 @@
 const mongoose = require('mongoose');
-const dns = require('dns');
 
-// [DNS-FIX]: Force Google DNS and IPv4 for Atlas SRV resolution issues
-try {
-    dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
-    if (dns.setDefaultResultOrder) {
-        dns.setDefaultResultOrder('ipv4first');
+mongoose.connect('mongodb+srv://techdhruv16_db_user:FpXqAuXiuyi51JLx@cluster0.cpfocff.mongodb.net/?appName=Cluster0')
+  .then(async () => {
+    const db = mongoose.connection.useDb('company_datav');
+    
+    const Applicant = db.collection('applicants');
+    const Application = db.collection('applications');
+    const TrackerCandidate = db.collection('trackercandidates');
+    
+    console.log("One applicant in applicants:", await Applicant.findOne({}));
+    console.log("One applicant in applications:", await Application.findOne({}));
+    console.log("One trackercandidate:", await TrackerCandidate.findOne({}));
+    
+    const apps1 = await Applicant.find({}).toArray();
+    console.log(`Total applicants: ${apps1.length}`);
+    for (const a of apps1) {
+        if (a.requirementId && a.requirementId.toString() === '6a388ea160e1ef7811378d17') {
+           console.log(`Found applicant ${a.name} with status ${a.status}`);
+        }
     }
-} catch (e) {
-    console.warn('⚠️ DNS override failed:', e.message);
-}
-
-require('dotenv').config();
-
-const MONGO_URI = process.env.MONGO_URI;
-
-async function check() {
-    console.log('Connecting to:', MONGO_URI);
-    try {
-        await mongoose.connect(MONGO_URI);
-        console.log('✅ Connected');
-
-        const collections = await mongoose.connection.db.listCollections().toArray();
-        console.log('Collections:', collections.map(c => c.name));
-
-        const Tenant = mongoose.model('Tenant', new mongoose.Schema({}), 'tenants');
-        const count = await Tenant.countDocuments();
-        console.log('Tenant count:', count);
-
-        process.exit(0);
-    } catch (err) {
-        console.error('❌ Error:', err.message);
-        process.exit(1);
+    
+    const apps2 = await Application.find({}).toArray();
+    console.log(`Total applications: ${apps2.length}`);
+    for (const a of apps2) {
+        if (a.jobId && a.jobId.toString() === '6a388ea160e1ef7811378d17') {
+           console.log(`Found application ${a.name || (a.candidateInfo && a.candidateInfo.name)} with status ${a.status}`);
+           console.log(a);
+        }
     }
-}
-
-check();
+    
+    process.exit(0);
+  });

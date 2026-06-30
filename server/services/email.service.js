@@ -55,7 +55,8 @@ class EmailService {
             },
             lookup: customLookup,
             debug: false,
-            logger: false
+            logger: false,
+            tls: { rejectUnauthorized: false }
         };
 
         // If explicitly using gmail service, nodemailer handles the host/port internally
@@ -149,7 +150,8 @@ class EmailService {
                 },
                 lookup: customLookup,
                 debug: false,
-                logger: false
+                logger: false,
+                tls: { rejectUnauthorized: false }
             };
 
             if (host.includes('gmail.com') && !secure) {
@@ -350,6 +352,7 @@ class EmailService {
 
              html = html.replace(/{{candidateName}}/g, candidateName)
                         .replace(/{{jobTitle}}/g, jobTitle)
+                        .replace(/{{designation}}/g, jobTitle)
                         .replace(/{{companyName}}/g, companyName)
                         .replace(/{{ctcBreakdown}}/g, ctcBreakdown)
                         .replace(/{{candidateDetails}}/g, candidateDetails)
@@ -730,6 +733,7 @@ class EmailService {
             subject = customTemplate.subject
                        .replace(/{{candidateName}}/g, candidateName)
                        .replace(/{{jobTitle}}/g, jobTitle)
+                       .replace(/{{designation}}/g, jobTitle)
                        .replace(/{{companyName}}/g, companyName)
                        .replace(/{{department}}/g, details.department || '');
         }
@@ -739,8 +743,16 @@ class EmailService {
             const ctcBreakdown = applicant ? generateCTCBreakdownHtml(applicant.salarySnapshotId || applicant.salarySnapshot) : '';
             const candidateDetails = applicant ? generateCandidateDetailsHtml(applicant) : '';
 
+            const ctcYearlyNum = parseFloat((details.ctcYearly || '').replace(/,/g, '')) || 0;
+            const currentCTCNum = parseFloat(String(details.currentCTC || (applicant ? applicant.currentCTC : '') || '').replace(/,/g, '')) || 0;
+            let hikePercentage = '';
+            if (currentCTCNum > 0 && ctcYearlyNum > 0) {
+                hikePercentage = (((ctcYearlyNum - currentCTCNum) / currentCTCNum) * 100).toFixed(2) + '%';
+            }
+
             html = html.replace(/{{candidateName}}/g, candidateName)
                        .replace(/{{jobTitle}}/g, jobTitle)
+                       .replace(/{{designation}}/g, jobTitle)
                        .replace(/{{companyName}}/g, companyName)
                        .replace(/{{approvalUrl}}/g, approvalUrl)
                        .replace(/{{department}}/g, details.department || '')
@@ -748,6 +760,7 @@ class EmailService {
                        .replace(/{{joiningDate}}/g, details.joiningDate || '')
                        .replace(/{{currentDesignation}}/g, details.currentDesignation || (applicant ? applicant.currentDesignation : '') || '')
                        .replace(/{{currentCTC}}/g, details.currentCTC || (applicant ? applicant.currentCTC : '') || '')
+                       .replace(/{{hikePercentage}}/g, hikePercentage)
                        .replace(/{{ctcBreakdown}}/g, ctcBreakdown)
                        .replace(/{{candidateDetails}}/g, candidateDetails);
         }
@@ -808,6 +821,7 @@ class EmailService {
             subject = customTemplate.subject
                        .replace(/{{candidateName}}/g, candidateName)
                        .replace(/{{jobTitle}}/g, jobTitle)
+                       .replace(/{{designation}}/g, jobTitle)
                        .replace(/{{companyName}}/g, companyName)
                        .replace(/{{department}}/g, details.department || '');
         }
@@ -815,6 +829,7 @@ class EmailService {
         if (html) {
             html = html.replace(/{{candidateName}}/g, candidateName)
                        .replace(/{{jobTitle}}/g, jobTitle)
+                       .replace(/{{designation}}/g, jobTitle)
                        .replace(/{{companyName}}/g, companyName)
                        .replace(/{{approvalUrl}}/g, approvalUrl)
                        .replace(/{{department}}/g, details.department || '')

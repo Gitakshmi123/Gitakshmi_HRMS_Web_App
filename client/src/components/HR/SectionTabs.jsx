@@ -8,7 +8,7 @@ export default function SectionTabs({ tabs, className = "" }) {
   const defaultClasses = isCustom ? "" : "mb-5 border-b border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 sticky top-0 z-20";
   
   return (
-    <div className={`overflow-x-auto ${defaultClasses} ${className}`.trim()}>
+    <div className={`overflow-x-auto no-scrollbar ${defaultClasses} ${className}`.trim()}>
       <div className="flex min-w-max items-center gap-1.5">
         {tabs.map((tab) => {
           const Icon = tab.icon;

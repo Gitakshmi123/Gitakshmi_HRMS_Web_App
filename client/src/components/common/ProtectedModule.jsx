@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useRBAC } from '../../context/RBACContext';
 import { isPrivilegedManagementRole } from '../../utils/employeeAccess';
@@ -30,8 +30,9 @@ const MODULE_PERMISSION_PROBES = {
  * @param {React.ReactNode} children - The components to render if allowed
  */
 const ProtectedModule = ({ module, permissionKey = null, action = 'view', children }) => {
-    const { user, enabledModules } = useAuth();
+    const { user, enabledModules, loading: authLoading } = useAuth();
     const { hasPermission, loading, permissions } = useRBAC();
+    const location = useLocation();
     
     const getRoleName = (user) => {
         return String(
@@ -47,6 +48,13 @@ const ProtectedModule = ({ module, permissionKey = null, action = 'view', childr
 
     if (isPsa) {
         return <>{children}</>;
+    }
+
+    // While auth is still loading or modules haven't been fetched yet, wait silently.
+    // This prevents a race condition where stale/empty localStorage cache causes
+    // premature Unauthorized redirects before the server returns fresh module data.
+    if (authLoading || enabledModules === null || enabledModules === undefined) {
+        return null;
     }
 
     // Check if module is enabled
@@ -70,6 +78,9 @@ const ProtectedModule = ({ module, permissionKey = null, action = 'view', childr
         console.warn(`[ProtectedModule] Access denied for module: ${module}. Redirecting to safe landing.`);
         // Redirect to safe landing instead of showing error page
         const safeLanding = isPrivileged ? '/hr/dashboard' : '/employee/dashboard';
+        if (location.pathname === safeLanding) {
+            return <Navigate to="/unauthorized" replace />;
+        }
         return <Navigate to={safeLanding} replace />;
     }
 
@@ -77,3 +88,4 @@ const ProtectedModule = ({ module, permissionKey = null, action = 'view', childr
 };
 
 export default ProtectedModule;
+

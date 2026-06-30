@@ -1,13 +1,18 @@
 class SalaryCalculationEngine {
-    static calculateSalary({ annualCTC = 0, earnings = [], deductions = [], benefits = [], payrollContext = {}, employeeCategory = 'GENERAL', minWageAmount = 0 }) {
+    static calculateSalary({ annualCTC = 0, earnings = [], deductions = [], benefits = [], payrollContext = {}, employeeCategory = 'GENERAL', minWageAmount = 0, useExcelStructure = true }) {
         const ctc = this._safeNum(annualCTC);
         if (ctc <= 0) return this._emptyResult(ctc, payrollContext);
 
         const ctxRules = this._normalizePayrollContext(payrollContext);
         const monthlyCTC = this._round(ctc / 12);
-        
-        // 1. Minimum Wage logic
         const effectiveMinWage = this._safeNum(minWageAmount);
+
+        const shouldRunExcelSolver = (useExcelStructure && (earnings.length === 0 || payrollContext.useExcelStructure === true));
+        if (shouldRunExcelSolver) {
+            return this._calculateExcelStructure(ctc, effectiveMinWage, ctxRules, employeeCategory);
+        }
+
+        // 1. Minimum Wage logic
         
         // 2. Determine Basic Salary (Dynamic & Custom logic)
         let basicMonthly = 0;
@@ -252,7 +257,13 @@ class SalaryCalculationEngine {
 
         if (code === 'PROFESSIONAL_TAX') {
             const ptPolicy = policy.professionalTax || {};
-            if (ptPolicy.enabled === false) return 0;
+            
+            // List of states that levy Professional Tax
+            const ptStates = ['andhra pradesh', 'assam', 'bihar', 'gujarat', 'jharkhand', 'karnataka', 'kerala', 'madhya pradesh', 'maharashtra', 'manipur', 'meghalaya', 'mizoram', 'nagaland', 'odisha', 'puducherry', 'sikkim', 'tamil nadu', 'telangana', 'tripura', 'west bengal'];
+            const currentState = String(ctx.payrollContext?.locationContext?.workState || '').toLowerCase();
+            const isPtState = !currentState || ptStates.includes(currentState);
+
+            if (ptPolicy.enabled === false || !isPtState) return 0;
             
             // If slabs are provided, calculate based on Gross
             if (Array.isArray(ptPolicy.slabs) && ptPolicy.slabs.length > 0) {
@@ -631,6 +642,321 @@ class SalaryCalculationEngine {
                 takeHomeYearly: 0
             }
         };
+    }
+
+    static _calculateForCtcA(ctcA, minWage, rates) {
+        const round0 = (v) => Math.round(v);
+        
+        // Step 3: Basic = MAX(Minimum Wage, AnnualCTC * 50%)
+        // Note: ctcA mathematically acts as AnnualCTC in the formula context
+        const basic = round0(Math.max(minWage, ctcA * rates.basicPct));
+        
+        // Step 4: Bonus = IF(Basic > 21000, 0, Basic * 8.33%)
+        const bonus = basic > rates.bonusCeiling ? 0 : round0(basic * rates.bonusPct);
+        
+        // Step 5: PF Employer = IF(Basic >= 15000, 1800, Basic * 12%)
+        const pfBase = rates.pfCapContribution === false ? basic : Math.min(basic, rates.pfWageCeiling);
+        const pfEmployer = pfBase >= 1 ? round0(pfBase * rates.pfEmployerPct) : 0;
+        
+        // Step 6: ESIC Employer = IF(Basic >= 21001, 0, Basic * 3.25%)
+        const esicEmployer = basic > rates.esicWageCeiling ? 0 : round0(basic * rates.esicEmployerPct);
+        
+        // Step 7: HRA = MIN(ROUND(Basic*50%,0), MAX(0, ctcA - (Basic + Bonus + pfEmployer + esicEmployer)))
+        const maxHraLimit = Math.max(0, round0(ctcA - (basic + bonus + pfEmployer + esicEmployer)));
+        const hra = Math.min(round0(basic * rates.hraPct), maxHraLimit);
+        
+        // Step 8: Conveyance = MIN(ROUND(Basic*15%,0), MAX(0, ctcA - (Basic + Bonus + HRA + pfEmployer + esicEmployer)))
+        const maxConvLimit = Math.max(0, round0(ctcA - (basic + bonus + hra + pfEmployer + esicEmployer)));
+        const conveyance = Math.min(round0(basic * rates.conveyancePct), maxConvLimit);
+        
+        // Step 9: Compensatory = MAX(0, ctcA - (Basic + Bonus + HRA + Conveyance + pfEmployer + esicEmployer))
+        const compensatory = Math.max(0, round0(ctcA - (basic + bonus + hra + conveyance + pfEmployer + esicEmployer)));
+        
+        // Step 10: Gross Salary
+        const gross = basic + hra + conveyance + compensatory + bonus;
+        
+        // Step 11: CTC(A) = Gross + Employer PF + Employer ESIC
+        const actualCtcA = gross + pfEmployer + esicEmployer;
+        
+        // Step 16: Gratuity = Basic * 4.81%
+        const gratuity = round0(basic * rates.gratuityPct);
+        
+        // Step 17: PA Policy (If ctcA >= 20833.33 Coverage = 500000 Else Coverage = ctcA * 24)
+        const val1 = actualCtcA >= rates.paPolicyCeiling ? rates.paPolicyFixedCap : actualCtcA * 24;
+        const term1 = round0(val1 * rates.paPolicyRate1);
+        const val2 = (actualCtcA * 36) + (actualCtcA >= rates.paPolicyCeiling ? (actualCtcA * 24 - rates.paPolicyFixedCap) : 0);
+        const term2 = round0(val2 * rates.paPolicyRate2);
+        const yearlyPremium = term1 + term2;
+        const premium = round0(yearlyPremium / 12);
+        
+        // Step 20: Total CTC = CTC(A) + RetirementBenefits(B) + InsuranceBenefits(C)
+        const totalCTC = actualCtcA + gratuity + premium;
+        
+        return {
+            ctcA: actualCtcA,
+            basic,
+            hra,
+            conveyance,
+            compensatory,
+            bonus,
+            pfEmployer,
+            esicEmployer,
+            gratuity,
+            premium,
+            totalCTC,
+            gross
+        };
+    }
+
+    static _calculateExcelStructure(ctc, minWage, ctxRules, employeeCategory) {
+        const targetMonthlyCTC = this._round(ctc / 12);
+        
+        const rules = ctxRules.companyRules || {};
+        const policy = ctxRules.locationPolicy || {};
+        
+        const safeRate = (val, fallback) => {
+            const num = parseFloat(val);
+            return Number.isFinite(num) && num > 0 ? num / 100 : fallback;
+        };
+
+        const rates = {
+            basicPct: safeRate(policy.basicPercentage, 0.50),
+            bonusPct: safeRate(policy.bonusPercentage, 0.0833),
+            bonusCeiling: parseFloat(policy.bonusCeiling) || 21000,
+            pfEmployerPct: safeRate(rules.pf?.employerContributionPercentage, 0.12),
+            pfEmployeePct: safeRate(rules.pf?.employeeContributionPercentage, 0.12),
+            pfWageCeiling: parseFloat(rules.pf?.wageCeiling) || 15000,
+            pfCapContribution: rules.pf?.capContribution !== false,
+            esicEmployerPct: safeRate(rules.esic?.employerContributionPercentage, 0.0325),
+            esicEmployeePct: safeRate(rules.esic?.employeeContributionPercentage, 0.0075),
+            esicWageCeiling: parseFloat(rules.esic?.wageCeiling) || 21000,
+            hraPct: safeRate(policy.hra?.percentageOfBasic, 0.50),
+            conveyancePct: safeRate(policy.conveyancePercentage, 0.15),
+            gratuityPct: safeRate(rules.gratuity?.percentage, 0.0481),
+            paPolicyCeiling: 20833.33,
+            paPolicyFixedCap: 500000,
+            paPolicyRate1: 1.5 / 1000,
+            paPolicyRate2: 0.45 / 1000
+        };
+        
+        // Solve for target ctcA
+        let low = 0;
+        let high = targetMonthlyCTC;
+        let bestCTC_A = targetMonthlyCTC;
+        let bestDiff = Infinity;
+        
+        for (let i = 0; i < 30; i++) {
+            let mid = (low + high) / 2;
+            let calc = this._calculateForCtcA(mid, minWage, rates);
+            let diff = calc.totalCTC - targetMonthlyCTC;
+            
+            if (Math.abs(diff) < Math.abs(bestDiff)) {
+                bestDiff = diff;
+                bestCTC_A = mid;
+            }
+            
+            if (calc.totalCTC > targetMonthlyCTC) {
+                high = mid;
+            } else {
+                low = mid;
+            }
+        }
+        
+        const breakup = this._calculateForCtcA(bestCTC_A, minWage, rates);
+        
+        // Professional Tax (Step 14)
+        let pt = 0;
+        const ptPolicy = ctxRules.locationPolicy?.professionalTax || {};
+        
+        // List of states that levy Professional Tax
+        const ptStates = ['andhra pradesh', 'assam', 'bihar', 'gujarat', 'jharkhand', 'karnataka', 'kerala', 'madhya pradesh', 'maharashtra', 'manipur', 'meghalaya', 'mizoram', 'nagaland', 'odisha', 'puducherry', 'sikkim', 'tamil nadu', 'telangana', 'tripura', 'west bengal'];
+        const currentState = String(ctxRules.locationContext?.workState || '').toLowerCase();
+        const isPtState = !currentState || ptStates.includes(currentState);
+
+        if (ptPolicy.enabled !== false && isPtState) {
+            if (Array.isArray(ptPolicy.slabs) && ptPolicy.slabs.length > 0) {
+                const match = ptPolicy.slabs.find(slab => {
+                    const min = this._safeNum(slab.minIncome);
+                    const max = slab.maxIncome === null || slab.maxIncome === undefined ? Infinity : this._safeNum(slab.maxIncome);
+                    return breakup.gross >= min && breakup.gross <= max;
+                });
+                if (match) pt = this._round(match.amount);
+            } else {
+                // Fallback to Excel slab formula
+                if (breakup.gross <= 9000) pt = 0;
+                else if (breakup.gross <= 12000) pt = 150;
+                else pt = 200;
+            }
+        }
+        
+        // Employee PF and Employee ESI (Steps 12 & 13)
+        const pfEmployeeBase = rates.pfCapContribution === false ? breakup.basic : Math.min(breakup.basic, rates.pfWageCeiling);
+        const pfEmployee = pfEmployeeBase >= 1 ? Math.round(pfEmployeeBase * rates.pfEmployeePct) : 0;
+        const esicEmployee = breakup.basic > rates.esicWageCeiling ? 0 : Math.round(breakup.basic * rates.esicEmployeePct);
+        
+        // Construct the results array
+        const earningsResult = [
+            {
+                code: 'BASIC',
+                name: 'Basic Salary',
+                calculationType: 'FIXED',
+                value: breakup.basic,
+                basedOn: 'MW_OR_50PCT',
+                monthly: breakup.basic,
+                yearly: this._round(breakup.basic * 12)
+            },
+            {
+                code: 'HOUSE_RENT_ALLOWANCE',
+                name: 'House Rent Allowance',
+                calculationType: 'FIXED',
+                value: breakup.hra,
+                basedOn: 'BASIC',
+                monthly: breakup.hra,
+                yearly: this._round(breakup.hra * 12)
+            },
+            {
+                code: 'CONVEYANCE',
+                name: 'Conveyance Allowance',
+                calculationType: 'FIXED',
+                value: breakup.conveyance,
+                basedOn: 'BASIC',
+                monthly: breakup.conveyance,
+                yearly: this._round(breakup.conveyance * 12)
+            },
+            {
+                code: 'COMPENSATORY_ALLOWANCE',
+                name: 'Compensatory Allowance',
+                calculationType: 'FIXED',
+                value: breakup.compensatory,
+                basedOn: 'NA',
+                monthly: breakup.compensatory,
+                yearly: this._round(breakup.compensatory * 12)
+            }
+        ];
+        
+        if (breakup.bonus > 0) {
+            earningsResult.push({
+                code: 'BONUS',
+                name: 'Bonus',
+                calculationType: 'FIXED',
+                value: breakup.bonus,
+                basedOn: 'NA',
+                monthly: breakup.bonus,
+                yearly: this._round(breakup.bonus * 12)
+            });
+        }
+        
+        const employerContributions = [];
+        if (breakup.pfEmployer > 0) {
+            employerContributions.push({
+                code: 'EMPLOYER_PF',
+                name: 'Employer PF',
+                calculationType: 'STATUTORY',
+                value: breakup.pfEmployer,
+                basedOn: 'BASIC',
+                monthly: breakup.pfEmployer,
+                yearly: this._round(breakup.pfEmployer * 12)
+            });
+        }
+        if (breakup.esicEmployer > 0) {
+            employerContributions.push({
+                code: 'EMPLOYER_ESI',
+                name: 'Employer ESI',
+                calculationType: 'STATUTORY',
+                value: breakup.esicEmployer,
+                basedOn: 'GROSS',
+                monthly: breakup.esicEmployer,
+                yearly: this._round(breakup.esicEmployer * 12)
+            });
+        }
+        
+        const retirementBenefits = [
+            {
+                code: 'GRATUITY',
+                name: 'Gratuity',
+                calculationType: 'STATUTORY',
+                value: breakup.gratuity,
+                basedOn: 'BASIC',
+                monthly: breakup.gratuity,
+                yearly: this._round(breakup.gratuity * 12)
+            }
+        ];
+        
+        const otherBenefits = [
+            {
+                code: 'PA_POLICY_PREMIUM',
+                name: 'P.A. Policy Premium',
+                calculationType: 'FIXED',
+                value: breakup.premium,
+                basedOn: 'NA',
+                monthly: breakup.premium,
+                yearly: this._round(breakup.premium * 12)
+            }
+        ];
+        
+        const deductionsResult = [];
+        if (pfEmployee > 0) {
+            deductionsResult.push({
+                code: 'EMPLOYEE_PF',
+                name: 'Employee PF',
+                calculationType: 'STATUTORY',
+                value: pfEmployee,
+                basedOn: 'BASIC',
+                monthly: pfEmployee,
+                yearly: this._round(pfEmployee * 12)
+            });
+        }
+        if (esicEmployee > 0) {
+            deductionsResult.push({
+                code: 'EMPLOYEE_ESI',
+                name: 'Employee ESI',
+                calculationType: 'STATUTORY',
+                value: esicEmployee,
+                basedOn: 'GROSS',
+                monthly: esicEmployee,
+                yearly: this._round(esicEmployee * 12)
+            });
+        }
+        if (pt > 0) {
+            deductionsResult.push({
+                code: 'PROFESSIONAL_TAX',
+                name: 'Professional Tax',
+                calculationType: 'STATUTORY',
+                value: pt,
+                basedOn: 'NA',
+                monthly: pt,
+                yearly: this._round(pt * 12)
+            });
+        }
+        
+        const totalDeductionsAnnual = this._round(deductionsResult.reduce((s, d) => s + d.yearly, 0));
+        const totalEarningsAnnual = this._round(earningsResult.reduce((s, e) => s + e.yearly, 0));
+        
+        const result = {
+            annualCTC: ctc,
+            payrollContext: ctxRules,
+            earnings: earningsResult,
+            deductions: deductionsResult,
+            benefits: [...employerContributions, ...retirementBenefits, ...otherBenefits],
+            employerContributions,
+            retirementBenefits,
+            otherBenefits,
+            minWageAmount: minWage,
+            totals: {
+                grossA_Monthly: breakup.ctcA,
+                grossA_Yearly: this._round(breakup.ctcA * 12),
+                grossB_Monthly: breakup.gratuity,
+                grossB_Yearly: this._round(breakup.gratuity * 12),
+                grossC_Monthly: breakup.premium,
+                grossC_Yearly: this._round(breakup.premium * 12),
+                totalCTC: ctc,
+                deductionMonthly: this._round(totalDeductionsAnnual / 12),
+                takeHomeMonthly: this._round((totalEarningsAnnual - totalDeductionsAnnual) / 12),
+                takeHomeYearly: this._round(totalEarningsAnnual - totalDeductionsAnnual)
+            }
+        };
+        
+        return result;
     }
 }
 

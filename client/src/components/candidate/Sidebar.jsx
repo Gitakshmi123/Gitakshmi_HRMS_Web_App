@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Briefcase, FileText, User, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, Briefcase, FileText, User, ChevronRight, UploadCloud } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 export default function Sidebar() {
@@ -21,6 +21,7 @@ export default function Sidebar() {
         { name: 'Open Positions', path: '/candidate/open-positions', icon: Briefcase },
         { name: 'My Applications', path: '/candidate/applications', icon: FileText },
         { name: 'My Profile', path: '/candidate/profile', icon: User },
+        { name: 'Upload Documents', path: '/candidate/upload-documents', icon: UploadCloud },
     ];
 
     return (

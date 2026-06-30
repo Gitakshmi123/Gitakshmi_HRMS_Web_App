@@ -2,14 +2,30 @@
 const dns = require('dns');
 dns.setServers(['8.8.8.8', '1.1.1.1']);
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+// Server root - forced restart 2026-06-24T05:52:00
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 
-// [DNS-FIX]: Removed manual DNS overrides as they cause issues on some Windows setups
-// const dns = require('dns');
-// if (dns.setDefaultResultOrder) {
-//     dns.setDefaultResultOrder('ipv4first');
-// }
+// Configure custom DNS servers if provided in .env (helps with DNS SRV lookup issues)
+if (process.env.DNS_SERVERS) {
+    try {
+        const dns = require('dns');
+        const dnsServers = process.env.DNS_SERVERS.split(',').map(s => s.trim()).filter(Boolean);
+        if (dnsServers.length > 0) {
+            dns.setServers(dnsServers);
+            console.log(`📡 [DNS] Custom DNS servers configured: ${dnsServers.join(', ')}`);
+        }
+    } catch (dnsErr) {
+        console.error('❌ [DNS] Failed to set custom DNS servers:', dnsErr.message);
+    }
+} else {
+    // [DNS-FIX]: Removed manual DNS overrides by default as they cause issues on some offline/Windows setups,
+    // but users can still enable them via DNS_SERVERS env var.
+    // const dns = require('dns');
+    // if (dns.setDefaultResultOrder) {
+    //     dns.setDefaultResultOrder('ipv4first');
+    // }
+}
 
 let isShuttingDown = false;
 let modelsLoading = false;
@@ -117,6 +133,8 @@ if (isProduction) {
     mongoose.set('autoCreate', false);
 }
 
+let dnsFallbackApplied = false;
+
 async function connectToDatabase() {
     const fallback = process.env.MONGO_FALLBACK_URI || 'mongodb://localhost:27017/hrms';
     const preferLocalInDev = String(process.env.PREFER_LOCAL_MONGO || 'false').toLowerCase() === 'true';
@@ -134,8 +152,33 @@ async function connectToDatabase() {
     } catch (err) {
         console.error('❌ MongoDB initial connection failed:', err.message);
         emitStatus(`❌ [DB NOT CONNECTED] reason=${err.message}`);
-        if (err && (err.syscall === 'querySrv' || err.code === 'ENOTFOUND')) {
+
+        const isDnsError = err && (
+            err.syscall === 'querySrv' ||
+            err.code === 'ENOTFOUND' ||
+            err.code === 'ECONNREFUSED' ||
+            err.message.includes('querySrv')
+        );
+
+        if (isDnsError) {
             console.warn('⚠️ DNS SRV lookup failed. Possible ISP or network restriction.');
+
+            if (!dnsFallbackApplied && MONGO_URI.startsWith('mongodb+srv://')) {
+                console.log('🔄 Attempting DNS override with Google Public DNS (8.8.8.8)...');
+                try {
+                    const dns = require('dns');
+                    dns.setServers(['8.8.8.8', '1.1.1.1']);
+                    dnsFallbackApplied = true;
+                    await mongoose.connect(MONGO_URI, options);
+                    emitStatus(`✅ [DB CONNECTED] source=dns-fallback-srv db=${mongoose.connection.name} host=${mongoose.connection.host}`);
+                    return true;
+                } catch (dnsErr) {
+                    console.error('❌ Retry after DNS fallback failed:', dnsErr.message);
+                }
+            } else {
+                console.warn('⚠️ DNS SRV lookup failed. Possible ISP or network restriction.');
+            }
+
             const fallback = process.env.MONGO_FALLBACK_URI;
             if (fallback && fallback !== MONGO_URI) {
                 try {
@@ -165,6 +208,10 @@ function setupDbConnectionStatusHooks() {
         emitStatus('⚠️ [DB DISCONNECTED]');
     });
     mongoose.connection.on('error', (err) => {
+        // Suppress warning if it's a DNS lookup error during startup, since it is handled by fallback retry
+        if (err && (err.syscall === 'querySrv' || err.code === 'ENOTFOUND')) {
+            return;
+        }
         emitStatus(`❌ [DB ERROR] ${err?.message || 'Unknown DB error'}`);
     });
 }

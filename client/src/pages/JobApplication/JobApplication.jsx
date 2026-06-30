@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams, useParams, useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import { useJobPortalAuth } from '../../context/JobPortalAuthContext';
-import { getTenantId, getCompany, cleanId } from '../../utils/auth';
+import { getCandidateTenantId, setCandidateTenantId, getCandidateCompany, cleanId } from '../../utils/auth';
 import { DatePicker } from 'antd';
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
@@ -159,8 +159,8 @@ export default function JobApplication() {
 
   const requirementId = paramReqId || searchParams.get('requirementId');
   const rawTenantId = searchParams.get('tenantId');
-  const tenantId = cleanId(rawTenantId) || getTenantId();
-  const company = getCompany();
+  const tenantId = cleanId(rawTenantId) || getCandidateTenantId();
+  const company = getCandidateCompany();
 
   const [formData, setFormData] = useState({
     name: '',
@@ -247,7 +247,7 @@ export default function JobApplication() {
       }
       // Safety: If tenantId was missing locally but returned from server, update it
       if (!tenantId && res.data.tenant) {
-        localStorage.setItem('tenantId', res.data.tenant);
+        setCandidateTenantId(res.data.tenant);
       }
     } catch (err) { console.error("Requirement Load Error:", err); }
   };

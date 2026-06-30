@@ -25,7 +25,7 @@ const {
   buildGradeAttendanceSettings,
   fetchEmployeeGrade
 } = require('../services/gradeAttendancePolicy.service');
-const { buildEffectiveAttendanceSettings } = require('../utils/shiftRuntime');
+const { buildEffectiveAttendanceSettings, translateShiftPolicyToLegacyConfig } = require('../utils/shiftRuntime');
 
 const faceService = new RealFaceRecognitionService();
 const FACE_EMBEDDING_KEY =
@@ -1831,10 +1831,40 @@ exports.markAttendance = async (req, res) => {
     if (!attendanceSettings) {
       attendanceSettings = await AttendanceSettings.create({ tenant: tenantId });
     }
-    const shiftConfig = employee.shiftId
-      ? await Shift.findOne({ _id: employee.shiftId, isActive: true, isDeleted: false }).lean()
-      : null;
-    const employeeGrade = shiftConfig ? null : await fetchEmployeeGrade({
+    let activeShiftId = employee.shiftId ? employee.shiftId : null;
+    let shiftConfig = null;
+    let shiftMaster = null;
+    let shiftPolicy = null;
+
+    try {
+      const RosterAssignment = req.tenantDB.model('RosterAssignment');
+      const currentRoster = await RosterAssignment.findOne({
+          employeeId: employee._id,
+          status: 'Published',
+          startDate: { $lte: attendanceDate },
+          endDate: { $gte: attendanceDate }
+      }).lean();
+      if (currentRoster && currentRoster.shiftId) {
+          activeShiftId = currentRoster.shiftId;
+      }
+    } catch (err) {
+      console.error('Roster lookup error in face tracking:', err.message);
+    }
+
+    if (activeShiftId) {
+      shiftConfig = await Shift.findOne({ _id: activeShiftId, isActive: true, isDeleted: false }).lean();
+      if (!shiftConfig) {
+          const ShiftMaster = req.tenantDB.model('ShiftMaster');
+          const ShiftPolicy = req.tenantDB.model('ShiftPolicy');
+          shiftMaster = await ShiftMaster.findOne({ _id: activeShiftId, status: 'Active' }).lean();
+          if (shiftMaster) {
+              shiftPolicy = await ShiftPolicy.findOne({ shiftMasterId: shiftMaster._id, isCurrent: true }).lean();
+              shiftConfig = translateShiftPolicyToLegacyConfig(shiftMaster, shiftPolicy);
+          }
+      }
+    }
+
+    const employeeGrade = (shiftConfig || shiftMaster) ? null : await fetchEmployeeGrade({
       employee,
       Grade,
       tenantId,
@@ -1884,6 +1914,43 @@ exports.markAttendance = async (req, res) => {
         'You are already checked in. Please check out first.'
       );
     }
+
+    // ==== ENTERPRISE SHIFT POLICY: PUNCH WINDOW LIMITS ====
+    if (nextPunchType === 'IN' && employee.shiftId) {
+      try {
+        const ShiftMaster = req.tenantDB.model('ShiftMaster');
+        const ShiftPolicy = req.tenantDB.model('ShiftPolicy');
+        
+        const shiftMaster = await ShiftMaster.findById(employee.shiftId).lean();
+        if (shiftMaster && shiftMaster.coreTiming && shiftMaster.coreTiming.startTime) {
+          const shiftPolicy = await ShiftPolicy.findOne({ shiftMasterId: shiftMaster._id, tenant: tenantId, isCurrent: true }).lean();
+          
+          if (shiftPolicy?.attendanceRules?.punchWindow) {
+            const { maxAdvancePunchInMinutes } = shiftPolicy.attendanceRules.punchWindow;
+            if (maxAdvancePunchInMinutes !== undefined && maxAdvancePunchInMinutes !== null) {
+              const dayjs = require('dayjs');
+              const now = dayjs();
+              const [hours, minutes] = shiftMaster.coreTiming.startTime.split(':');
+              const shiftStartTimeToday = dayjs().hour(hours).minute(minutes).second(0);
+              
+              const diffMinutes = shiftStartTimeToday.diff(now, 'minute');
+              
+              if (diffMinutes > maxAdvancePunchInMinutes) {
+                return res.status(403).json({
+                  success: false,
+                  status: 'REJECTED',
+                  error: 'punch_in_too_early',
+                  message: `You cannot punch in yet. You are only allowed to punch in ${maxAdvancePunchInMinutes} minutes before your shift starts (${shiftMaster.coreTiming.startTime}).`
+                });
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Error evaluating punch window limits:", err);
+      }
+    }
+    // ======================================================
 
     if (nextPunchType === 'OUT' && !lastLogType && !attendance?.checkIn) {
       return sendAttendanceConflict(
@@ -2096,6 +2163,7 @@ exports.markAttendance = async (req, res) => {
         attendance.checkInTime = now;
         attendance.checkInLocation = displayLocation;
       }
+      attendance.checkInImage = submittedImage;
       attendance.gpsLocation = { lat: displayLocation.lat, lng: displayLocation.lng };
       attendance.checkOut = null;
       attendance.checkOutTime = null;
@@ -2107,6 +2175,7 @@ exports.markAttendance = async (req, res) => {
       attendance.checkOut = now;
       attendance.checkOutTime = now;
       attendance.checkOutLocation = displayLocation;
+      attendance.checkOutImage = submittedImage;
       attendance.tracking.stoppedAt = now;
       attendance.tracking.status = 'STOPPED';
     }
@@ -2161,7 +2230,8 @@ exports.markAttendance = async (req, res) => {
         baseStatus: attendance.status,
         settings: effectiveSettings,
         accumulatedLateCount,
-        accumulatedEarlyExitCount
+        accumulatedEarlyExitCount,
+        shiftPolicy: shiftPolicy
       });
 
       attendance.status = rulesResult.status;
@@ -2174,7 +2244,19 @@ exports.markAttendance = async (req, res) => {
       attendance.isOnDuty = !!rulesResult.isOnDuty;
       attendance.isCompOffDay = !!rulesResult.isCompOffDay;
       attendance.isNightShift = !!rulesResult.isNightShift;
-      attendance.lopDays = typeof rulesResult.lopDays === 'number' ? rulesResult.lopDays : attendance.lopDays;
+      attendance.lopDays = rulesResult.lopDays;
+      
+      if (rulesResult.otMinutes > 0) {
+          attendance.overtimeHours = parseFloat((rulesResult.otMinutes / 60).toFixed(2));
+          if (rulesResult.meta) {
+              rulesResult.meta.otMultiplierApplied = rulesResult.otMultiplierApplied;
+          }
+      } else {
+          attendance.overtimeHours = 0;
+      }
+
+      attendance.ruleEngineVersion = rulesResult.engineVersion;
+      attendance.ruleEngineMeta = rulesResult.meta;
     } else {
       const lateEarly = evaluateLateAndEarly({
         date: attendanceDate,

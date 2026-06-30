@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const candidateCtrl = require('../controllers/candidate.controller');
 const hiringFlowCtrl = require('../controllers/hiring.flow.controller');
+const externalRecordCtrl = require('../controllers/externalEmployeeRecord.controller');
 const { authenticateCandidate } = require('../middleware/jobPortalAuthMiddleware');
 
 router.post('/register', candidateCtrl.registerCandidate);
@@ -10,6 +11,12 @@ router.post('/logout', candidateCtrl.logoutCandidate);
 router.post('/send-otp', candidateCtrl.sendCandidateOtp);
 router.post('/forgot-password/send-otp', candidateCtrl.sendForgotPasswordOtp);
 router.post('/forgot-password/reset', candidateCtrl.resetPassword);
+
+// Secure token-based pre-onboarding profile completion.
+router.get('/document-upload/:token/reference-data', externalRecordCtrl.getReferenceData);
+router.get('/document-upload/:token', externalRecordCtrl.getByToken);
+router.put('/document-upload/:token/draft', externalRecordCtrl.saveDraftByToken);
+router.post('/document-upload/:token/submit', externalRecordCtrl.submitByToken);
 
 // Profile update and photo upload
 const { profilePicUpload } = require('../utils/upload');

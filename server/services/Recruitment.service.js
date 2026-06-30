@@ -125,8 +125,12 @@ class RecruitmentService {
 
         // Helper to update step 1
         const updateStep1 = async (d) => {
-            if (data.positionId || data.department || data.jobType) {
-                const gradeSnapshot = data.gradeId ? await this.resolveGradeSnapshot(tenantId, data.gradeId) : null;
+            if (data.positionId || data.department || data.jobType || data.grade || data.gradeId) {
+                const requestedGradeId = data.gradeId || data.grade;
+                let gradeSnapshot = null;
+                if (requestedGradeId && mongoose.Types.ObjectId.isValid(String(requestedGradeId))) {
+                    gradeSnapshot = await this.resolveGradeSnapshot(tenantId, requestedGradeId);
+                }
                 d.step1 = {
                     positionId: data.positionId || d.step1?.positionId || undefined,
                     gradeId: gradeSnapshot?.gradeId || d.step1?.gradeId || undefined,
@@ -286,10 +290,16 @@ class RecruitmentService {
         ));
 
         // 3. Map data to Requirement Model (matching Requirement.js schema)
+        const gradeSnapshot = s1.gradeId ? await this.resolveGradeSnapshot(tenantId, s1.gradeId).catch(() => null) : null;
+        const resolvedGradeId = gradeSnapshot?.gradeId || (s1.gradeId || undefined);
+        const resolvedGradeName = gradeSnapshot?.grade || s1.grade || undefined;
+
         const requirement = new Requirement({
             tenant: tenantId,
             jobOpeningId: jobId,
             positionId: sanitizedPositionId,
+            gradeId: resolvedGradeId,
+            grade: resolvedGradeName,
             subCompanyId: orgAssignment.subCompanyId || undefined,
             branchId: orgAssignment.branchId || undefined,
             divisionId: orgAssignment.divisionId || undefined,
@@ -297,6 +307,8 @@ class RecruitmentService {
             designationId: orgAssignment.designationId || undefined,
             department: orgAssignment.department || s1.department,
             jobTitle: s2.jobTitle,
+            gradeId: s1.gradeId || undefined,
+            grade: s1.grade || undefined,
 
             jobDetails: {
                 salaryMin: s2.salaryMin,
@@ -307,6 +319,7 @@ class RecruitmentService {
                 visibility: s2.visibility || 'External',
                 workMode: s1.workMode || 'On-site',
                 jobType: s1.jobType || 'Full-Time',
+                grade: s1.gradeId || undefined,
                 hiringManager: sanitizedHiringManager || orgAssignment.managerId || undefined,
                 reportingTo: orgAssignment.managerId || linkedPosition?.reportingTo || undefined,
                 interviewPanel: sanitizedInterviewPanel
@@ -470,6 +483,34 @@ class RecruitmentService {
             console.error('Failed to notify HR/managers of new job requisition:', emailGroupErr.message);
         }
 
+        // 8. Notify DMS about the new position
+        try {
+            const Tenant = mongoose.models['Tenant'] || mongoose.model('Tenant');
+            const tenantRecord = await Tenant.findById(tenantId).lean();
+            if (tenantRecord && tenantRecord.dmsCompanyId) {
+                const axios = require('axios');
+                const dmsUrl = process.env.DMS_URL;
+                const dmsToken = process.env.DMS_SECURE_TOKEN;
+                if (dmsUrl && dmsToken) {
+                    await axios.post(
+                        `${dmsUrl}/api/v1/hrms/hiring/positions`,
+                        {
+                            companyId: tenantRecord.dmsCompanyId,
+                            positionId: saved.jobOpeningId || String(saved._id),
+                            positionName: saved.jobTitle
+                        },
+                        {
+                            headers: { 'x-hrms-secure-token': dmsToken },
+                            timeout: 10000
+                        }
+                    );
+                    console.log(`[DMS Sync] ✅ Position folder ready for: ${saved.jobOpeningId}`);
+                }
+            }
+        } catch (dmsErr) {
+            console.error('[DMS Sync] Failed to notify DMS about new position:', dmsErr.message);
+        }
+
         return saved;
     }
 
@@ -515,6 +556,8 @@ class RecruitmentService {
                 const gradeSnapshot = await this.resolveGradeSnapshot(tenantId, finalData.gradeId);
                 finalData.gradeId = gradeSnapshot.gradeId;
                 finalData.grade = gradeSnapshot.grade;
+                if (!finalData.jobDetails) finalData.jobDetails = {};
+                finalData.jobDetails.grade = gradeSnapshot.gradeId;
             }
 
             // 2. Auto-generate Job ID via helper
@@ -537,6 +580,13 @@ class RecruitmentService {
                 reportingTo: finalData.reportingTo || finalData.jobDetails?.reportingTo || pos?.reportingTo,
             });
 
+            const finalJobDetails = {
+                ...(finalData.jobDetails || {}),
+                grade: finalData.jobDetails?.grade || finalData.gradeId || undefined,
+                hiringManager: finalData.jobDetails?.hiringManager || finalData.hiringManager || orgAssignment.managerId || undefined,
+                reportingTo: finalData.jobDetails?.reportingTo || finalData.reportingTo || orgAssignment.managerId || undefined,
+            };
+
             const requirement = new Requirement({
                 ...finalData,
                 tenant: tenantId,
@@ -547,11 +597,7 @@ class RecruitmentService {
                 departmentId: orgAssignment.departmentId || finalData.departmentId,
                 designationId: orgAssignment.designationId || finalData.designationId,
                 department: orgAssignment.department || finalData.department,
-                jobDetails: {
-                    ...(finalData.jobDetails || {}),
-                    hiringManager: finalData.jobDetails?.hiringManager || finalData.hiringManager || orgAssignment.managerId || undefined,
-                    reportingTo: finalData.jobDetails?.reportingTo || finalData.reportingTo || orgAssignment.managerId || undefined,
-                },
+                jobDetails: finalJobDetails,
                 isInternal,
                 createdBy: userId
             });
@@ -698,6 +744,8 @@ class RecruitmentService {
             const gradeSnapshot = await this.resolveGradeSnapshot(tenantId, data.gradeId);
             data.gradeId = gradeSnapshot.gradeId;
             data.grade = gradeSnapshot.grade;
+            if (!data.jobDetails) data.jobDetails = {};
+            data.jobDetails.grade = gradeSnapshot.gradeId;
         }
 
         // Use findByIdAndUpdate to perform partial update without validating unrelated fields
@@ -918,12 +966,38 @@ class RecruitmentService {
             console.warn('[RecruitmentService.getTenantApplications] BGV lookup skipped:', e.message);
         }
 
+        // Attach Document Request status to each applicant
+        let docRequestByCandidateId = new Map();
+        try {
+            if (!db.models.CandidateDocumentRequest) {
+                db.model('CandidateDocumentRequest', require('../models/CandidateDocumentRequest'));
+            }
+            const CandidateDocumentRequest = db.model('CandidateDocumentRequest');
+            const docReqs = await CandidateDocumentRequest.find({
+                tenant: tenantId
+            }).select('_id candidateId status token').lean();
+            
+            docRequestByCandidateId = new Map(
+                docReqs
+                    .filter(r => r && r.candidateId)
+                    .map(r => [String(r.candidateId), r])
+            );
+        } catch (e) {
+            console.warn('[RecruitmentService.getTenantApplications] Doc request lookup skipped:', e.message);
+        }
+
         const applicantsWithBGV = applicants.map((app) => {
             const bgv = bgvByApplicationId.get(String(app._id));
+            const candidateIdStr = app.candidateId ? String(app.candidateId._id || app.candidateId) : null;
+            const docReq = candidateIdStr ? docRequestByCandidateId.get(candidateIdStr) : null;
+
             return {
                 ...app,
                 bgvStatus: bgv ? bgv.overallStatus : 'NOT_INITIATED',
-                bgvId: bgv ? bgv._id : null
+                bgvId: bgv ? bgv._id : null,
+                documentRequestStatus: docReq ? docReq.status : 'NOT_SENT',
+                documentRequestToken: docReq ? docReq.token : null,
+                documentRequestId: docReq ? docReq._id : null
             };
         });
 

@@ -362,6 +362,146 @@ exports.createDesignation = async (req, res) => {
   }
 };
 
+/* ----------------------------------------------------
+   BULK UPLOAD DESIGNATIONS
+   ---------------------------------------------------- */
+exports.bulkUploadDesignations = async function (req, res) {
+  try {
+    const { records } = req.body;
+
+    if (!records || !Array.isArray(records)) {
+      return fail(res, 400, "Invalid request format - records must be an array");
+    }
+
+    if (records.length === 0) {
+      return fail(res, 400, "No designation records to upload");
+    }
+
+    if (records.length > 1000) {
+      return fail(res, 400, "Exceeded maximum record limit of 1000 records");
+    }
+
+    const Designation = model(req, 'Designation');
+    const Department = model(req, 'Department');
+    const tenantId = req.tenantId || req.user?.tenantId || req.user?.companyId;
+
+    if (!tenantId) {
+      return fail(res, 400, "Tenant context missing");
+    }
+
+    let uploadedCount = 0;
+    let failedCount = 0;
+    const errors = [];
+    const warnings = [];
+
+    for (let i = 0; i < records.length; i++) {
+      const record = records[i];
+      const rowNum = i + 2;
+
+      try {
+        const title = record.Title || record.title || record['Designation Title'] || record['Designation Name'] || record.Name || record.name;
+        const code = record.Code || record.code || record['Designation Code'];
+        const departmentCode = record.Department || record.department || record['Department Code'];
+
+        if (!title || typeof title !== "string" || title.trim().length < 2) {
+          failedCount++;
+          errors.push(`Row ${rowNum}: Designation Title is required`);
+          continue;
+        }
+
+        if (!departmentCode || typeof departmentCode !== "string" || departmentCode.trim().length < 1) {
+          failedCount++;
+          errors.push(`Row ${rowNum}: Department Code is required`);
+          continue;
+        }
+
+        const desigTitle = title.trim();
+        let desigCode = code ? code.trim().toUpperCase() : null;
+        const deptCode = departmentCode.trim().toUpperCase();
+
+        // Verify Department
+        const department = await Department.findOne({
+          code: deptCode,
+          $or: [{ mainCompanyId: tenantId }, { tenant: tenantId }]
+        });
+
+        if (!department) {
+          failedCount++;
+          errors.push(`Row ${rowNum}: Department with code '${deptCode}' not found`);
+          continue;
+        }
+
+        // Generate Code if missing
+        if (!desigCode) {
+          desigCode = await nextCode(req, `designation:${department._id}:${abbr(desigTitle)}`, `${department.departmentCode || department.code || 'GT-DEP'}-DES-${abbr(desigTitle)}`);
+        }
+
+        // Find existing designation by code or title (within the same department)
+        const existingDesignation = await Designation.findOne({
+          departmentId: department._id,
+          $or: [
+            { code: desigCode },
+            { title: desigTitle },
+            { name: desigTitle }
+          ]
+        });
+
+        if (existingDesignation) {
+          // Update existing
+          existingDesignation.name = desigTitle;
+          existingDesignation.title = desigTitle;
+          existingDesignation.code = desigCode;
+          existingDesignation.designationCode = desigCode;
+          existingDesignation.entityCode = desigCode;
+          existingDesignation.isActive = true;
+          existingDesignation.isDeleted = false;
+          await existingDesignation.save();
+          uploadedCount++;
+          warnings.push(`Row ${rowNum}: Updated existing designation (${desigTitle}) in department ${deptCode}`);
+        } else {
+          // Create new
+          await Designation.create({
+            name: desigTitle,
+            title: desigTitle,
+            code: desigCode,
+            designationCode: desigCode,
+            entityCode: desigCode,
+            isActive: true,
+            mainCompanyId: department.mainCompanyId,
+            subCompanyId: department.subCompanyId,
+            branchId: department.branchId,
+            divisionId: department.divisionId,
+            departmentId: department._id
+          });
+          uploadedCount++;
+        }
+      } catch (rowErr) {
+        failedCount++;
+        errors.push(`Row ${rowNum}: ${rowErr.message || "Failed to process record"}`);
+      }
+    }
+
+    res.json({
+      success: uploadedCount > 0,
+      message: uploadedCount > 0 ? "Bulk upload completed" : "Bulk upload failed",
+      uploadedCount,
+      failedCount,
+      errors,
+      warnings
+    });
+
+  } catch (err) {
+    console.error("bulkUploadDesignations error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Server error during bulk upload",
+      uploadedCount: 0,
+      failedCount: req.body?.records?.length || 0,
+      errors: [err.message || "An unexpected error occurred"]
+    });
+  }
+};
+
 const listHierarchy = (modelName) => async (req, res) => {
   try {
     const data = await model(req, modelName).find(scopedFilterForModel(req, modelName)).select('-password').lean();

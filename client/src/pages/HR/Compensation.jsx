@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     Search,
     Eye,
@@ -16,8 +17,8 @@ import {
 } from 'lucide-react';
 import api from '../../utils/api';
 import SalaryIncrementModal from '../../components/Compensation/SalaryIncrementModal';
-import InitialCompensationModal from '../../components/Compensation/InitialCompensationModal';
 import PayrollSetupPanel from '../../components/Compensation/PayrollSetupPanel';
+import BulkSalaryAssignmentModal from '../../components/Compensation/BulkSalaryAssignmentModal';
 import CustomSelect from '../../components/shared/CustomSelect';
 import usePagePermissions from '../../hooks/usePagePermissions';
 
@@ -191,6 +192,7 @@ function Row({ emp, canView, canManage, onView, onSetupSalary, onIncrement, onHi
 }
 
 export default function Compensation() {
+    const navigate = useNavigate();
     const { canView, canCreate, canEdit } = usePagePermissions('payroll.compensation');
     const canManageCanonical = canCreate || canEdit;
     const [loading, setLoading] = useState(true);
@@ -199,9 +201,9 @@ export default function Compensation() {
     const [statusFilter, setStatusFilter] = useState('');
     const [selectedEmployee, setSelectedEmployee] = useState(null);
     const [showViewModal, setShowViewModal] = useState(false);
-    const [showSetupModal, setShowSetupModal] = useState(false);
     const [showIncrementModal, setShowIncrementModal] = useState(false);
     const [showHistoryModal, setShowHistoryModal] = useState(false);
+    const [showBulkAssignModal, setShowBulkAssignModal] = useState(false);
     const [history, setHistory] = useState([]);
     const [historyMeta, setHistoryMeta] = useState(null);
     const [migrationBusy, setMigrationBusy] = useState(false);
@@ -286,8 +288,7 @@ export default function Compensation() {
     };
 
     const openSetupSalary = (emp) => {
-        setSelectedEmployee(emp);
-        setShowSetupModal(true);
+        navigate(`/hr/payroll/salary-assignment-excel?employeeId=${emp._id}`);
     };
 
     const openIncrement = (emp) => {
@@ -390,6 +391,14 @@ export default function Compensation() {
                     ]}
                     className="w-44"
                 />
+                {canManageCanonical && (
+                    <button
+                        onClick={() => setShowBulkAssignModal(true)}
+                        className="h-[38px] px-4 flex items-center justify-center gap-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 rounded-xl hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-colors shadow-sm text-[11px] font-bold tracking-wide"
+                    >
+                        Bulk Assign
+                    </button>
+                )}
             </div>
 
             <div className="overflow-x-auto w-full rounded-2xl no-scrollbar">
@@ -595,27 +604,7 @@ export default function Compensation() {
                 </div>
             )}
 
-            {showSetupModal && selectedEmployee && !selectedEmployee.activeVersion && (
-                <InitialCompensationModal
-                    employee={selectedEmployee}
-                    onClose={() => setShowSetupModal(false)}
-                    onSuccess={(result) => {
-                        setShowSetupModal(false);
-                        fetchData();
-                        alert([
-                            'Initial salary setup created.',
-                            `Version: v${result.data.salaryVersion.version}`,
-                            `Annual CTC: Rs ${result.data.salaryVersion.totalCTC.toLocaleString('en-IN')}`,
-                            result.data.payrollProfileAutoBackfilled
-                                ? 'Payroll profile was auto-created from employee location.'
-                                : 'Payroll profile was left unchanged.',
-                            result.data.preservedScheduledVersion
-                                ? `Existing scheduled version preserved for ${formatDate(result.data.preservedScheduledVersion.effectiveFrom)}.`
-                                : 'No scheduled revision was affected.'
-                        ].join('\n'));
-                    }}
-                />
-            )}
+
 
             {showIncrementModal && selectedEmployee && selectedEmployee.activeVersion && (
                 <SalaryIncrementModal
@@ -691,6 +680,13 @@ export default function Compensation() {
                     </div>
                 </div>
             )}
+
+            <BulkSalaryAssignmentModal
+                isOpen={showBulkAssignModal}
+                onClose={() => setShowBulkAssignModal(false)}
+                onRefresh={fetchData}
+            />
+
         </div>
     );
 }

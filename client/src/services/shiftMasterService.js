@@ -26,13 +26,19 @@ const shiftMasterService = {
         return response.data;
     },
 
-    // 4. Update Shift Master
+    // 4. Bulk Create Shifts from Excel
+    bulkCreateShifts: async (shiftsData) => {
+        const response = await api.post('/shift-master/bulk', { shifts: shiftsData });
+        return response.data;
+    },
+
+    // 5. Update Existing Shift Master
     updateShift: async (id, updates) => {
         const response = await api.put(`/shift-master/${id}`, updates);
         return response.data;
     },
 
-    // 5. Delete Shift (Soft Delete)
+    // 6. Delete Shift (Soft Delete)
     deleteShift: async (id) => {
         const response = await api.delete(`/shift-master/${id}`);
         return response.data;

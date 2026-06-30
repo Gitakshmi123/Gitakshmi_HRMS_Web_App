@@ -2,7 +2,7 @@ const RealFaceRecognitionService = require('../services/realFaceRecognition.serv
 const faceService = new RealFaceRecognitionService();
 const legacyFaceService = require('../services/faceRecognition.service');
 const crypto = require('crypto');
-const { buildEffectiveAttendanceSettings, normalizePunchMode } = require('../utils/shiftRuntime');
+const { buildEffectiveAttendanceSettings, normalizePunchMode, translateShiftPolicyToLegacyConfig } = require('../utils/shiftRuntime');
 const {
   buildAttendanceWindow,
   calculateAttendance,
@@ -187,8 +187,18 @@ exports.registerFace = async (req, res) => {
     faceData.detection = {
       bbox: metadata.detection || { x: 0, y: 0, width: 200, height: 200 }
     };
-    faceData.status = 'ACTIVE';
-    faceData.isVerified = true;
+    if (faceImageData) {
+      faceData.registeredFaceImage = faceImageData;
+    }
+    
+    if (!existingFace) {
+      faceData.status = 'PENDING_REVIEW';
+      faceData.isVerified = false;
+    } else {
+      faceData.status = 'ACTIVE';
+      faceData.isVerified = true;
+    }
+    
     faceData.registration = {
       registeredAt: new Date(),
       registeredBy: internalEmployeeId,
@@ -198,6 +208,16 @@ exports.registerFace = async (req, res) => {
 
     debugFaceLog(`[DEBUG_FACE_REGISTER] Saving face data for employee: ${internalEmployeeId}`);
     await faceData.save();
+
+    if (!existingFace) {
+      const initialRequest = new FaceUpdateRequest({
+        tenant: tenantId,
+        employee: internalEmployeeId,
+        status: 'pending',
+        reason: 'Initial face registration approval request'
+      });
+      await initialRequest.save();
+    }
 
     if (approvedUpdateRequest) {
       approvedUpdateRequest.status = 'used';
@@ -348,9 +368,21 @@ exports.verifyFaceAttendance = async (req, res) => {
     if (!attendanceSettings) {
       attendanceSettings = await AttendanceSettings.create({ tenant: tenantId });
     }
-    const shiftConfig = employee.shiftId
+    let shiftConfig = employee.shiftId
       ? await Shift.findOne({ _id: employee.shiftId, isActive: true, isDeleted: false }).lean()
       : null;
+    // ✅ FIX: If legacy Shift not found, try new ShiftMaster system
+    if (!shiftConfig && employee.shiftId) {
+      const ShiftMasterSchema = require('../models/ShiftMaster');
+      const ShiftPolicySchema = require('../models/ShiftPolicy');
+      const ShiftMaster = req.tenantDB.model('ShiftMaster', ShiftMasterSchema);
+      const ShiftPolicy = req.tenantDB.model('ShiftPolicy', ShiftPolicySchema);
+      const shiftMaster = await ShiftMaster.findOne({ _id: employee.shiftId, status: 'Active' }).lean();
+      if (shiftMaster) {
+        const shiftPolicy = await ShiftPolicy.findOne({ shiftMasterId: shiftMaster._id, isCurrent: true }).lean();
+        shiftConfig = translateShiftPolicyToLegacyConfig(shiftMaster, shiftPolicy);
+      }
+    }
     const employeeGrade = shiftConfig ? null : await fetchEmployeeGrade({
       employee,
       Grade,

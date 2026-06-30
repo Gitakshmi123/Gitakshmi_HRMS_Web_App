@@ -27,7 +27,7 @@ const SalaryAssignmentSchema = new mongoose.Schema({
     salaryTemplateId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'SalaryTemplate',
-        required: true
+        required: false
     },
     ctcAnnual: { type: Number, required: true },
     monthlyCTC: { type: Number, required: true },

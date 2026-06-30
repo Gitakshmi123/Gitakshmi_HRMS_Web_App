@@ -15,6 +15,10 @@ const LeaveBalanceSchema = new mongoose.Schema({
     used: { type: Number, default: 0 },     // Approved leaves
     pending: { type: Number, default: 0 },  // Applied but not approved
 
+    opening: { type: Number, default: 0 },
+    accrued: { type: Number, default: 0 },
+    isOpeningManual: { type: Boolean, default: false },
+
     // Available = Total - Used - Pending (Calculated or Stored)
     // Stored is faster for read, needs transaction update
     available: { type: Number, default: 0 },

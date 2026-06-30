@@ -18,6 +18,7 @@ import {
     Building2,
     Calendar,
     ChevronRight,
+    ChevronDown,
     Search,
     Type,
     Layers,
@@ -177,6 +178,7 @@ const DEFAULT_STEP2_FIELD_CONFIG = {
     salaryMin: { visible: true, isPublic: false, required: false, label: 'Sal. Min', placeholder: 'Min' },
     salaryMax: { visible: true, isPublic: false, required: false, label: 'Sal. Max', placeholder: 'Max' },
     jobType: { visible: true, isPublic: true, required: false, label: 'Job Type', placeholder: '' },
+        grade: { visible: true, isPublic: true, required: false, label: 'Grade', placeholder: 'Select Grade' },
     workMode: { visible: true, isPublic: true, required: false, label: 'Work Mode', placeholder: '' },
     visibility: { visible: true, isPublic: true, required: false, label: 'Visibility', placeholder: '' },
     priority: { visible: true, isPublic: false, required: false, label: 'Priority', placeholder: '' },
@@ -231,6 +233,13 @@ export default function RequirementForm({ onClose, onSuccess, initialData, isEdi
     });
     const [showPositionFieldCustomizer, setShowPositionFieldCustomizer] = useState(false);
     const [employees, setEmployees] = useState([]);
+    const [grades, setGrades] = useState([]);
+    const [dbDepartments, setDbDepartments] = useState([]);
+    const departmentOptionsList = useMemo(() => {
+        const dbNames = dbDepartments.map(d => d.name).filter(Boolean);
+        const combined = [...new Set([...dbNames, ...DEPARTMENT_OPTIONS])];
+        return combined;
+    }, [dbDepartments]);
     const [selectedPosition, setSelectedPosition] = useState(null);
     const [isGeneratingAI, setIsGeneratingAI] = useState(false);
 
@@ -271,6 +280,20 @@ export default function RequirementForm({ onClose, onSuccess, initialData, isEdi
         fetchTemplates();
     }, []);
 
+    const fetchGrades = async () => {
+        try {
+            const res = await api.get('/grades');
+            const payload = res?.data;
+            const data = Array.isArray(payload)
+                ? payload
+                : (Array.isArray(payload?.data) ? payload.data : []);
+            setGrades(Array.isArray(data) ? data : []);
+        } catch (err) {
+            console.error('Failed to load grades', err);
+            setGrades([]);
+        }
+    };
+
     useEffect(() => {
         const fetchEmployees = async () => {
             try {
@@ -284,6 +307,26 @@ export default function RequirementForm({ onClose, onSuccess, initialData, isEdi
             }
         };
         fetchEmployees();
+        fetchGrades();
+    }, []);
+
+    useEffect(() => {
+        const fetchDeptsAndGrades = async () => {
+            try {
+                const [deptRes, gradeRes] = await Promise.all([
+                    api.get('/hr/departments'),
+                    api.get('/grades')
+                ]);
+                const deptList = Array.isArray(deptRes.data?.data) ? deptRes.data.data : (Array.isArray(deptRes.data) ? deptRes.data : []);
+                setDbDepartments(deptList);
+
+                const gradeList = Array.isArray(gradeRes.data?.data) ? gradeRes.data.data : (Array.isArray(gradeRes.data) ? gradeRes.data : []);
+                setGrades(gradeList);
+            } catch (err) {
+                console.error('Failed to load departments or grades', err);
+            }
+        };
+        fetchDeptsAndGrades();
     }, []);
 
     useEffect(() => {
@@ -308,6 +351,8 @@ export default function RequirementForm({ onClose, onSuccess, initialData, isEdi
         jobTitle: '',
         department: '',
         jobType: 'Full-Time',
+        gradeId: '',
+        grade: '',
         workMode: 'On-site',
         country: '',
         state: '',
@@ -370,7 +415,7 @@ export default function RequirementForm({ onClose, onSuccess, initialData, isEdi
     const [dropdownOptions, setDropdownOptions] = useState({
         jobType: ['Full-Time', 'Part-Time', 'Contract', 'Internship', 'Freelance'],
         workMode: ['On-site', 'Remote', 'Hybrid'],
-        priority: ['Low', 'Medium', 'High', 'Urgent'],
+        priority: ['Low', 'Medium', 'High'],
         visibility: ['External (Public Portal)', 'Internal Only', 'Both (External + Internal)']
     });
 
@@ -501,7 +546,20 @@ export default function RequirementForm({ onClose, onSuccess, initialData, isEdi
     }, [isEdit]);
     useEffect(() => {
         if (initialData) {
-            setFormData(prev => ({ ...prev, ...normalizeLocationFields(initialData) }));
+            const normalizedInitialData = normalizeLocationFields(initialData);
+            const resolvedGradeId = normalizedInitialData.gradeId
+                ? (typeof normalizedInitialData.gradeId === 'object' ? (normalizedInitialData.gradeId._id || '') : normalizedInitialData.gradeId)
+                : (normalizedInitialData.jobDetails?.grade ? (typeof normalizedInitialData.jobDetails.grade === 'object' ? (normalizedInitialData.jobDetails.grade._id || '') : normalizedInitialData.jobDetails.grade) : '');
+            const resolvedGradeName = normalizedInitialData.grade
+                || (normalizedInitialData.jobDetails?.grade ? (typeof normalizedInitialData.jobDetails.grade === 'object' ? normalizedInitialData.jobDetails.grade.name : '') : '');
+
+            setFormData(prev => ({
+                ...prev,
+                ...normalizedInitialData,
+                gradeId: resolvedGradeId,
+                grade: resolvedGradeName
+            }));
+
             if (isEdit && initialData._id) {
                 setDraftId(initialData._id);
             }
@@ -652,6 +710,13 @@ export default function RequirementForm({ onClose, onSuccess, initialData, isEdi
                 .map(id => typeof id === 'object' ? (id._id || id) : id);
         }
 
+        // Sanitize gradeId
+        if (!clean.gradeId || clean.gradeId === "") {
+            delete clean.gradeId;
+        } else if (typeof clean.gradeId === 'object') {
+            clean.gradeId = clean.gradeId._id || clean.gradeId;
+        }
+
         // Sanitize positionId
         return clean;
     };
@@ -784,7 +849,7 @@ export default function RequirementForm({ onClose, onSuccess, initialData, isEdi
             delete dataPayload.positionId;
         }
 
-        if (currentStep === 4) {
+        if (currentStep >= 3) {
             dataPayload.pipelineStages = workflow.map((stg, idx) => {
                 const allInterviewers = ((stg.assignedInterviewers && stg.assignedInterviewers.length > 0)
                     ? stg.assignedInterviewers
@@ -813,6 +878,11 @@ export default function RequirementForm({ onClose, onSuccess, initialData, isEdi
                     isSystemStage: stg.isSystemStage || false
                 };
             });
+        }
+
+        if (dataPayload.gradeId && !dataPayload.grade) {
+            const selectedGrade = grades.find((g) => String(g._id) === String(dataPayload.gradeId));
+            dataPayload.grade = selectedGrade?.name || dataPayload.grade || '';
         }
 
         dataPayload.bgvConfig = formData.bgvConfig;
@@ -849,7 +919,7 @@ export default function RequirementForm({ onClose, onSuccess, initialData, isEdi
     };
 
     const proceedToSaveDraft = async (currentFormData, currentStep) => {
-        const targetStep = currentStep + 1;
+        const targetStep = currentStep === 3 ? 5 : currentStep + 1;
 
         try {
             setSaving(true);
@@ -904,7 +974,13 @@ export default function RequirementForm({ onClose, onSuccess, initialData, isEdi
 
     const handleBack = () => {
         if (isEdit && step === 2) return;
-        if (step > 1) setStep(step - 1);
+        if (step > 1) {
+            if (step === 5) {
+                setStep(3);
+            } else {
+                setStep(step - 1);
+            }
+        }
     };
 
     const fetchNextPositionId = async () => {
@@ -932,7 +1008,7 @@ export default function RequirementForm({ onClose, onSuccess, initialData, isEdi
             isReplacement: false,
             baseSalaryRange: { min: '', max: '' }
         });
-        setIsCustomDepartment(!!initialDepartment && !DEPARTMENT_OPTIONS.includes(initialDepartment));
+        setIsCustomDepartment(!!initialDepartment && !departmentOptionsList.includes(initialDepartment));
         setIsCustomDesignation(false);
         setShowPositionFieldCustomizer(false);
         setPositionModalOpen(true);
@@ -947,7 +1023,7 @@ export default function RequirementForm({ onClose, onSuccess, initialData, isEdi
 
     const renderDepartmentField = ({ label, required, placeholder, labelClassName = "mb-2 block text-[10px] font-bold uppercase tracking-widest text-slate-400" }) => {
         const currentDepartment = String(positionForm.department || '').trim();
-        const selectValue = isCustomDepartment || (currentDepartment && !DEPARTMENT_OPTIONS.includes(currentDepartment))
+        const selectValue = isCustomDepartment || (currentDepartment && !departmentOptionsList.includes(currentDepartment))
             ? CUSTOM_DEPARTMENT_VALUE
             : currentDepartment;
 
@@ -972,7 +1048,7 @@ export default function RequirementForm({ onClose, onSuccess, initialData, isEdi
                     className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-800 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
                 >
                     <option value="">{placeholder || 'Select department'}</option>
-                    {DEPARTMENT_OPTIONS.map((department) => (
+                    {departmentOptionsList.map((department) => (
                         <option key={department} value={department}>{department}</option>
                     ))}
                     <option value={CUSTOM_DEPARTMENT_VALUE}>Custom</option>
@@ -1329,6 +1405,15 @@ export default function RequirementForm({ onClose, onSuccess, initialData, isEdi
         );
     };
 
+    const handleGradeSelection = (gradeId) => {
+        const selectedGrade = grades.find((g) => String(g._id) === String(gradeId));
+        setFormData((prev) => ({
+            ...prev,
+            gradeId: gradeId || '',
+            grade: gradeId ? (selectedGrade?.name || '') : ''
+        }));
+    };
+
     const updateField = (field, val) => {
         setFormData(prev => ({ ...prev, [field]: val }));
         if (field === 'positionId' && val) handlePositionChange(val);
@@ -1357,9 +1442,12 @@ export default function RequirementForm({ onClose, onSuccess, initialData, isEdi
                         visibility: cleanData.visibility,
                         workMode: cleanData.workMode,
                         jobType: cleanData.jobType,
+                        grade: cleanData.gradeId || cleanData.grade,
                         hiringManager: cleanData.hiringManager,
                         interviewPanel: cleanData.interviewPanel
                     },
+                    gradeId: cleanData.gradeId,
+                    grade: cleanData.grade,
                     jobDescription: {
                         roleOverview: cleanData.description,
                         responsibilities: cleanData.responsibilities,
@@ -1916,6 +2004,23 @@ export default function RequirementForm({ onClose, onSuccess, initialData, isEdi
                         )}
 
                         {/* Job Type */}
+                        {renderFieldWithControls('grade', 'Grade',
+                                <div className="relative">
+                                    <select
+                                        value={formData.gradeId || ''}
+                                        onChange={(e) => handleGradeSelection(e.target.value)}
+                                        className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-4 pr-10 text-sm font-semibold text-slate-800 transition-all hover:bg-slate-50 focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-indigo-500/10"
+                                    >
+                                        <option value="">Select Grade</option>
+                                        {grades.map((g, i) => (
+                                            <option key={i} value={g._id}>{g.name}</option>
+                                        ))}
+                                    </select>
+                                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+                                        <ChevronDown size={16} className="text-slate-400" />
+                                    </div>
+                                </div>
+                            )}
                         {renderFieldWithControls('jobType', 'Job Type',
                             <CustomSelect
                                 value={formData.jobType || 'Full-Time'}
@@ -3040,7 +3145,7 @@ export default function RequirementForm({ onClose, onSuccess, initialData, isEdi
                 </div>
                 <div className="flex items-center gap-3 sm:gap-6">
                     <div className="hidden md:flex items-center gap-2">
-                        {(isEdit ? [2, 3, 4, 5] : [1, 2, 3, 4, 5]).map(s => (
+                        {(isEdit ? [2, 3, 5] : [1, 2, 3, 5]).map(s => (
                             <div key={s} className={`w-2 h-2 rounded-full transition-all duration-500 ${step === s ? 'w-8 bg-indigo-600' : 'bg-slate-200 dark:bg-slate-600'}`}></div>
                         ))}
                     </div>

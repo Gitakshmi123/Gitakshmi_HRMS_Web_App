@@ -58,7 +58,10 @@ import IdentityDetailsTab from '../../components/HR/IdentityDetailsTab';
 import FamilyBackgroundTab from '../../components/HR/FamilyBackgroundTab';
 import CommunicationTab from '../../components/HR/CommunicationTab';
 import OfficialRecordsTab from '../../components/HR/OfficialRecordsTab';
-
+import AcademicQualificationsTab from '../../components/HR/AcademicQualificationsTab';
+import EmploymentHistoryTab from '../../components/HR/EmploymentHistoryTab';
+import SalaryBreakupStep from '../../components/HR/SalaryBreakupStep';
+import { TabularContainer, TabularRow, TabularField, TabularCustomFieldLabel } from '../../components/HR/TabularForm';
 const BACKEND_URL = API_ROOT || '';
 const NATIONALITIES = ['Indian', 'American', 'British', 'Canadian', 'Australian', 'Other'];
 
@@ -67,11 +70,20 @@ export default function EmployeeForm({
   onClose,
   viewOnly = false,
   onDraftSaved,
+  isExternal = false,
+  token = null,
 }) {
   const [step, setStep] = useState(() => {
     const last = (employee?.status === 'Draft' ? employee?.lastStep : 1) || 1;
-    return Math.min(Math.max(1, last), 10); // 10 steps (References = page 7, submit on step 10)
+    return Math.min(Math.max(1, last), isExternal ? 8 : 11);
   });
+
+  const getActualStep = (s) => {
+    if (!isExternal) return s;
+    if (s === 1) return 1;
+    return s + 1; // Skips Job Information for external candidates
+  };
+  const actualStep = getActualStep(step);
 
 
   const [firstName, setFirstName] = useState(employee?.firstName || '');
@@ -82,6 +94,7 @@ export default function EmployeeForm({
   const [dob, setDob] = useState(employee?.dob ? new Date(employee.dob).toISOString().slice(0, 10) : '');
   const [contactNo, setContactNo] = useState(employee?.contactNo || '');
   const [email, setEmail] = useState(employee?.email || '');
+  const [personalEmail, setPersonalEmail] = useState(employee?.personalEmail || '');
   // Passwords are stored hashed in DB; existing password cannot be read back for display.
   // For edit flow we only allow setting a NEW password.
   const [password, setPassword] = useState('');
@@ -144,10 +157,6 @@ export default function EmployeeForm({
     ...e,
     payslips: e.payslips || (e.payslipUrl ? [e.payslipUrl] : [])
   })) : []);
-  // Training entries (optional, same fields as experience - no validation)
-  const [trainingEntries, setTrainingEntries] = useState(Array.isArray(employee?.trainingEntries) && employee.trainingEntries.length
-    ? employee.trainingEntries.map(t => ({ ...t, payslips: t.payslips || [] }))
-    : []);
   const [jobType, setJobType] = useState(employee?.jobType || employee?.employeeType || 'Full-Time');
 
   const [bankName, setBankName] = useState(employee?.bankDetails?.bankName || '');
@@ -160,7 +169,16 @@ export default function EmployeeForm({
   const [role, setRole] = useState(employee?.role || 'Employee');
   const [department, setDepartment] = useState(employee?.department || '');
   const [departmentId, setDepartmentId] = useState(employee?.departmentId?._id || employee?.departmentId || '');
+  const [employeeCategory, setEmployeeCategory] = useState(employee?.employeeCategory || '');
+  const [holidayCalendar, setHolidayCalendar] = useState(employee?.holidayCalendar || '');
+  const [leaveGroup, setLeaveGroup] = useState(employee?.leaveGroup || '');
+  const [confirmationPeriod, setConfirmationPeriod] = useState(employee?.confirmationPeriod || '');
+  const [basic, setBasic] = useState(employee?.basic || '');
+  const [leaveTravelAllowance, setLeaveTravelAllowance] = useState(employee?.leaveTravelAllowance || '');
+  const [designation, setDesignation] = useState(employee?.designation || '');
   const [designations, setDesignations] = useState([]);
+  const [academicQualifications, setAcademicQualifications] = useState(employee?.academicQualifications || []);
+  const [highestQualification, setHighestQualification] = useState(employee?.highestQualification || '');
   const [assignmentPreview, setAssignmentPreview] = useState(null);
   const [assignmentLoading, setAssignmentLoading] = useState(false);
   const [assignmentError, setAssignmentError] = useState('');
@@ -171,12 +189,15 @@ export default function EmployeeForm({
   const [managers, setManagers] = useState([]);
   const [_departmentHead, _setDepartmentHead] = useState(employee?.departmentHead || false);
   const [saving, setSaving] = useState(false);
+  const externalAutoSaveRef = useRef(null);
   const [errors, setErrors] = useState({});
   const [showPassword, setShowPassword] = useState(false);
   const [pincodeLoading, setPincodeLoading] = useState(false);
   const [ifscLoading, setIfscLoading] = useState(false);
   const [passwordLock, setPasswordLock] = useState(!!employee?._id);
   const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
+  const [passwordEdited, setPasswordEdited] = useState(false);
+  const [bypassValidation, setBypassValidation] = useState(isExternal); // Developer bypass mode
 
   // Reset password input whenever switching to an existing employee record
   // (we must not attempt to show hashed password).
@@ -191,11 +212,30 @@ export default function EmployeeForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [employee?._id]);
 
+  // Auto-generate password based on firstName, lastName, and dob
+  useEffect(() => {
+    if (!passwordLock && !employee?._id && !passwordEdited) {
+      if (firstName && lastName && dob) {
+        const fn3 = firstName.substring(0, 3).toLowerCase();
+        const ln3 = lastName.substring(0, 3).toLowerCase();
+        const year = dob.split('-')[0];
+        if (fn3 && ln3 && year) {
+          setPassword(`${ln3}${fn3}@${year}`);
+        } else {
+          setPassword('');
+        }
+      } else {
+        setPassword('');
+      }
+    }
+  }, [firstName, lastName, dob, passwordLock, employee?._id, passwordEdited]);
+
   // Payroll / Compensation State (Step 10)
   const [salaryTemplateId, setSalaryTemplateId] = useState(employee?.salaryTemplateId?._id || employee?.salaryTemplateId || '');
   const [salaryEffectiveDate, setSalaryEffectiveDate] = useState(employee?.joiningDate ? dayjs(employee.joiningDate).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD'));
   const [salaryStatus, setSalaryStatus] = useState('Active');
   const [salaryTemplates, setSalaryTemplates] = useState([]);
+  const [salaryAssigned, setSalaryAssigned] = useState(!!employee?.salaryAssigned);
 
   // Sync Salary Effective Date with Joining Date if it's currently earlier
   useEffect(() => {
@@ -206,19 +246,20 @@ export default function EmployeeForm({
 
   // Step 6: Languages & Previous Interview (custom page)
   const defaultLanguageRows = () => [
-    { name: 'English', speak: false, read: false, write: false },
-    { name: 'Hindi', speak: false, read: false, write: false },
-    { name: 'Gujarati', speak: false, read: false, write: false }
+    { name: 'English', speak: false, read: false, write: false, understand: false },
+    { name: 'Hindi', speak: false, read: false, write: false, understand: false },
+    { name: 'Gujarati', speak: false, read: false, write: false, understand: false }
   ];
   const [languages, setLanguages] = useState(() => {
     const fromEmp = employee?.languages;
     if (Array.isArray(fromEmp) && fromEmp.length > 0) {
       return fromEmp.map(l => {
-        const name = l.name ?? [l.speak, l.read, l.write].find(Boolean) ?? '';
+        const name = l.name ?? [l.speak, l.read, l.write, l.understand].find(Boolean) ?? '';
         const speak = typeof l.speak === 'boolean' ? l.speak : !!l.speak;
         const read = typeof l.read === 'boolean' ? l.read : !!l.read;
         const write = typeof l.write === 'boolean' ? l.write : !!l.write;
-        return { name: typeof name === 'string' ? name.trim() || 'Language' : 'Language', speak, read, write };
+        const understand = typeof l.understand === 'boolean' ? l.understand : !!l.understand;
+        return { name: typeof name === 'string' ? name.trim() || 'Language' : 'Language', speak, read, write, understand };
       });
     }
     return defaultLanguageRows();
@@ -305,7 +346,7 @@ export default function EmployeeForm({
 
   // Fetch salary templates safely ONLY when on the relevant step
   useEffect(() => {
-    if (step === 10) {
+    if (actualStep === 10 && !isExternal) {
       async function loadTemplates() {
         try {
           const res = await api.get('/payroll/salary-templates').catch(() => ({ data: { data: [] } }));
@@ -316,7 +357,7 @@ export default function EmployeeForm({
       }
       loadTemplates();
     }
-  }, [step]);
+  }, [step, actualStep, isExternal]);
 
 
   const saveSalaryAssignment = async () => {
@@ -356,6 +397,20 @@ export default function EmployeeForm({
   // Shift Assignment (Shift Management)
   const [shiftId, setShiftId] = useState(employee?.shiftId?._id || employee?.shiftId || '');
   const [shifts, setShifts] = useState([]);
+
+  // Roster Management
+  const [rosterId, setRosterId] = useState(employee?.rosterId?._id || employee?.rosterId || '');
+  const [rosters, setRosters] = useState([]);
+
+  const loadRosters = useCallback(async () => {
+    try {
+      const res = await api.get('/enterprise-roster');
+      setRosters(res.data?.data || res.data || []);
+    } catch (err) {
+      if (err.response?.status === 403 || err.response?.status === 404) return;
+      console.error("Failed to load rosters", err); 
+    }
+  }, []);
 
   // Grade state
   const [gradeId, setGradeId] = useState(employee?.gradeId?._id || employee?.gradeId || '');
@@ -440,6 +495,7 @@ export default function EmployeeForm({
       if (employee.dob) setDob(dayjs(employee.dob).format('YYYY-MM-DD'));
       if (employee.contactNo) setContactNo(employee.contactNo);
       if (employee.email) setEmail(employee.email);
+      if (employee.personalEmail) setPersonalEmail(employee.personalEmail);
       if (employee.maritalStatus) setMaritalStatus(employee.maritalStatus);
       if (employee.bloodGroup) setBloodGroup(employee.bloodGroup);
       if (employee.nationality) setNationality(employee.nationality);
@@ -472,6 +528,9 @@ export default function EmployeeForm({
       }
       if (employee.salaryTemplateId) {
         setSalaryTemplateId(employee.salaryTemplateId?._id || employee.salaryTemplateId);
+      }
+      if (employee.salaryAssigned !== undefined) {
+        setSalaryAssigned(!!employee.salaryAssigned);
       }
       if (employee.gradeId) {
         setGradeId(employee.gradeId?._id || employee.gradeId);
@@ -519,36 +578,54 @@ export default function EmployeeForm({
 
     const byLabel = {};
     existing.forEach((f) => { byLabel[f.label] = f.value; });
+    const globalPersonalLabels = globalPersonal.map(g => typeof g === 'string' ? g : g.label);
     const merged = [
-      ...globalPersonal.map((l) => ({ label: l, value: byLabel[l] ?? '' })),
-      ...existing.filter((f) => !globalPersonal.includes(f.label))
+      ...globalPersonal.map((l) => (
+        typeof l === 'string'
+          ? { label: l, value: byLabel[l] ?? '', type: 'text' }
+          : { label: l.label, value: byLabel[l.label] ?? '', type: l.type, options: l.options }
+      )),
+      ...existing.filter((f) => !globalPersonalLabels.includes(f.label))
     ];
     setCustomFields(merged);
+
     const g = tenant.meta?.employeeFormGlobalCustomFields || {};
     const globalFather = g.father || [];
     const existingFather = employee?.fatherCustomFields || [];
     const byLabelF = {};
     existingFather.forEach((f) => { byLabelF[f.label] = f.value; });
+    const globalFatherLabels = globalFather.map(g => typeof g === 'string' ? g : g.label);
     setFatherCustomFields([
-      ...globalFather.map((l) => ({ label: l, value: byLabelF[l] ?? '' })),
-      ...existingFather.filter((f) => !globalFather.includes(f.label))
+      ...globalFather.map((l) => (
+        typeof l === 'string'
+          ? { label: l, value: byLabelF[l] ?? '', type: 'text' }
+          : { label: l.label, value: byLabelF[l.label] ?? '', type: l.type, options: l.options }
+      )),
+      ...existingFather.filter((f) => !globalFatherLabels.includes(f.label))
     ]);
+
     const globalMother = g.mother || [];
     const existingMother = employee?.motherCustomFields || [];
     const byLabelM = {};
     existingMother.forEach((f) => { byLabelM[f.label] = f.value; });
+    const globalMotherLabels = globalMother.map(g => typeof g === 'string' ? g : g.label);
     setMotherCustomFields([
-      ...globalMother.map((l) => ({ label: l, value: byLabelM[l] ?? '' })),
-      ...existingMother.filter((f) => !globalMother.includes(f.label))
+      ...globalMother.map((l) => (
+        typeof l === 'string'
+          ? { label: l, value: byLabelM[l] ?? '', type: 'text' }
+          : { label: l.label, value: byLabelM[l.label] ?? '', type: l.type, options: l.options }
+      )),
+      ...existingMother.filter((f) => !globalMotherLabels.includes(f.label))
     ]);
   }, [tenant, employee]);
 
-  const onAddGlobalField = useCallback(async (section, label) => {
+  const onAddGlobalField = useCallback(async (section, label, type = 'text', options = []) => {
     if (!tenant?._id || !label) return;
     const current = tenant.meta?.employeeFormGlobalCustomFields || {};
+    const newField = type === 'select' ? { label, type, options } : label;
     const updated = {
       ...current,
-      [section]: [...(current[section] || []), label]
+      [section]: [...(current[section] || []), newField]
     };
     try {
       await api.put(`/tenants/${tenant._id}`, {
@@ -556,13 +633,13 @@ export default function EmployeeForm({
       });
       setTenant((t) => (t ? { ...t, meta: { ...(t.meta || {}), employeeFormGlobalCustomFields: updated } } : null));
       if (section === 'personal') {
-        setCustomFields((prev) => [...prev, { label, value: '' }]);
+        setCustomFields((prev) => [...prev, { label, value: '', type, options }]);
       }
       if (section === 'father') {
-        setFatherCustomFields((prev) => [...prev, { label, value: '' }]);
+        setFatherCustomFields((prev) => [...prev, { label, value: '', type, options }]);
       }
       if (section === 'mother') {
-        setMotherCustomFields((prev) => [...prev, { label, value: '' }]);
+        setMotherCustomFields((prev) => [...prev, { label, value: '', type, options }]);
       }
       showToast('success', 'Global field added', 'Field will appear for all employees.');
     } catch (err) {
@@ -572,7 +649,7 @@ export default function EmployeeForm({
 
   const loadShifts = useCallback(async () => {
     try {
-      const res = await api.get('/attendance/shifts');
+      const res = await api.get('/shift-master?status=Active');
       setShifts(res.data?.data || []);
     } catch (err) {
       if (err.response?.status === 403 || err.response?.status === 404) return;
@@ -676,6 +753,9 @@ export default function EmployeeForm({
 
   const ensureDepartmentForSave = useCallback(async () => {
     const typedName = normalizeDepartmentName(department);
+    if (isExternal) {
+      return { department: typedName || undefined, departmentId: undefined };
+    }
     const existingById = departments.find((dept) => String(dept?._id || dept || '') === String(departmentId || ''));
     const existingByName = departments.find((dept) => {
       const deptName = normalizeDepartmentName(typeof dept === 'string' ? dept : dept?.name);
@@ -734,7 +814,7 @@ export default function EmployeeForm({
     setDepartmentId('');
     setDepartment(typedName);
     return { department: typedName, departmentId: undefined };
-  }, [department, departmentId, departments, makeDepartmentCode, normalizeDepartmentName]);
+  }, [department, departmentId, departments, isExternal, makeDepartmentCode, normalizeDepartmentName]);
 
   // Fetch employees for manager dropdown
   const loadManagers = useCallback(async () => {
@@ -777,15 +857,37 @@ export default function EmployeeForm({
     }
   }, [step, firstName, lastName, department, firstNameCapital, jobType]);
 
+  const loadReferenceData = useCallback(async () => {
+    try {
+      const res = await api.get(`/candidate/document-upload/${token}/reference-data`);
+      if (res.data?.success) {
+        const { departments, managers, salaryTemplates, policies, shifts, grades, roles } = res.data.data;
+        setDepartments(departments || []);
+        setManagers(managers || []);
+        setSalaryTemplates(salaryTemplates || []);
+        setPolicies(policies || []);
+        setShifts(shifts || []);
+        setGrades(grades || []);
+      }
+    } catch (err) {
+      console.error('Failed to load candidate reference data', err);
+    }
+  }, [token]);
+
   useEffect(() => {
-    loadDepartments();
-    loadManagers();
-    loadPolicies();
-    loadShifts(); // Shift Management
-    loadGrades(); // Grade Management
-    fetchMappings();
-    if (step === 9 && !employee) loadEmployeeCodePreview();
-  }, [loadDepartments, loadManagers, loadEmployeeCodePreview, step, employee, loadPolicies, loadShifts, loadGrades, fetchMappings]);
+    if (isExternal) {
+      loadReferenceData();
+    } else {
+      loadDepartments();
+      loadManagers();
+      loadPolicies();
+      loadShifts(); // Shift Management
+      loadRosters(); // Roster Management
+      loadGrades(); // Grade Management
+      fetchMappings();
+      if (actualStep === 9 && !employee) loadEmployeeCodePreview();
+    }
+  }, [isExternal, loadReferenceData, loadDepartments, loadManagers, loadEmployeeCodePreview, step, employee, loadPolicies, loadShifts, loadRosters, loadGrades, fetchMappings]);
 
   const [employeeCode, setEmployeeCode] = useState('');
 
@@ -1061,13 +1163,19 @@ export default function EmployeeForm({
   }, [firstName]);
 
   const validateStep = (stepNum) => {
+    if (bypassValidation) {
+      setErrors({});
+      return true;
+    }
+    const actualStepNum = getActualStep(stepNum);
     const e = {};
-    if (stepNum === 1) {
+    if (actualStepNum === 1) {
       if (!firstName || firstName.length < 3 || !/^[A-Za-z\s.]+$/.test(firstName)) e.firstName = 'First name required (min 3 chars, letters, spaces, dots allowed)';
       if (middleName && middleName.length < 3) e.middleName = 'Middle name must be at least 3 chars';
       if (!lastName || lastName.length < 3) e.lastName = 'Last name is required (min 3 chars)';
       if (!gender) e.gender = 'Gender is required';
       if (!dob) e.dob = 'Date of birth required';
+      if (!personalEmail || !/\S+@\S+\.\S+/.test(personalEmail)) e.personalEmail = 'Valid Personal Email is required';
       else {
         const birth = new Date(dob); const age = Math.floor((Date.now() - birth.getTime()) / (1000 * 60 * 60 * 24 * 365.25));
         if (age < 18) e.dob = 'Employee must be at least 18 years old';
@@ -1077,39 +1185,44 @@ export default function EmployeeForm({
       if (!maritalStatus) e.maritalStatus = 'Marital Status is required';
       const validBloodGroups = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
       if (!bloodGroup) e.bloodGroup = 'Blood Group is required';
-      else if (!validBloodGroups.includes(bloodGroup.toUpperCase())) e.bloodGroup = 'Invalid Blood Group (Allowed: A+, A-, B+, B-, O+, O-, AB+, AB-)';
+      else if (!validBloodGroups.includes(bloodGroup.toUpperCase())) e.bloodGroup = 'Invalid Blood Group (Allowed: A+, A-, B+, B-, O+, O-)';
       if (!nationality) e.nationality = 'Nationality is required';
       if (!emergencyContactName || emergencyContactName.length < 3) e.emergencyContactName = 'Emergency contact name required (min 3 chars)';
       const cleanEmergency = String(emergencyContactNumber ?? '').replace(/\D/g, '');
       if (cleanEmergency.length < 10 || cleanEmergency.length > 15 || !phoneRe.test(cleanEmergency)) e.emergencyContactNumber = 'Emergency phone must be 10-15 digits';
     }
 
-    if (stepNum === 2) {
+    if (actualStepNum === 2) {
       if (generationMode === 'MANUAL' && (!employeeId || employeeId.trim().length < 2)) e.employeeId = 'Employee ID is required (min 2 chars)';
       const customDepartmentName = normalizeDepartmentName(department);
       if (!departmentId && !customDepartmentName) e.department = 'Department is required';
       else if (!departmentId && customDepartmentName.length < 2) e.department = 'Department name must be at least 2 characters';
       else if (!departmentId && customDepartmentName.length > 50) e.department = 'Department name must be at most 50 characters';
       if (!joiningDate) e.joiningDate = 'Joining Date is required';
-      if (!gradeId && !grade) e.grade = 'Grade is required';
-      if (!band) e.band = 'Band is required';
       if (!jobType) e.jobType = 'Employee Type is required';
     }
 
-    if (stepNum === 3) {
+    if (actualStepNum === 3) {
       if (!eduType) e.eduType = 'Education Type is required';
-      if (!class10Marksheet && !employee?.education?.class10Marksheet) e.class10 = '10th Marksheet is required';
-      const hasDegree = !!diplomaCertificate || !!bachelorDegree || !!employee?.education?.diplomaCertificate || !!employee?.education?.bachelorDegree;
+      
+      const has10thInAq = academicQualifications && academicQualifications.some(aq => aq.qualification === '10th Standard' && (aq.document || aq.documentUrl));
+      if (!class10Marksheet && !employee?.education?.class10Marksheet && !has10thInAq) e.class10 = '10th Marksheet is required';
+      
+      const has12thInAq = academicQualifications && academicQualifications.some(aq => aq.qualification === '12th Standard' && (aq.document || aq.documentUrl));
+      const hasDegreeInAq = academicQualifications && academicQualifications.some(aq => aq.qualification && aq.qualification !== '10th Standard' && aq.qualification !== '12th Standard' && (aq.document || aq.documentUrl));
+      
+      const hasDegree = !!diplomaCertificate || !!bachelorDegree || !!employee?.education?.diplomaCertificate || !!employee?.education?.bachelorDegree || hasDegreeInAq;
       const hasAlt = (lastSem1 && lastSem2 && lastSem3) || (employee?.education?.lastSem1 && employee?.education?.lastSem2 && employee?.education?.lastSem3);
+      
       if (eduType === 'Diploma') {
         if (!hasDegree && !hasAlt) e.diploma = 'Diploma Certificate OR Last 3 Sem Marksheets required';
       } else if (eduType === 'Regular') {
-        if (!class12Marksheet && !employee?.education?.class12Marksheet) e.class12 = '12th Marksheet is required';
+        if (!class12Marksheet && !employee?.education?.class12Marksheet && !has12thInAq) e.class12 = '12th Marksheet is required';
         if (!hasDegree && !hasAlt) e.bachelor = 'Bachelor Degree OR Last 3 Sem Marksheets required';
       }
     }
 
-    if (stepNum === 4) {
+    if (actualStepNum === 4) {
       if (!aadharNumber || aadharNumber.length !== 12) e.aadharNumber = 'Aadhar Number must be exactly 12 digits';
       if (!panNumber || panNumber.length !== 10) e.panNumber = 'PAN Number must be exactly 10 characters';
       if (!aadharFront && !employee?.documents?.aadharFront) e.aadharFront = 'Aadhar Front is required';
@@ -1117,7 +1230,7 @@ export default function EmployeeForm({
       if (!panCard && !employee?.documents?.panCard) e.panCard = 'PAN Card is required';
     }
 
-    if (stepNum === 5) {
+    if (actualStepNum === 5) {
       experience.forEach((exp, idx) => {
         if (exp.from && exp.to) {
           const f = new Date(exp.from); const t = new Date(exp.to);
@@ -1129,21 +1242,40 @@ export default function EmployeeForm({
       });
     }
 
-    if (stepNum === 6) {
+    if (actualStepNum === 6) {
       if (!employee) {
         if (!bankName) e.bankName = 'Bank name required';
-        if (!accountNumber || accountNumber.length !== 12) e.accountNumber = 'Account Number must be exactly 12 digits';
+        if (!accountNumber || accountNumber.length < 9 || accountNumber.length > 18) e.accountNumber = 'Account Number must be between 9 and 18 digits';
         if (!ifsc || !ifscRe.test(ifsc)) e.ifsc = 'IFSC invalid';
         if (!branchName) e.branchName = 'Branch name required';
         if (!currentBankProof) e.bankProof = 'Bank Proof is required';
       }
     }
 
-    if (stepNum === 10) {
+    if (actualStepNum === 8) {
+      if (relatedEmployee.hasRelated === 'yes') {
+        if (!relatedEmployee.name) e.relatedName = 'Name is required';
+        if (!relatedEmployee.relationship) e.relatedRelationship = 'Relationship is required';
+      }
+      references.forEach((ref, idx) => {
+        if (ref.name || ref.company || ref.phone || ref.email) {
+          if (!ref.name) e[`ref_${idx}_name`] = 'Name is required';
+          if (!ref.phone) e[`ref_${idx}_phone`] = 'Phone is required';
+        }
+      });
+    }
+
+    if (actualStepNum === 10) {
       if (!email || !/\S+@\S+\.\S+/.test(email)) e.email = 'Valid Email is required';
       if (!employee?._id || !passwordLock) {
         if (password && password.length < 6) e.password = 'Password min 6 chars';
         if (!employee?._id && !password) e.password = 'Password is required';
+      }
+    }
+
+    if (actualStepNum === 11) {
+      if (!salaryTemplateId && !salaryAssigned) {
+        e.salaryTemplateId = "Salary structure must be assigned (use 'Confirm & Assign') or selected.";
       }
       if (!salaryEffectiveDate) e.effectiveDate = "Effective Date is required";
       if (joiningDate && salaryEffectiveDate < joiningDate) e.effectiveDate = "Cannot be before Joining Date";
@@ -1174,8 +1306,12 @@ export default function EmployeeForm({
   };
 
   useEffect(() => {
-    if (sameAsTemp) setPermAddress({ ...tempAddress });
-  }, [sameAsTemp, tempAddress]);
+    if (commSameAsTemp) setCommAddress({ ...tempAddress });
+  }, [commSameAsTemp, tempAddress]);
+
+  useEffect(() => {
+    if (sameAsTemp) setPermAddress({ ...commAddress });
+  }, [sameAsTemp, commAddress]);
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -1209,6 +1345,7 @@ export default function EmployeeForm({
       showToast('error', 'Cannot submit', firstMsg);
       return;
     }
+    const uploadEndpoint = isExternal ? `/public/candidate-documents/upload/${token}` : '/uploads/doc';
     setSaving(true);
     try {
       // Upload Current Bank Proof if changed
@@ -1217,7 +1354,7 @@ export default function EmployeeForm({
         try {
           const fd = new FormData();
           fd.append('file', currentBankProof);
-          const up = await api.post('/uploads/doc', fd);
+          const up = await api.post(uploadEndpoint, fd);
           if (up?.data?.success) currentBankProofUrl = up.data.url;
         } catch (e) { console.warn('Bank proof upload failed', e) }
       } else if (typeof currentBankProof === 'string') {
@@ -1248,17 +1385,26 @@ export default function EmployeeForm({
                 const fd = new FormData();
                 fd.append('file', item);
                 try {
-                  const up = await api.post('/uploads/doc', fd);
+                  const up = await api.post(uploadEndpoint, fd);
                   if (up?.data?.success) pSlips.push(up.data.url);
                 } catch (e) { console.warn('Payslip upload failed', e); }
               } else if (typeof item === 'string') { pSlips.push(item); }
             }
           }
-          return { ...exp, payslips: pSlips };
+          let certUrl = exp.experienceCertificateUrl;
+          if (certUrl instanceof File) {
+            const fd = new FormData();
+            fd.append('file', certUrl);
+            try {
+              const up = await api.post(uploadEndpoint, fd);
+              if (up?.data?.success) certUrl = up.data.url;
+            } catch (e) { console.warn('Experience cert upload failed', e); certUrl = null; }
+          }
+          return { ...exp, payslips: pSlips, experienceCertificateUrl: certUrl };
         }));
       }
 
-      // Education File Uploads
+      // Education File Uploads (Legacy / Kept for safety)
       let c10Url = employee?.education?.class10Marksheet;
       let c12Url = employee?.education?.class12Marksheet;
       let diplomaUrl = employee?.education?.diplomaCertificate;
@@ -1273,13 +1419,33 @@ export default function EmployeeForm({
         const fd = new FormData();
         fd.append('file', file);
         try {
-          const res = await api.post('/uploads/doc', fd);
+          const res = await api.post(uploadEndpoint, fd);
           return res?.data?.success ? res.data.url : null;
         } catch (e) {
           console.warn('File upload failed', e);
           return null;
         }
       };
+
+      // Process Academic Qualifications File Uploads
+      let processedAcademicQualifications = [];
+      if (academicQualifications && academicQualifications.length > 0) {
+        processedAcademicQualifications = await Promise.all(academicQualifications.map(async (aq) => {
+          let docUrl = typeof aq.documentUrl === 'string' ? aq.documentUrl : null;
+          if (aq.document instanceof File) {
+             docUrl = await uploadFile(aq.document) || docUrl;
+          }
+          return {
+            qualification: aq.qualification || undefined,
+            universityBoard: aq.universityBoard || undefined,
+            yearOfPassing: aq.yearOfPassing || undefined,
+            percentageCgpa: aq.percentageCgpa || undefined,
+            mode: aq.mode || undefined,
+            documentUrl: docUrl
+          };
+        }));
+      }
+
 
       if (class10Marksheet instanceof File) { c10Url = await uploadFile(class10Marksheet) || c10Url; }
       if (class12Marksheet instanceof File) { c12Url = await uploadFile(class12Marksheet) || c12Url; }
@@ -1327,6 +1493,7 @@ export default function EmployeeForm({
         dob: dob || undefined,
         contactNo: contactNo || undefined,
         email: email || undefined,
+        personalEmail: personalEmail || undefined,
         password: password || undefined,
         maritalStatus: maritalStatus || undefined,
         bloodGroup: bloodGroup || undefined,
@@ -1375,6 +1542,8 @@ export default function EmployeeForm({
           lastSem2Marksheet: ls2Url,
           lastSem3Marksheet: ls3Url
         },
+        academicQualifications: processedAcademicQualifications,
+        highestQualification: highestQualification || undefined,
         documents: {
           aadharFront: aadharFrontUrl,
           aadharBack: aadharBackUrl,
@@ -1390,9 +1559,11 @@ export default function EmployeeForm({
         departmentHead: _departmentHead,
         profilePic: profilePicUrl,
         status: 'Active',
-        lastStep: 10,
+        lastStep: isExternal ? 8 : 11,
+        salaryAssigned: salaryAssigned,
         leavePolicy: leavePolicy || undefined,
         shiftId: shiftId || undefined,
+        rosterId: rosterId || undefined,
         spouseDetails: showDependents ? spouseDetails : undefined,
         children: showDependents ? children : [],
         brothers: showDependents ? brothers : [],
@@ -1416,14 +1587,20 @@ export default function EmployeeForm({
       };
 
       let empResult;
-      if (employee) {
+      if (isExternal) {
+        // Since candidates now fill all steps including Job Info and Employment Setup,
+        // we send the full flat payload exactly like HR does. The backend will store it
+        // in rawEmployeePayload and map it via splitRecordPayload.
+        empResult = await api.post(`/candidate/document-upload/${token}/submit`, payload);
+      } else if (employee) {
         empResult = await api.put(`/hr/employees/${employee._id}`, payload);
       } else {
         empResult = await api.post('/hr/employees', payload);
       }
 
+
       // If employee is marked as "Dep Head", update the department's head field
-      if (role === 'Dep Head' && departmentId) {
+      if (!isExternal && role === 'Dep Head' && departmentId) {
         const empId = empResult?.data?.data?._id || empResult?.data?._id || employee?._id;
         if (empId) {
           await api.put(`/hr/departments/${departmentId}`, { head: empId })
@@ -1431,7 +1608,14 @@ export default function EmployeeForm({
         }
       }
 
-      onClose();
+        if (onClose) {
+          onClose();
+        } else if (isExternal) {
+          showToast('success', 'Submitted Successfully', 'Your profile and documents have been submitted.');
+          setTimeout(() => {
+            window.location.reload();
+          }, 2000);
+        }
     } catch (err) {
       console.error('Employee save error:', err);
       const code = err?.response?.data?.error;
@@ -1448,8 +1632,9 @@ export default function EmployeeForm({
     }
   }
 
-  async function saveDraft(e) {
+  async function saveDraft(e, options = {}) {
     if (e) e.preventDefault();
+    const uploadEndpoint = isExternal ? `/public/candidate-documents/upload/${token}` : '/uploads/doc';
     setSaving(true);
     try {
       const uploadFile = async (file) => {
@@ -1457,7 +1642,7 @@ export default function EmployeeForm({
         const fd = new FormData();
         fd.append('file', file);
         try {
-          const res = await api.post('/uploads/doc', fd);
+          const res = await api.post(uploadEndpoint, fd);
           return res?.data?.success ? res.data.url : null;
         } catch (e) { console.warn('File upload failed', e); return null; }
       };
@@ -1491,7 +1676,11 @@ export default function EmployeeForm({
               } else if (typeof item === 'string') { pSlips.push(item); }
             }
           }
-          return { ...exp, payslips: pSlips };
+          let certUrl = exp.experienceCertificateUrl;
+          if (certUrl instanceof File) {
+            certUrl = await uploadFile(certUrl) || null;
+          }
+          return { ...exp, payslips: pSlips, experienceCertificateUrl: certUrl };
         }));
       }
 
@@ -1544,6 +1733,7 @@ export default function EmployeeForm({
         dob: dob || undefined,
         contactNo: contactNo || undefined,
         email: email || undefined,
+        personalEmail: personalEmail || undefined,
         password: password || undefined,
         maritalStatus: maritalStatus || undefined,
         bloodGroup: bloodGroup || undefined,
@@ -1599,8 +1789,10 @@ export default function EmployeeForm({
         profilePic: profilePicUrl,
         status: 'Draft',
         lastStep: step,
+        salaryAssigned: salaryAssigned,
         leavePolicy: leavePolicy || undefined, // Add Leave Policy
         shiftId: shiftId || undefined, // Shift assignment
+        rosterId: rosterId || undefined, // Roster assignment
         gradeId: gradeId || undefined, // Grade assignment
         grade: grade || undefined, // Custom Grade Name
         band: band || undefined, // Band assignment
@@ -1624,13 +1816,17 @@ export default function EmployeeForm({
       };
 
       let draftResponse;
-      if (employee?._id) {
+      if (isExternal) {
+        draftResponse = await api.put(`/candidate/document-upload/${token}/draft`, payload);
+      } else if (employee?._id) {
         draftResponse = await api.put(`/hr/employees/${employee._id}`, payload);
       } else {
         draftResponse = await api.post('/hr/employees', payload);
       }
       const savedDraft = draftResponse?.data?.data || draftResponse?.data || null;
-      showToast('success', 'Success', 'Draft saved successfully!');
+      if (!options.silent) {
+        showToast('success', 'Success', 'Draft saved successfully!');
+      }
       if (savedDraft && onDraftSaved) {
         onDraftSaved(savedDraft);
       }
@@ -1640,15 +1836,47 @@ export default function EmployeeForm({
     } finally { setSaving(false); }
   }
 
-  const stepTitles = ['General Details', 'Official Records', 'Education', 'Identity Documents', 'Experience / Training', 'Bank Details', 'Languages & Interview', 'References & Related', 'Other Perquisites', 'Security'];
+  const stepTitles = isExternal
+    ? ['General Details', 'Academic Qualifications', 'Identity Documents', 'Employment History', 'Bank Details', 'Language Proficiency', 'References & Related', 'Additional Benefits']
+    : ['General Details', 'Job Information', 'Academic Qualifications', 'Identity Documents', 'Employment History', 'Bank Details', 'Language Proficiency', 'References & Related', 'Additional Benefits', 'Employment Setup', 'Salary Breakup'];
 
   return (
     <div className="w-full h-full overflow-hidden flex flex-col bg-white">
       <div className="w-full flex-1 flex flex-col overflow-hidden">
         <form onSubmit={submit} className="w-full relative flex flex-col h-full overflow-hidden px-4 md:px-8">
-          {/* Employee Onboarding Header */}
-          <div className="mb-3 pt-1.5 sticky top-0 bg-white z-30">
-            <div className="flex items-center gap-3 sm:gap-6">
+          {/* Employee Onboarding Header / Clickable Stepper */}
+          <div className="mb-3 pt-1.5 sticky top-0 bg-white z-30 border-b border-slate-100 pb-2">
+            <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-2">
+              {stepTitles.map((title, index) => {
+                const currentStepNumber = index + 1;
+                const isActive = step === currentStepNumber;
+                const isPassed = step > currentStepNumber;
+                
+                return (
+                  <button
+                    key={title}
+                    type="button"
+                    onClick={() => setStep(currentStepNumber)}
+                    className={`flex items-center gap-2 shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition-all duration-200 border ${
+                      isActive 
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' 
+                        : isPassed 
+                          ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+                          : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${
+                      isActive ? 'bg-white/20' : isPassed ? 'bg-indigo-200' : 'bg-slate-200'
+                    }`}>
+                      {isPassed ? <Check size={12} /> : currentStepNumber}
+                    </div>
+                    {title}
+                  </button>
+                );
+              })}
+            </div>
+            
+            <div className="flex items-center gap-3 sm:gap-6 mt-2 hidden">
               <div className="hidden sm:block text-[10px] md:text-xs font-bold text-slate-900 dark:text-white uppercase tracking-widest whitespace-nowrap">
                 {stepTitles[step - 1]}
               </div>
@@ -1674,14 +1902,26 @@ export default function EmployeeForm({
           {/* Content area gets bottom padding so bar never overlaps */}
           <div className="flex-1 overflow-y-auto overflow-x-hidden pr-2 custom-scrollbar pb-10">
             {/* Step 1: Consolidated layout (Identity, Family, Communication, Official) */}
-            {step === 1 && (
+            {actualStep === 1 && (
               <div className="space-y-3 animate-in fade-in duration-300">
                 <div className="space-y-3">
                   {/* Identity Details Section */}
                   <div className="pt-2 sticky top-[-1px] bg-white z-20 pb-2">
-                    <div className="flex items-center gap-2 mb-1 text-slate-900 dark:text-white">
-                      <User size={20} />
-                      <h3 className="text-lg font-bold uppercase tracking-tight">Personal Details</h3>
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-2 text-slate-900 dark:text-white">
+                        <User size={20} />
+                        <h3 className="text-lg font-bold uppercase tracking-tight">Personal Details</h3>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBypassValidation(!bypassValidation);
+                          showToast(bypassValidation ? 'info' : 'success', bypassValidation ? 'Validation Enabled' : 'Validation Bypassed', bypassValidation ? 'Required fields are enforced.' : 'All required fields have been bypassed.');
+                        }}
+                        className={`px-3 py-1 text-xs font-bold rounded-full transition-colors ${bypassValidation ? 'bg-red-500 text-white' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}`}
+                      >
+                        {bypassValidation ? 'Validation Bypassed' : 'Bypass Validation'}
+                      </button>
                     </div>
                   </div>
                   <IdentityDetailsTab
@@ -1723,8 +1963,8 @@ export default function EmployeeForm({
                       setPhysicalDisabilityOrSickness={setPhysicalDisabilityOrSickness}
                       physicalDisabilityDetails={physicalDisabilityDetails}
                       setPhysicalDisabilityDetails={setPhysicalDisabilityDetails}
-                      email={email}
-                      setEmail={setEmail}
+                      personalEmail={personalEmail}
+                      setPersonalEmail={setPersonalEmail}
                       contactNo={contactNo}
                       setContactNo={setContactNo}
                       customFields={customFields}
@@ -1817,8 +2057,8 @@ export default function EmployeeForm({
                 </div>
               )}
 
-            {/* Step 2: Official Records (moved from last page) */}
-            {step === 2 && (
+            {/* Step 2: Job Information (moved from last page) */}
+            {actualStep === 2 && (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="bg-white dark:bg-slate-950 p-4 rounded-xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm relative overflow-hidden">
                   <div className="pt-2 sticky top-[-1px] bg-white z-20 pb-2">
@@ -1826,7 +2066,7 @@ export default function EmployeeForm({
                       <div className="w-9 h-9 rounded-lg bg-[#1e293b]/10 flex items-center justify-center text-[#1e293b] shrink-0">
                         <FileCheck size={20} />
                       </div>
-                      <h3 className="text-lg font-bold uppercase tracking-tight">Official Records</h3>
+                      <h3 className="text-lg font-bold uppercase tracking-tight">Job Information</h3>
                     </div>
                   </div>
                   <div className="relative z-10">
@@ -1837,6 +2077,20 @@ export default function EmployeeForm({
                        generationMode={generationMode}
                        jobType={jobType}
                        setJobType={setJobType}
+                       employeeCategory={employeeCategory}
+                       setEmployeeCategory={setEmployeeCategory}
+                       holidayCalendar={holidayCalendar}
+                       setHolidayCalendar={setHolidayCalendar}
+                       leaveGroup={leaveGroup}
+                       setLeaveGroup={setLeaveGroup}
+                       confirmationPeriod={confirmationPeriod}
+                       setConfirmationPeriod={setConfirmationPeriod}
+                       basic={basic}
+                       setBasic={setBasic}
+                       leaveTravelAllowance={leaveTravelAllowance}
+                       setLeaveTravelAllowance={setLeaveTravelAllowance}
+                       designation={designation}
+                       setDesignation={setDesignation}
                        employee={employee}
                        departmentId={departmentId}
                        setDepartmentId={setDepartmentId}
@@ -1856,6 +2110,9 @@ export default function EmployeeForm({
                        shiftId={shiftId}
                        setShiftId={setShiftId}
                        shifts={shifts}
+                       rosterId={rosterId}
+                       setRosterId={setRosterId}
+                       rosters={rosters}
                        leavePolicy={leavePolicy}
                        setLeavePolicy={setLeavePolicy}
                        policies={policies}
@@ -1877,667 +2134,237 @@ export default function EmployeeForm({
             )}
 
             {/* Step 5: Experience / Training */}
-            {step === 5 && (
-              <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="flex items-center justify-between gap-3 px-4 py-2 bg-white dark:bg-slate-900/40 rounded-xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm">
-                  <div className="flex items-center gap-3 border-l-[3px] border-[#1e293b] pl-3">
-                    <div className="w-9 h-9 rounded-lg bg-[#1e293b]/10 flex items-center justify-center text-[#1e293b]">
-                      <Briefcase size={18} />
-                    </div>
-                    <div className="flex items-center">
-                      <h3 className="text-base font-black text-slate-800 dark:text-white uppercase tracking-tight">Professional History</h3>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setTrainingEntries([...trainingEntries, { companyName: '', from: '', to: '', lastDrawnSalary: '', reason: '', reportingPersonName: '', reportingPersonEmail: '', reportingPersonPhone: '', payslips: [], chequebook: null }])}
-                      className="flex items-center gap-1.5 px-4 py-2 bg-[#1e293b] text-white rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-[#0D9488] shadow-md active:scale-95 transition-all"
-                    >
-                      <GraduationCap size={20} />
-                      Training
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setExperience([...experience, { companyName: '', from: '', to: '', lastDrawnSalary: '', reason: '', reportingPersonName: '', reportingPersonEmail: '', reportingPersonPhone: '', payslips: [], chequebook: null }])}
-                      className="flex items-center gap-1.5 px-4 py-2 bg-[#1e293b] text-white rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-[#0D9488] shadow-md active:scale-95 transition-all"
-                    >
-                      <Plus size={20} />
-                      Add Entry
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  {experience.map((exp, idx) => (
-                    <div key={idx} className="bg-white dark:bg-slate-950 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm relative group/card">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-md bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-[9px] font-black text-slate-500">
-                            {String(idx + 1).padStart(2, '0')}
-                          </div>
-                          <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-widest">Entry #{idx + 1}</h4>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setExperience(experience.filter((_, i) => i !== idx))}
-                          className="w-8 h-8 rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white transition-all flex items-center justify-center"
-                        >
-                          <Trash2 size={20} />
-                        </button>
-                      </div>
-
-                      <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
-                        <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <div className="md:col-span-2 flex flex-col gap-1">
-                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-0.5">Organization Name <span className="text-rose-500">*</span></label>
-                            <input value={exp.companyName} onChange={e => { const copy = [...experience]; copy[idx].companyName = e.target.value; setExperience(copy); }} className="w-full px-3 py-2 h-9 bg-transparent dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:border-[#1e293b] transition-all text-xs font-bold text-slate-700" placeholder="Former employer" />
-                          </div>
-                          <div className="flex flex-col gap-1">
-                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-0.5">Service Start</label>
-                            <input type="date" value={exp.from} onChange={e => { const copy = [...experience]; copy[idx].from = e.target.value; setExperience(copy); }} className="w-full px-3 py-2 h-9 bg-transparent dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:border-[#1e293b] transition-all text-xs font-bold text-slate-700" />
-                          </div>
-                          <div className="flex flex-col gap-1">
-                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-0.5">Service End</label>
-                            <input type="date" value={exp.to} onChange={e => { const copy = [...experience]; copy[idx].to = e.target.value; setExperience(copy); }} className="w-full px-3 py-2 h-9 bg-transparent dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:border-[#1e293b] transition-all text-xs font-bold text-slate-700" />
-                          </div>
-                          <div className="md:col-span-2 flex flex-col sm:flex-row gap-3 sm:gap-4">
-                            <div className="flex-1 flex flex-col gap-1">
-                              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-0.5">Last Annual Compensation</label>
-                              <div className="relative">
-                                <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400">
-                                  <IndianRupee size={20} />
-                                </div>
-                                <input type="number" value={exp.lastDrawnSalary} onChange={e => { const copy = [...experience]; copy[idx].lastDrawnSalary = e.target.value; setExperience(copy); }} className="w-full pl-8 pr-3 py-2 h-9 bg-transparent dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:border-[#1e293b] transition-all text-xs font-bold text-slate-700" placeholder="0.00" />
-                              </div>
-                            </div>
-                            <div className="flex-1 flex flex-col gap-1">
-                              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-0.5">Reason</label>
-                              <input value={exp.reason ?? ''} onChange={e => { const copy = [...experience]; copy[idx].reason = e.target.value; setExperience(copy); }} className="w-full px-3 py-2 h-9 bg-transparent dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:border-[#1e293b] transition-all text-xs font-bold text-slate-700" placeholder="e.g. Reason for leaving" />
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="lg:col-span-2 space-y-2.5">
-                          <div className="p-3 bg-white dark:bg-slate-900/50 rounded-lg border border-slate-100 dark:border-slate-800">
-                            <h5 className="text-[8px] font-black text-slate-400 uppercase tracking-[0.15em] mb-2">Direct Reporting Contact</h5>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                              <input value={exp.reportingPersonName} onChange={e => { const copy = [...experience]; copy[idx].reportingPersonName = e.target.value; setExperience(copy); }} className="w-full px-2.5 py-2 h-8 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-md text-[11px] font-bold text-slate-700 outline-none focus:border-[#1e293b] focus:ring-1 focus:ring-[#1e293b]/30 transition-colors" placeholder="Manager Name" />
-                              <input value={exp.reportingPersonEmail} onChange={e => { const copy = [...experience]; copy[idx].reportingPersonEmail = e.target.value; setExperience(copy); }} className="w-full px-2.5 py-2 h-8 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-md text-[11px] font-bold text-slate-700 outline-none focus:border-[#1e293b] focus:ring-1 focus:ring-[#1e293b]/30 transition-colors" placeholder="Manager Email" />
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div className="flex flex-col gap-1">
-                              <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest pl-0.5">Historical Payslips (Last 3)</label>
-                              <div className="flex gap-1.5">
-                                {[0, 1, 2].map(i => (
-                                  <label key={i} className={`flex-1 flex items-center justify-center aspect-square min-w-0 border-2 border-dashed rounded-lg cursor-pointer transition-all ${exp.payslips && exp.payslips[i] ? 'bg-indigo-50 border-indigo-500/20 text-[#1e293b]' : 'bg-white border-slate-100 text-slate-300 hover:border-indigo-300'}`}>
-                                    {exp.payslips && exp.payslips[i] ? <Check size={20} /> : <Upload size={20} />}
-                                    <input type="file" className="hidden" onChange={e => { const copy = [...experience]; if (!copy[idx].payslips) copy[idx].payslips = []; copy[idx].payslips[i] = e.target.files[0]; setExperience(copy); }} />
-                                  </label>
-                                ))}
-                              </div>
-                            </div>
-                            <div className="flex flex-col gap-1">
-                              <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest pl-0.5">Experience Letter</label>
-                              <label className={`flex flex-col items-center justify-center py-2 px-2 border-2 border-dashed rounded-lg cursor-pointer transition-all min-h-[36px] ${exp.chequebook ? 'bg-indigo-50 border-indigo-500/20 text-[#1e293b]' : 'bg-white border-slate-100 text-slate-300 hover:border-indigo-300'}`}>
-                                <div className="flex items-center gap-1.5">
-                                  {exp.chequebook ? <CheckCircle size={20} /> : <Upload size={20} />}
-                                  <span className="text-[9px] font-black uppercase tracking-tighter">{exp.chequebook ? 'Uploaded' : 'Upload PDF'}</span>
-                                </div>
-                                <input type="file" className="hidden" onChange={e => { const copy = [...experience]; copy[idx].chequebook = e.target.files[0]; setExperience(copy); }} />
-                              </label>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {errors[`exp_${idx}`] && (
-                        <div className="mt-3 p-2 bg-rose-50 border border-rose-100 rounded-lg text-[9px] font-bold text-rose-500 uppercase tracking-widest flex items-center gap-1.5">
-                          <AlertCircle size={20} /> {errors[`exp_${idx}`]}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Training entries (optional – same fields, no validation) */}
-                {trainingEntries.length > 0 && (
-                  <div className="pt-4 mt-4 border-t border-slate-200 dark:border-slate-700">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/20 flex items-center justify-center text-[#1e293b]">
-                        <GraduationCap size={16} />
-                      </div>
-                      <h3 className="text-sm font-black text-slate-700 dark:text-slate-200 uppercase tracking-tight">Training (Optional)</h3>
-                    </div>
-                    <div className="space-y-3">
-                      {trainingEntries.map((tr, idx) => (
-                        <div key={idx} className="bg-white dark:bg-slate-950 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm relative group/card">
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-2">
-                              <div className="w-6 h-6 rounded-md bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 flex items-center justify-center text-[9px] font-black text-slate-900">
-                                {String(idx + 1).padStart(2, '0')}
-                              </div>
-                              <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-widest">Training #{idx + 1}</h4>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => setTrainingEntries(trainingEntries.filter((_, i) => i !== idx))}
-                              className="w-8 h-8 rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white transition-all flex items-center justify-center"
-                            >
-                              <Trash2 size={20} />
-                            </button>
-                          </div>
-
-                          <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
-                            <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-3">
-                              <div className="md:col-span-2 flex flex-col gap-1">
-                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-0.5">Organization / Institution (Optional)</label>
-                                <input value={tr.companyName} onChange={e => { const copy = [...trainingEntries]; copy[idx].companyName = e.target.value; setTrainingEntries(copy); }} className="w-full px-3 py-2 h-9 bg-transparent dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:border-[#1e293b] transition-all text-xs font-bold text-slate-700" placeholder="Training provider" />
-                              </div>
-                              <div className="flex flex-col gap-1">
-                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-0.5">From (Optional)</label>
-                                <input type="date" value={tr.from} onChange={e => { const copy = [...trainingEntries]; copy[idx].from = e.target.value; setTrainingEntries(copy); }} className="w-full px-3 py-2 h-9 bg-transparent dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:border-[#1e293b] transition-all text-xs font-bold text-slate-700" />
-                              </div>
-                              <div className="flex flex-col gap-1">
-                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-0.5">To (Optional)</label>
-                                <input type="date" value={tr.to} onChange={e => { const copy = [...trainingEntries]; copy[idx].to = e.target.value; setTrainingEntries(copy); }} className="w-full px-3 py-2 h-9 bg-transparent dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:border-[#1e293b] transition-all text-xs font-bold text-slate-700" />
-                              </div>
-                              <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                                <div className="flex flex-col gap-1">
-                                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-0.5">Last Annual Compensation (Optional)</label>
-                                  <div className="relative">
-                                    <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400">
-                                      <IndianRupee size={20} />
-                                    </div>
-                                    <input type="number" value={tr.lastDrawnSalary} onChange={e => { const copy = [...trainingEntries]; copy[idx].lastDrawnSalary = e.target.value; setTrainingEntries(copy); }} className="w-full pl-8 pr-3 py-2 h-9 bg-transparent dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:border-[#1e293b] transition-all text-xs font-bold text-slate-700" placeholder="0.00" />
-                                  </div>
-                                </div>
-                                <div className="flex flex-col gap-1">
-                                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-0.5">Reason (Optional)</label>
-                                  <input value={tr.reason ?? ''} onChange={e => { const copy = [...trainingEntries]; copy[idx].reason = e.target.value; setTrainingEntries(copy); }} className="w-full px-3 py-2 h-9 bg-transparent dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-lg outline-none focus:border-[#1e293b] transition-all text-xs font-bold text-slate-700" placeholder="e.g. Reason for leaving" />
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="lg:col-span-2 space-y-2.5">
-                              <div className="p-3 bg-white dark:bg-slate-900/50 rounded-lg border border-slate-100 dark:border-slate-800">
-                                <h5 className="text-[8px] font-black text-slate-400 uppercase tracking-[0.15em] mb-2">Direct Reporting Contact (Optional)</h5>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                  <input value={tr.reportingPersonName} onChange={e => { const copy = [...trainingEntries]; copy[idx].reportingPersonName = e.target.value; setTrainingEntries(copy); }} className="w-full px-2.5 py-2 h-8 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-md text-[11px] font-bold text-slate-700 outline-none focus:border-[#1e293b] focus:ring-1 focus:ring-[#1e293b]/30 transition-colors" placeholder="Manager Name" />
-                                  <input value={tr.reportingPersonEmail} onChange={e => { const copy = [...trainingEntries]; copy[idx].reportingPersonEmail = e.target.value; setTrainingEntries(copy); }} className="w-full px-2.5 py-2 h-8 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-md text-[11px] font-bold text-slate-700 outline-none focus:border-[#1e293b] focus:ring-1 focus:ring-[#1e293b]/30 transition-colors" placeholder="Manager Email" />
-                                </div>
-                              </div>
-
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div className="flex flex-col gap-1">
-                                  <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest pl-0.5">Payslips / Proofs (Optional)</label>
-                                  <div className="flex gap-1.5">
-                                    {[0, 1, 2].map(i => (
-                                      <label key={i} className={`flex-1 flex items-center justify-center aspect-square min-w-0 border-2 border-dashed rounded-lg cursor-pointer transition-all ${tr.payslips && tr.payslips[i] ? 'bg-indigo-50 border-indigo-500/20 text-[#1e293b]' : 'bg-white border-slate-100 text-slate-300 hover:border-indigo-300'}`}>
-                                        {tr.payslips && tr.payslips[i] ? <Check size={20} /> : <Upload size={20} />}
-                                        <input type="file" className="hidden" onChange={e => { const copy = [...trainingEntries]; if (!copy[idx].payslips) copy[idx].payslips = []; copy[idx].payslips[i] = e.target.files[0]; setTrainingEntries(copy); }} />
-                                      </label>
-                                    ))}
-                                  </div>
-                                </div>
-                                <div className="flex flex-col gap-1">
-                                  <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest pl-0.5">Certificate / Letter (Optional)</label>
-                                  <label className={`flex flex-col items-center justify-center py-2 px-2 border-2 border-dashed rounded-lg cursor-pointer transition-all min-h-[36px] ${tr.chequebook ? 'bg-indigo-50 border-indigo-500/20 text-[#1e293b]' : 'bg-white border-slate-100 text-slate-300 hover:border-indigo-300'}`}>
-                                    <div className="flex items-center gap-1.5">
-                                      {tr.chequebook ? <CheckCircle size={20} /> : <Upload size={20} />}
-                                      <span className="text-[9px] font-black uppercase tracking-tighter">{tr.chequebook ? 'Uploaded' : 'Upload PDF'}</span>
-                                    </div>
-                                    <input type="file" className="hidden" onChange={e => { const copy = [...trainingEntries]; copy[idx].chequebook = e.target.files[0]; setTrainingEntries(copy); }} />
-                                  </label>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
+            {actualStep === 5 && (
+              <EmploymentHistoryTab
+                experience={experience}
+                setExperience={setExperience}
+                errors={errors}
+              />
             )}
 
             {/* Step 3: Education (Academic Timeline) */}
-            {step === 3 && (
-              <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="bg-white dark:bg-slate-950 px-4 py-3 rounded-xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm relative overflow-hidden group">
-
-
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-3 relative z-10">
-                    <div>
-                      <h3 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tight">Academic Timeline</h3>
-                    </div>
-
-                    <div className="flex p-1 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-800">
-                      {['Regular', 'Diploma'].map((type) => (
-                        <button
-                          key={type}
-                          type="button"
-                          onClick={() => setEduType(type)}
-                          className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-500 flex items-center gap-2.5 ${eduType === type ? 'bg-[#1e293b] text-white shadow-lg shadow-indigo-500/20' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
-                        >
-                          {type === 'Regular' ? <GraduationCap size={20} /> : <FileText size={20} />}
-                          {type} Track
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Document Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[repeat(4,minmax(0,1fr))] gap-2 lg:gap-3 relative z-10 w-full min-w-0 items-start">
-                    <div className="flex flex-col gap-1.5 min-w-0 max-w-full">
-                      <label className="min-h-[20px] flex items-center text-[9px] font-black text-slate-400 uppercase tracking-widest pl-0.5 truncate">Primary Foundation (10th) <span className="text-rose-500">*</span></label>
-                      <label className={`relative group/edu border-2 border-dashed rounded-lg p-2 transition-all duration-500 cursor-pointer min-w-0 ${class10Marksheet ? 'border-indigo-500/30 bg-indigo-50/20 dark:bg-indigo-950/5' : 'border-slate-100 dark:border-slate-800 hover:border-[#1e293b]/40 hover:bg-transparent dark:hover:bg-slate-900/50'}`}>
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div className={`w-9 h-9 shrink-0 rounded-lg flex items-center justify-center transition-all duration-500 ${class10Marksheet ? 'bg-[#1e293b] text-white shadow-lg shadow-indigo-500/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-300'}`}>
-                            {class10Marksheet ? <FileCheck size={20} /> : <Upload size={20} />}
-                          </div>
-                          <div className="flex-1 min-w-0 overflow-hidden">
-                            <p className={`text-[10px] font-black uppercase tracking-tight truncate ${class10Marksheet ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400'}`}>
-                              {class10Marksheet ? (class10Marksheet instanceof File ? class10Marksheet.name : '10th') : '10th Marksheet'}
-                            </p>
-                            <p className="text-[7px] font-bold text-slate-400 uppercase tracking-wider mt-0.5 truncate">Foundation</p>
-                          </div>
-                        </div>
-                        <input ref={c10Ref} type="file" className="hidden" accept="image/*,application/pdf" onChange={e => setClass10Marksheet(e.target.files[0])} />
-                      </label>
-                      {errors.class10 && <div className="text-[8px] font-bold text-rose-500 px-1 uppercase tracking-widest flex items-center gap-1"><AlertCircle size={10} /> {errors.class10}</div>}
-                    </div>
-
-                    {eduType === 'Diploma' ? (
-                      <div className="flex flex-col gap-1.5 min-w-0 max-w-full">
-                        <label className="min-h-[20px] flex items-center text-[9px] font-black text-slate-400 uppercase tracking-widest pl-0.5 truncate">Diploma Proficiency <span className="text-rose-500">*</span></label>
-                        <label className={`relative group/edu border-2 border-dashed rounded-lg p-2 transition-all duration-500 cursor-pointer min-w-0 ${diplomaCertificate ? 'border-indigo-500/30 bg-indigo-50/20 dark:bg-indigo-950/5' : 'border-slate-100 dark:border-slate-800 hover:border-[#1e293b]/40 hover:bg-transparent dark:hover:bg-slate-900/50'}`}>
-                          <div className="flex items-center gap-2 min-w-0">
-                            <div className={`w-9 h-9 shrink-0 rounded-lg flex items-center justify-center transition-all duration-500 ${diplomaCertificate ? 'bg-[#1e293b] text-white shadow-lg shadow-indigo-500/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-300'}`}>
-                              {diplomaCertificate ? <ShieldCheck size={20} /> : <Upload size={20} />}
-                            </div>
-                            <div className="flex-1 min-w-0 overflow-hidden">
-                              <p className={`text-[10px] font-black uppercase tracking-tight truncate ${diplomaCertificate ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400'}`}>
-                                {diplomaCertificate ? (diplomaCertificate instanceof File ? diplomaCertificate.name : 'Diploma') : 'Diploma Cert'}
-                              </p>
-                              <p className="text-[7px] font-bold text-slate-400 uppercase tracking-wider mt-0.5 truncate">Specialized</p>
-                            </div>
-                          </div>
-                          <input ref={diplomaRef} type="file" className="hidden" accept="image/*,application/pdf" onChange={e => setDiplomaCertificate(e.target.files[0])} />
-                        </label>
-                        {errors.diploma && <div className="text-[8px] font-bold text-rose-500 px-1 uppercase tracking-widest flex items-center gap-1"><AlertCircle size={10} /> {errors.diploma}</div>}
-                      </div>
-                    ) : (
-                      <div className="flex flex-col gap-1.5 min-w-0 max-w-full">
-                        <label className="min-h-[20px] flex items-center text-[9px] font-black text-slate-400 uppercase tracking-widest pl-0.5 truncate">Secondary (12th) <span className="text-rose-500">*</span></label>
-                        <label className={`relative group/edu border-2 border-dashed rounded-lg p-2 transition-all duration-500 cursor-pointer min-w-0 ${class12Marksheet ? 'border-indigo-500/30 bg-indigo-50/20 dark:bg-indigo-950/5' : 'border-slate-100 dark:border-slate-800 hover:border-[#1e293b]/40 hover:bg-transparent dark:hover:bg-slate-900/50'}`}>
-                          <div className="flex items-center gap-2 min-w-0">
-                            <div className={`w-9 h-9 shrink-0 rounded-lg flex items-center justify-center transition-all duration-500 ${class12Marksheet ? 'bg-[#1e293b] text-white shadow-lg shadow-indigo-500/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-300'}`}>
-                              {class12Marksheet ? <BookOpen size={20} /> : <Upload size={20} />}
-                            </div>
-                            <div className="flex-1 min-w-0 overflow-hidden">
-                              <p className={`text-[10px] font-black uppercase tracking-tight truncate ${class12Marksheet ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400'}`}>
-                                {class12Marksheet ? (class12Marksheet instanceof File ? class12Marksheet.name : '12th') : '12th Marksheet'}
-                              </p>
-                              <p className="text-[7px] font-bold text-slate-400 uppercase tracking-wider mt-0.5 truncate">Academic Core</p>
-                            </div>
-                          </div>
-                          <input ref={c12Ref} type="file" className="hidden" accept="image/*,application/pdf" onChange={e => setClass12Marksheet(e.target.files[0])} />
-                        </label>
-                        {errors.class12 && <div className="text-[8px] font-bold text-rose-500 px-1 uppercase tracking-widest flex items-center gap-1"><AlertCircle size={10} /> {errors.class12}</div>}
-                      </div>
-                    )}
-
-                    {eduType !== 'Diploma' && (
-                      <div className="flex flex-col gap-1.5 min-w-0 max-w-full">
-                        <label className="min-h-[20px] flex items-center text-[9px] font-black text-slate-400 uppercase tracking-widest pl-0.5 truncate">Bachelor / Undergrad <span className="text-rose-500">*</span></label>
-                        <label className={`relative group/edu border-2 border-dashed rounded-lg p-2 transition-all duration-500 cursor-pointer min-w-0 ${bachelorDegree ? 'border-indigo-500/30 bg-indigo-50/20 dark:bg-indigo-950/5' : 'border-slate-100 dark:border-slate-800 hover:border-[#1e293b]/40 hover:bg-transparent dark:hover:bg-slate-900/50'}`}>
-                          <div className="flex items-center gap-2 min-w-0">
-                            <div className={`w-9 h-9 shrink-0 rounded-lg flex items-center justify-center transition-all duration-500 ${bachelorDegree ? 'bg-[#1e293b] text-white shadow-lg shadow-indigo-500/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-300'}`}>
-                              {bachelorDegree ? <Award size={20} /> : <Upload size={20} />}
-                            </div>
-                            <div className="flex-1 min-w-0 overflow-hidden">
-                              <p className={`text-[10px] font-black uppercase tracking-tight truncate ${bachelorDegree ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400'}`}>
-                                {bachelorDegree ? (bachelorDegree instanceof File ? bachelorDegree.name : 'Bachelor') : 'Bachelor'}
-                              </p>
-                              <p className="text-[7px] font-bold text-slate-400 uppercase tracking-wider mt-0.5 truncate">Professional</p>
-                            </div>
-                          </div>
-                          <input ref={bachelorRef} type="file" className="hidden" accept="image/*,application/pdf" onChange={e => setBachelorDegree(e.target.files[0])} />
-                        </label>
-                        {errors.bachelor && <div className="text-[8px] font-bold text-rose-500 px-1 uppercase tracking-widest flex items-center gap-1"><AlertCircle size={10} /> {errors.bachelor}</div>}
-                      </div>
-                    )}
-
-                    <div className="flex flex-col gap-1.5 min-w-0 max-w-full mt-[3px]">
-                      <label className="min-h-[20px] flex items-center text-[9px] font-black text-slate-400 uppercase tracking-widest pl-0.5 truncate">Post Graduate (Optional)</label>
-                      <label className={`relative group/edu border-2 border-dashed rounded-lg p-2 transition-all duration-500 cursor-pointer min-w-0 ${masterDegree ? 'border-indigo-500/30 bg-indigo-50/20 dark:bg-indigo-950/5' : 'border-slate-100 dark:border-slate-800 hover:border-slate-200 hover:bg-transparent dark:hover:bg-slate-900/50'}`}>
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div className={`w-9 h-9 shrink-0 rounded-lg flex items-center justify-center transition-all duration-500 ${masterDegree ? 'bg-[#1e293b] text-white shadow-xl shadow-indigo-500/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-300'}`}>
-                            {masterDegree ? <Briefcase size={20} /> : <Upload size={20} />}
-                          </div>
-                          <div className="flex-1 min-w-0 overflow-hidden">
-                            <p className={`text-[10px] font-black uppercase tracking-tight truncate ${masterDegree ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400'}`}>
-                              {masterDegree ? (masterDegree instanceof File ? masterDegree.name : 'Masters') : 'Master Degree'}
-                            </p>
-                            <p className="text-[7px] font-bold text-slate-400 uppercase tracking-wider mt-0.5 truncate">Advanced</p>
-                          </div>
-                        </div>
-                        <input ref={masterRef} type="file" className="hidden" accept="image/*,application/pdf" onChange={e => setMasterDegree(e.target.files[0])} />
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Supplementary Verification */}
-                  <div className="mt-2 pt-2 relative z-10">
-                    <div className="flex items-center justify-end gap-4 mb-2">
-                      <div className="px-4 py-2 bg-slate-50 dark:bg-slate-900 rounded-full border border-slate-100 dark:border-slate-800 text-[9px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                        <AlertCircle size={20} className="text-indigo-500" /> Use if main degree is pending
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {[
-                        { state: lastSem1, setter: setLastSem1, ref: ls1Ref, label: 'Semester 01' },
-                        { state: lastSem2, setter: setLastSem2, ref: ls2Ref, label: 'Semester 02' },
-                        { state: lastSem3, setter: setLastSem3, ref: ls3Ref, label: 'Semester 03' },
-                      ].map((sem, i) => (
-                        <div key={i} className="flex flex-col gap-2">
-                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-1">{sem.label} Transcript</label>
-                          <label className={`relative group/sem flex items-center gap-4 p-4 border rounded-2xl transition-all duration-300 cursor-pointer ${sem.state ? 'bg-white dark:bg-slate-900 border-[#1e293b]/20' : 'bg-slate-50 dark:bg-slate-950/20 border-transparent hover:border-slate-200 dark:hover:border-slate-800 shadow-inner'}`}>
-                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${sem.state ? 'bg-[#1e293b] text-white' : 'bg-white dark:bg-slate-900 text-slate-300 shadow-sm'}`}>
-                              {sem.state ? <Check size={18} /> : <FileUp size={18} />}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className={`text-[10px] font-black uppercase truncate ${sem.state ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400'}`}>
-                                {sem.state ? (sem.state instanceof File ? sem.state.name : 'Uploaded') : 'Upload PDF'}
-                              </p>
-                            </div>
-                            <input ref={sem.ref} type="file" className="hidden" accept="image/*,application/pdf" onChange={e => sem.setter(e.target.files[0])} />
-                          </label>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
+            {actualStep === 3 && (
+              <AcademicQualificationsTab
+                academicQualifications={academicQualifications}
+                setAcademicQualifications={setAcademicQualifications}
+                highestQualification={highestQualification}
+                setHighestQualification={setHighestQualification}
+                errors={errors}
+              />
             )}
 
             {/* Step 6: Bank Details */}
-            {step === 6 && (
-              <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                {/* Bank Repository Section */}
-                <div className="bg-white dark:bg-slate-950 p-4 rounded-xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm relative overflow-hidden group">
-                  <div className="flex items-center gap-3 mb-4 border-l-[3px] border-emerald-500 pl-3 relative z-10">
-                    <div className="w-9 h-9 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-500">
-                      <CreditCard size={18} />
-                    </div>
-                    <div>
-                      <h3 className="text-base font-black text-slate-800 dark:text-white uppercase tracking-tight">Bank Repository</h3>
-                    </div>
+            {actualStep === 6 && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <TabularContainer>
+                  <div className="bg-slate-100 dark:bg-slate-800/80 p-3 text-xs font-bold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 uppercase">
+                    Bank Repository
                   </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-[repeat(4,minmax(0,1fr))] gap-2 relative z-10 items-start">
-                    <div className="flex flex-col gap-1 min-w-0">
-                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-0.5 whitespace-nowrap truncate">Bank Name <span className="text-rose-500">*</span></label>
-                      <div className="relative group/input">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 group-focus-within/input:text-emerald-500 transition-colors">
-                          <Landmark size={20} />
-                        </div>
-                        <input value={bankName} onChange={e => setBankName(e.target.value)} className={`w-full pl-9 pr-3 py-2 h-9 bg-transparent dark:bg-slate-900/50 border rounded-lg outline-none transition-all text-xs font-bold text-slate-700 dark:text-slate-200 ${errors.bankName ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 dark:border-slate-700 focus:border-emerald-500'}`} placeholder="Ex. HDFC Bank, SBI" />
-                      </div>
-                      {errors.bankName && <div className="text-[8px] font-bold text-rose-500 px-1 uppercase tracking-widest mt-0.5">{errors.bankName}</div>}
-                    </div>
-
-                    <div className="flex flex-col gap-1 min-w-0">
-                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-0.5 whitespace-nowrap truncate">IFSC Code <span className="text-rose-500">*</span></label>
-                      <div className="relative group/ifsc">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 group-focus-within/ifsc:text-emerald-500 transition-colors">
-                          <ShieldCheck size={20} />
-                        </div>
-                        <input value={ifsc} onChange={e => setIfsc(e.target.value.toUpperCase())} onBlur={() => handleIfscLookup(ifsc)} className={`w-full pl-9 pr-3 py-2 h-9 bg-transparent dark:bg-slate-900/50 border rounded-lg outline-none transition-all text-xs font-bold text-slate-700 dark:text-slate-200 ${errors.ifsc ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 dark:border-slate-700 focus:border-emerald-500'}`} placeholder="Ex. HDFC0001234" />
+                  
+                  <TabularRow columns={4}>
+                    <TabularField label="BANK NAME" required>
+                      <input value={bankName} onChange={e => setBankName(e.target.value)} className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400" placeholder="Ex. HDFC Bank, SBI" />
+                    </TabularField>
+                    <TabularField label="IFSC CODE" required>
+                      <div className="relative">
+                        <input value={ifsc} onChange={e => setIfsc(e.target.value.toUpperCase())} onBlur={() => handleIfscLookup(ifsc)} className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400" placeholder="Ex. HDFC0001234" />
                         {ifscLoading && <div className="absolute right-2 top-1/2 -translate-y-1/2 text-[8px] font-black text-emerald-500 animate-pulse uppercase">Validating...</div>}
                       </div>
-                      {errors.ifsc && <div className="text-[8px] font-bold text-rose-500 px-1 uppercase tracking-widest mt-0.5">{errors.ifsc}</div>}
-                    </div>
+                    </TabularField>
+                    <TabularField label="ACCOUNT NUMBER" required>
+                      <input 
+                        type="text"
+                        maxLength={18}
+                        value={accountNumber} 
+                        onChange={e => setAccountNumber(e.target.value.replace(/\D/g, '').slice(0, 18))} 
+                        className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400" 
+                        placeholder="9-18 digit account number" 
+                      />
+                    </TabularField>
+                    <TabularField label="BRANCH LOCATION">
+                      <input value={branchName} onChange={e => setBranchName(e.target.value)} className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400" placeholder="Main Branch, New York" />
+                    </TabularField>
+                  </TabularRow>
 
-                    <div className="flex flex-col gap-1 min-w-0">
-                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-0.5 whitespace-nowrap truncate">Account Number <span className="text-rose-500">*</span></label>
-                      <div className="relative group/input">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 group-focus-within/input:text-emerald-500 transition-colors">
-                          <Hash size={20} />
-                        </div>
-                        <input 
-                          type="text"
-                          maxLength={12}
-                          value={accountNumber} 
-                          onChange={e => setAccountNumber(e.target.value.replace(/\D/g, '').slice(0, 12))} 
-                          className={`w-full pl-9 pr-3 py-2 h-9 bg-transparent dark:bg-slate-900/50 border rounded-lg outline-none transition-all text-xs font-bold text-slate-700 dark:text-slate-200 ${errors.accountNumber ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 dark:border-slate-700 focus:border-emerald-500'}`} 
-                          placeholder="Standard 12-digit account number" 
-                        />
-                      </div>
-                      {errors.accountNumber && <div className="text-[8px] font-bold text-rose-500 px-1 uppercase tracking-widest mt-0.5">{errors.accountNumber}</div>}
-                    </div>
-
-                    <div className="flex flex-col gap-1 min-w-0 mt-[10px]">
-                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-0.5 whitespace-nowrap truncate">Branch Location</label>
-                      <div className="relative group/input">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 group-focus-within/input:text-emerald-500 transition-colors">
-                          <MapPin size={20} />
-                        </div>
-                        <input value={branchName} onChange={e => setBranchName(e.target.value)} className={`w-full pl-9 pr-3 py-2 h-9 bg-transparent dark:bg-slate-900/50 border rounded-lg outline-none transition-all text-xs font-bold text-slate-700 dark:text-slate-200 ${errors.branchName ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 dark:border-slate-700 focus:border-emerald-500'}`} placeholder="Main Branch, New York" />
-                      </div>
-                      {errors.branchName && <div className="text-[8px] font-bold text-rose-500 px-1 uppercase tracking-widest mt-0.5">{errors.branchName}</div>}
-                    </div>
-                  </div>
-
-                  {/* Secure Document Vault - compact upload passbook */}
-                  <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800/60 relative z-10">
-                    <div className="mb-3" />
-                    <div className="grid grid-cols-1 gap-4">
-                      <div className="w-full">
+                  <TabularRow columns={1}>
+                    <TabularField label="DOCUMENT VAULT (CHEQUE / PASSBOOK)">
+                      <div className="p-3">
                         {currentBankProof ? (
-                          <div className="flex items-center justify-between w-full h-16 border-2 border-emerald-500/50 bg-emerald-50/10 dark:bg-emerald-950/20 rounded-xl px-4 animate-in zoom-in-95 duration-300">
+                          <div className="flex items-center justify-between w-full h-12 border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-900/20 rounded-lg px-4">
                             <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-lg bg-emerald-500 text-white flex items-center justify-center shadow-lg shadow-emerald-500/20">
-                                <FileCheck size={16} />
-                              </div>
+                              <FileCheck size={16} className="text-emerald-500" />
                               <div className="flex flex-col min-w-0">
-                                <p className="text-[10px] font-black text-slate-700 dark:text-slate-200 uppercase truncate max-w-[200px] md:max-w-none">
+                                <p className="text-[10px] font-bold text-slate-700 dark:text-slate-200 uppercase truncate">
                                   {currentBankProof instanceof File ? currentBankProof.name : 'Stored Document'}
                                 </p>
                                 <p className="text-[8px] font-bold text-emerald-600 uppercase tracking-widest">Uploaded Successfully</p>
                               </div>
                             </div>
-
-                            <div className="flex items-center gap-2 shrink-0">
+                            <div className="flex items-center gap-2">
                               {!(currentBankProof instanceof File) && (
                                 <a 
                                   href={String(currentBankProof).startsWith('http') ? currentBankProof : `${BACKEND_URL}${currentBankProof}`} 
                                   target="_blank" 
-                                  className="px-3 h-8 bg-white dark:bg-slate-800 text-slate-500 hover:text-emerald-500 border border-slate-200 dark:border-slate-800 rounded-lg flex items-center gap-1.5 transition-all text-[8px] font-black uppercase tracking-widest"
+                                  className="text-[10px] font-bold uppercase text-slate-500 hover:text-emerald-500 transition-colors"
                                 >
-                                  <Search size={20} /> View
+                                  VIEW
                                 </a>
                               )}
                               <button 
                                 type="button" 
                                 onClick={() => { setCurrentBankProof(null); if (bankProofRef.current) bankProofRef.current.value = ''; }} 
-                                className="px-3 h-8 bg-rose-500 text-white rounded-lg flex items-center gap-1.5 hover:bg-rose-600 transition-all shadow-lg shadow-rose-500/20 text-[8px] font-black uppercase tracking-widest"
+                                className="text-[10px] font-bold uppercase text-rose-500 hover:text-rose-600 transition-colors ml-3"
                               >
-                                <Trash2 size={20} /> Remove
+                                REMOVE
                               </button>
                             </div>
                           </div>
                         ) : (
-                          <label className="flex flex-col items-center justify-center w-full h-16 border-2 border-slate-200 dark:border-slate-700 border-dashed rounded-xl cursor-pointer bg-slate-50/30 dark:bg-slate-900/10 hover:bg-emerald-50/30 dark:hover:bg-emerald-950/10 hover:border-emerald-500/50 transition-all group/upload">
-                            <div className="flex flex-col items-center justify-center py-1 text-center">
-                              <div className="w-8 h-8 rounded-lg bg-white dark:bg-slate-800 shadow-sm flex items-center justify-center text-slate-400 group-hover/upload:text-emerald-500 transition-colors mb-0.5">
-                                <Upload size={16} />
-                              </div>
-                              <p className="text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-tight leading-none">Drop Cheque or Passbook</p>
-                              <p className="text-[8px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">Max 5MB (PDF, PNG, JPG)</p>
+                          <label className="flex flex-col items-center justify-center w-full h-16 border-2 border-slate-200 dark:border-slate-700 border-dashed rounded-lg cursor-pointer bg-slate-50 hover:bg-slate-100 dark:bg-slate-900 dark:hover:bg-slate-800 transition-all">
+                            <div className="flex items-center gap-2">
+                              <Upload size={14} className="text-slate-400" />
+                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Drop Cheque or Passbook</span>
                             </div>
                             <input ref={bankProofRef} type="file" className="hidden" accept="image/*,application/pdf" onChange={e => setCurrentBankProof(e.target.files[0])} />
                           </label>
                         )}
-                        {errors.bankProof && <div className="text-[8px] font-bold text-rose-500 px-2 mt-2 uppercase tracking-widest flex items-center gap-1"><AlertCircle size={20} /> {errors.bankProof}</div>}
+                        {errors.bankProof && <div className="text-[10px] font-bold text-rose-500 uppercase tracking-widest flex items-center gap-1 mt-2"><AlertCircle size={12} /> {errors.bankProof}</div>}
                       </div>
-                    </div>
-                  </div>
-                </div>
+                    </TabularField>
+                  </TabularRow>
+                </TabularContainer>
               </div>
             )}
 
 
             {/* Step 4: Identity Documents */}
-            {step === 4 && (
-              <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                {/* Primary Identity Section - professional compact */}
-                <div className="bg-white dark:bg-slate-950 p-3 rounded-lg border border-slate-200/60 dark:border-slate-800/60 shadow-sm relative overflow-hidden">
-                  <div className="flex items-center gap-2 mb-3 border-l-[3px] border-[#1e293b] pl-2.5 relative z-10">
-                    <div className="w-7 h-7 rounded-md bg-indigo-50 dark:bg-indigo-950/20 flex items-center justify-center text-[#1e293b] shrink-0">
-                      <ShieldCheck size={20} />
-                    </div>
-                    <h3 className="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-tight">Identity Authentication</h3>
+            {actualStep === 4 && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <TabularContainer>
+                  <div className="bg-slate-100 dark:bg-slate-800/80 p-3 text-xs font-bold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 uppercase flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-indigo-500" /> Identity Authentication
                   </div>
+                  <TabularRow columns={2}>
+                    <TabularField label="AADHAR NUMBER" required>
+                      <input
+                        type="text"
+                        maxLength={12}
+                        value={aadharNumber}
+                        onChange={(e) => setAadharNumber(e.target.value.replace(/\D/g, '').slice(0, 12))}
+                        className={`w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400 ${errors.aadharNumber ? 'text-rose-500' : ''}`}
+                        placeholder="XXXX XXXX XXXX"
+                      />
+                      {errors.aadharNumber && <div className="text-[9px] font-bold text-rose-500 mt-1 uppercase px-3">{errors.aadharNumber}</div>}
+                    </TabularField>
+                    <TabularField label="PAN NUMBER" required>
+                      <input
+                        type="text"
+                        maxLength={10}
+                        value={panNumber}
+                        onChange={(e) => setPanNumber(e.target.value.toUpperCase().slice(0, 10))}
+                        className={`w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400 ${errors.panNumber ? 'text-rose-500' : ''}`}
+                        placeholder="ABCDE1234F"
+                      />
+                      {errors.panNumber && <div className="text-[9px] font-bold text-rose-500 mt-1 uppercase px-3">{errors.panNumber}</div>}
+                    </TabularField>
+                  </TabularRow>
+                </TabularContainer>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4 relative z-10">
-                    <div className="md:col-span-2 flex flex-col gap-1.5">
-                      <label className="text-[10px] font-black text-slate-400 dark:text-slate-400 uppercase tracking-widest pl-1">Aadhar Number <span className="text-rose-500">*</span></label>
-                      <div className="relative group/num">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-300 group-focus-within/num:text-[#1e293b] transition-colors">
-                          <Fingerprint size={16} />
-                        </div>
-                        <input
-                          type="text"
-                          maxLength={12}
-                          value={aadharNumber}
-                          onChange={(e) => setAadharNumber(e.target.value.replace(/\D/g, '').slice(0, 12))}
-                          required
-                          className={`w-full h-10 pl-10 pr-4 bg-transparent border-2 rounded-xl outline-none text-xs font-bold text-slate-700 dark:text-slate-200 transition-all ${errors.aadharNumber ? 'border-rose-200 focus:border-rose-500' : 'border-slate-100 dark:border-slate-800 focus:border-[#1e293b]'}`}
-                          placeholder="XXXX XXXX XXXX"
-                        />
-                      </div>
-                      {errors.aadharNumber && <p className="text-[9px] font-bold text-rose-500 uppercase tracking-widest pl-1 mt-0.5">{errors.aadharNumber}</p>}
-                    </div>
-
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-black text-slate-400 dark:text-slate-400 uppercase tracking-widest pl-1">PAN Number <span className="text-rose-500">*</span></label>
-                      <div className="relative group/num">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-300 group-focus-within/num:text-[#1e293b] transition-colors">
-                          <Shield size={16} />
-                        </div>
-                        <input
-                          type="text"
-                          maxLength={10}
-                          value={panNumber}
-                          onChange={(e) => setPanNumber(e.target.value.toUpperCase().slice(0, 10))}
-                          required
-                          className={`w-full h-10 pl-10 pr-4 bg-transparent border-2 rounded-xl outline-none text-xs font-bold text-slate-700 dark:text-slate-200 transition-all ${errors.panNumber ? 'border-rose-200 focus:border-rose-500' : 'border-slate-100 dark:border-slate-800 focus:border-[#1e293b]'}`}
-                          placeholder="ABCDE1234F"
-                        />
-                      </div>
-                      {errors.panNumber && <p className="text-[9px] font-bold text-rose-500 uppercase tracking-widest pl-1 mt-0.5">{errors.panNumber}</p>}
-                    </div>
+                <TabularContainer>
+                  <div className="bg-slate-100 dark:bg-slate-800/80 p-3 text-xs font-bold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 uppercase flex items-center gap-2">
+                    <Fingerprint className="w-4 h-4 text-indigo-500" /> Document Vault
                   </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 relative z-10">
+                  <TabularRow columns={3}>
                     {[
-                      { label: 'Aadhar Card (Front)', state: aadharFront, setter: setAadharFront, ref: aadharFrontRef, icon: <Fingerprint size={16} />, id: 'aadharFront' },
-                      { label: 'Aadhar Card (Back)', state: aadharBack, setter: setAadharBack, ref: aadharBackRef, icon: <Fingerprint size={16} />, id: 'aadharBack' },
-                      { label: 'PAN Card (Front)', state: panCard, setter: setPanCard, ref: panRef, icon: <Shield size={16} />, id: 'panCard' },
+                      { label: 'AADHAR CARD (FRONT)', state: aadharFront, setter: setAadharFront, ref: aadharFrontRef, icon: <Fingerprint size={16} />, id: 'aadharFront' },
+                      { label: 'AADHAR CARD (BACK)', state: aadharBack, setter: setAadharBack, ref: aadharBackRef, icon: <Fingerprint size={16} />, id: 'aadharBack' },
+                      { label: 'PAN CARD (FRONT)', state: panCard, setter: setPanCard, ref: panRef, icon: <Shield size={16} />, id: 'panCard' },
                     ].map((doc, idx) => (
-                      <div key={idx} className="flex flex-col gap-1">
-                        <label className="text-[8px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{doc.label} <span className="text-rose-500">*</span></label>
-                        <div className={`relative group/doc border border-dashed rounded-lg p-2 min-h-[72px] flex flex-col transition-all duration-200 ${doc.state ? 'border-indigo-500/40 bg-indigo-50/10 dark:bg-indigo-950/5' : 'border-slate-200 dark:border-slate-700 hover:border-indigo-500/50 hover:bg-transparent dark:hover:bg-slate-900/50'}`}>
+                      <TabularField key={idx} label={doc.label} required>
+                        <div className="p-3 w-full">
                           {doc.state ? (
-                            <div className="flex flex-col h-full min-h-[52px] justify-center">
-                              <div className="flex items-center justify-between gap-2 min-w-0">
-                                <p className="text-[9px] font-semibold text-slate-600 dark:text-slate-300 truncate flex-1">{doc.state instanceof File ? doc.state.name : 'Verified'}</p>
-                                <div className="flex items-center gap-1.5 shrink-0">
-                                  {!(doc.state instanceof File) && (
-                                    <a href={String(doc.state).startsWith('http') ? doc.state : `${BACKEND_URL}${doc.state}`} target="_blank" rel="noopener noreferrer" className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center hover:bg-slate-200 transition-colors" title="View">
-                                      <Search size={20} />
-                                    </a>
-                                  )}
-                                  <button type="button" onClick={(e) => { e.stopPropagation(); doc.setter(null); if (doc.ref.current) doc.ref.current.value = ''; }} className="w-7 h-7 rounded-lg bg-rose-500 text-white flex items-center justify-center shadow hover:bg-rose-600 transition-colors" title="Remove">
-                                    <Trash2 size={20} />
-                                  </button>
-                                </div>
+                            <div className="flex items-center justify-between w-full h-[38px] border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-900/20 rounded-lg px-3">
+                              <div className="flex items-center gap-2 overflow-hidden">
+                                <Check size={14} className="text-indigo-500 shrink-0" />
+                                <p className="text-[10px] font-bold text-slate-700 dark:text-slate-200 uppercase truncate">
+                                  {doc.state instanceof File ? doc.state.name : 'Verified'}
+                                </p>
                               </div>
-                              <div className="flex items-center gap-1.5 mt-1">
-                                <div className="w-5 h-5 rounded-full bg-indigo-500 text-white flex items-center justify-center shrink-0">
-                                  <Check size={10} />
-                                </div>
-                                <span className="text-[9px] font-semibold text-slate-900 dark:text-white">Uploaded</span>
+                              <div className="flex items-center gap-2 shrink-0">
+                                {!(doc.state instanceof File) && (
+                                  <a href={String(doc.state).startsWith('http') ? doc.state : `${BACKEND_URL}${doc.state}`} target="_blank" rel="noopener noreferrer" className="text-[9px] font-bold uppercase text-slate-500 hover:text-indigo-500 transition-colors">
+                                    VIEW
+                                  </a>
+                                )}
+                                <button type="button" onClick={(e) => { e.stopPropagation(); doc.setter(null); if (doc.ref.current) doc.ref.current.value = ''; }} className="text-[9px] font-bold uppercase text-rose-500 hover:text-rose-600 transition-colors ml-2">
+                                  REMOVE
+                                </button>
                               </div>
                             </div>
                           ) : (
-                            <div className="flex-1 flex flex-col items-center justify-center py-2 px-1 text-center min-h-[52px]">
-                              <div className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 group-hover/doc:text-indigo-500 transition-colors mb-1">
-                                {doc.icon}
+                            <label className="flex items-center justify-center w-full h-[38px] border border-slate-200 dark:border-slate-700 border-dashed rounded-lg cursor-pointer bg-slate-50 hover:bg-slate-100 dark:bg-slate-900 dark:hover:bg-slate-800 transition-all">
+                              <div className="flex items-center gap-2">
+                                <Upload size={12} className="text-slate-400" />
+                                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tight">Upload Document</span>
                               </div>
-                              <p className="text-[9px] font-semibold text-slate-500 dark:text-slate-400">Upload</p>
-                            </div>
+                              <input ref={doc.ref} type="file" className="hidden" accept="image/*,application/pdf" onChange={e => doc.setter(e.target.files[0])} />
+                            </label>
                           )}
-                          <input ref={doc.ref} type="file" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept="image/*,application/pdf" onChange={e => doc.setter(e.target.files[0])} />
+                          {errors[doc.id] && <div className="text-[9px] font-bold text-rose-500 uppercase px-1 mt-1">{errors[doc.id]}</div>}
                         </div>
-                        {errors[doc.id] && <div className="text-[7px] font-semibold text-rose-500 px-1 flex items-center gap-1"><AlertCircle size={9} /> {errors[doc.id]}</div>}
-                      </div>
+                      </TabularField>
                     ))}
-                  </div>
-                </div>
+                  </TabularRow>
+                </TabularContainer>
               </div>
             )}
 
-            {/* Step 7: Languages & Interview */}
-            {step === 7 && (
+            {/* Step 7: Language Proficiency */}
+            {actualStep === 7 && (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="bg-white dark:bg-slate-950 p-4 rounded-xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm">
-                  <h3 className="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-tight mb-1 flex items-center gap-2">
-                    <span className="flex items-center justify-center w-6 h-6 rounded-md bg-indigo-100 dark:bg-indigo-900/30 text-slate-900 dark:text-white shrink-0">
-                      <BookOpen className="w-3.5 h-3.5" />
-                    </span>
-                    Languages Known (Underline Mother-Tongue)
-                  </h3>
+                <TabularContainer>
+                  <div className="bg-slate-100 dark:bg-slate-800/80 p-3 text-xs font-bold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 uppercase flex items-center gap-2">
+                    <BookOpen className="w-4 h-4 text-emerald-500" /> Language Proficiency (Underline Mother-Tongue)
+                  </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse border-0">
                       <thead>
-                        <tr className="bg-white dark:bg-slate-900/50">
-                          <th className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest p-2 w-[200px]">Language</th>
-                          <th className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest p-2 text-center w-24">Speak</th>
-                          <th className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest p-2 text-center w-24">Read</th>
-                          <th className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest p-2 text-center w-24">Write</th>
-                          {languages.length > 3 ? <th className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest p-2 w-12"></th> : null}
+                        <tr className="border-b border-slate-200 dark:border-slate-700">
+                          <th className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest p-3 w-[200px] border-r border-slate-200 dark:border-slate-700">Language</th>
+                          <th className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest p-3 text-center w-24 border-r border-slate-200 dark:border-slate-700">Speak</th>
+                          <th className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest p-3 text-center w-24 border-r border-slate-200 dark:border-slate-700">Read</th>
+                          <th className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest p-3 text-center w-24 border-r border-slate-200 dark:border-slate-700">Write</th>
+                          <th className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest p-3 text-center w-24">Understand</th>
+                          {languages.length > 3 ? <th className="p-2 w-12"></th> : null}
                         </tr>
                       </thead>
                       <tbody>
                         {languages.map((row, idx) => (
-                          <tr key={idx}>
-                            <td className="p-1.5">
+                          <tr key={idx} className="border-b border-slate-200 dark:border-slate-700 last:border-b-0">
+                            <td className="p-0 border-r border-slate-200 dark:border-slate-700">
                               {idx < 3 ? (
-                                <span className="px-2 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200">{row.name}</span>
+                                <div className="px-3 h-[38px] flex items-center text-xs font-bold text-slate-700 dark:text-slate-200 uppercase">{row.name}</div>
                               ) : (
-                                <input value={row.name} onChange={e => { const c = [...languages]; c[idx] = { ...c[idx], name: e.target.value }; setLanguages(c); }} className="w-full px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded focus:border-indigo-500 outline-none bg-white dark:bg-slate-900" placeholder="Language" />
+                                <input value={row.name} onChange={e => { const c = [...languages]; c[idx] = { ...c[idx], name: e.target.value }; setLanguages(c); }} className="w-full h-[38px] px-3 bg-transparent outline-none text-xs font-bold uppercase" placeholder="Language" />
                               )}
                             </td>
-                            <td className="p-1.5 text-center">
-                              <input type="checkbox" checked={!!row.speak} onChange={e => { const c = [...languages]; c[idx] = { ...c[idx], speak: e.target.checked }; setLanguages(c); }} className="w-4 h-4 text-slate-900 border-slate-300 rounded focus:ring-indigo-500" />
+                            <td className="p-0 text-center border-r border-slate-200 dark:border-slate-700">
+                              <input type="checkbox" checked={!!row.speak} onChange={e => { const c = [...languages]; c[idx] = { ...c[idx], speak: e.target.checked }; setLanguages(c); }} className="w-4 h-4 text-emerald-500 border-slate-300 rounded focus:ring-emerald-500" />
                             </td>
-                            <td className="p-1.5 text-center">
-                              <input type="checkbox" checked={!!row.read} onChange={e => { const c = [...languages]; c[idx] = { ...c[idx], read: e.target.checked }; setLanguages(c); }} className="w-4 h-4 text-slate-900 border-slate-300 rounded focus:ring-indigo-500" />
+                            <td className="p-0 text-center border-r border-slate-200 dark:border-slate-700">
+                              <input type="checkbox" checked={!!row.read} onChange={e => { const c = [...languages]; c[idx] = { ...c[idx], read: e.target.checked }; setLanguages(c); }} className="w-4 h-4 text-emerald-500 border-slate-300 rounded focus:ring-emerald-500" />
                             </td>
-                            <td className="p-1.5 text-center">
-                              <input type="checkbox" checked={!!row.write} onChange={e => { const c = [...languages]; c[idx] = { ...c[idx], write: e.target.checked }; setLanguages(c); }} className="w-4 h-4 text-slate-900 border-slate-300 rounded focus:ring-indigo-500" />
+                            <td className="p-0 text-center border-r border-slate-200 dark:border-slate-700">
+                              <input type="checkbox" checked={!!row.write} onChange={e => { const c = [...languages]; c[idx] = { ...c[idx], write: e.target.checked }; setLanguages(c); }} className="w-4 h-4 text-emerald-500 border-slate-300 rounded focus:ring-emerald-500" />
+                            </td>
+                            <td className="p-0 text-center">
+                              <input type="checkbox" checked={!!row.understand} onChange={e => { const c = [...languages]; c[idx] = { ...c[idx], understand: e.target.checked }; setLanguages(c); }} className="w-4 h-4 text-emerald-500 border-slate-300 rounded focus:ring-emerald-500" />
                             </td>
                             {languages.length > 3 ? (
-                              <td className="p-1 text-center">
+                              <td className="p-0 text-center">
                                 {idx >= 3 ? (
-                                  <button type="button" onClick={() => setLanguages(prev => prev.filter((_, i) => i !== idx))} className="p-1 text-slate-400 hover:text-rose-500 rounded" title="Remove">
-                                    <Minus className="w-4 h-4" />
+                                  <button type="button" onClick={() => setLanguages(prev => prev.filter((_, i) => i !== idx))} className="w-full h-[38px] flex items-center justify-center text-slate-400 hover:text-rose-500 transition-colors" title="Remove">
+                                    <Trash2 className="w-4 h-4" />
                                   </button>
                                 ) : null}
                               </td>
@@ -2547,437 +2374,422 @@ export default function EmployeeForm({
                       </tbody>
                     </table>
                   </div>
-                  <div className="mt-2 flex justify-start">
-                    <button type="button" onClick={() => setLanguages(prev => [...prev, { name: '', speak: false, read: false, write: false }])} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-500 text-slate-900 dark:text-white bg-indigo-50 dark:bg-indigo-950/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 text-xs font-semibold transition-colors">
+                  <div className="p-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/30">
+                    <button type="button" onClick={() => setLanguages(prev => [...prev, { name: '', speak: false, read: false, write: false, understand: false }])} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-500 text-slate-900 dark:text-white bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 text-[10px] uppercase font-black tracking-widest transition-colors">
                       <Plus className="w-4 h-4" /> Add language
                     </button>
                   </div>
-                </div>
-                <div className="bg-white dark:bg-slate-950 p-4 rounded-xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm">
-                  <h3 className="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-tight mb-3 flex items-center gap-2">
-                    <span className="flex items-center justify-center w-6 h-6 rounded-md bg-indigo-100 dark:bg-indigo-900/30 text-slate-900 dark:text-white shrink-0">
-                      <UserCheck className="w-3.5 h-3.5" />
-                    </span>
-                    Have you been previously interviewed in this organization?
-                  </h3>
-                  <div className="flex items-center gap-6">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="radio" name="previousInterview" checked={previousInterview === 'yes'} onChange={() => setPreviousInterview('yes')} className="w-4 h-4 text-slate-900 border-slate-300 focus:ring-indigo-500" />
-                      <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Yes</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="radio" name="previousInterview" checked={previousInterview === 'no'} onChange={() => setPreviousInterview('no')} className="w-4 h-4 text-slate-900 border-slate-300 focus:ring-indigo-500" />
-                      <span className="text-sm font-medium text-slate-700 dark:text-slate-200">No</span>
-                    </label>
+                </TabularContainer>
+
+                <TabularContainer>
+                  <div className="bg-slate-100 dark:bg-slate-800/80 p-3 text-xs font-bold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 uppercase flex items-center gap-2">
+                    <UserCheck className="w-4 h-4 text-emerald-500" /> Previous Interview
                   </div>
+                  <TabularRow columns={1}>
+                    <TabularField label="HAVE YOU BEEN PREVIOUSLY INTERVIEWED IN THIS ORGANIZATION?">
+                      <div className="flex gap-6 p-3">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="previousInterview" checked={previousInterview === 'yes'} onChange={() => setPreviousInterview('yes')} className="w-4 h-4 text-slate-900 border-slate-300 focus:ring-emerald-500" />
+                          <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Yes</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="previousInterview" checked={previousInterview === 'no'} onChange={() => setPreviousInterview('no')} className="w-4 h-4 text-slate-900 border-slate-300 focus:ring-emerald-500" />
+                          <span className="text-sm font-medium text-slate-700 dark:text-slate-200">No</span>
+                        </label>
+                      </div>
+                    </TabularField>
+                  </TabularRow>
                   {previousInterview === 'yes' && (
-                    <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Date</label>
-                        <input type="date" value={previousInterviewDate} onChange={e => setPreviousInterviewDate(e.target.value)} className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Department / Location</label>
-                        <input type="text" value={previousInterviewDeptLocation} onChange={e => setPreviousInterviewDeptLocation(e.target.value)} placeholder="Dept or location" className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Interviewed by</label>
-                        <input type="text" value={previousInterviewedBy} onChange={e => setPreviousInterviewedBy(e.target.value)} placeholder="Name" className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
-                      </div>
-                    </div>
+                    <TabularRow columns={3}>
+                      <TabularField label="DATE">
+                        <input type="date" value={previousInterviewDate} onChange={e => setPreviousInterviewDate(e.target.value)} className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium" />
+                      </TabularField>
+                      <TabularField label="DEPARTMENT / LOCATION">
+                        <input type="text" value={previousInterviewDeptLocation} onChange={e => setPreviousInterviewDeptLocation(e.target.value)} placeholder="Dept or location" className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium" />
+                      </TabularField>
+                      <TabularField label="INTERVIEWED BY">
+                        <input type="text" value={previousInterviewedBy} onChange={e => setPreviousInterviewedBy(e.target.value)} placeholder="Name" className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium" />
+                      </TabularField>
+                    </TabularRow>
                   )}
-                </div>
+                </TabularContainer>
               </div>
             )}
 
             {/* Step 8: References & Related */}
-            {step === 8 && (
+            {actualStep === 8 && (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                {/* Related employee: Do you know or are you related to any employee of this company? */}
-                <div className="bg-white dark:bg-slate-950 p-4 rounded-xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm">
-                  <p className="text-sm font-semibold text-slate-800 dark:text-white mb-3 border-l-[3px] border-indigo-500 pl-2">
-                    Do you know or are you related to any employee of this organization? If yes, please provide details:
-                  </p>
-                  <div className="flex flex-wrap gap-4 items-center mb-4">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="radio" name="hasRelated" checked={relatedEmployee.hasRelated === 'yes'} onChange={() => setRelatedEmployee(r => ({ ...r, hasRelated: 'yes' }))} className="w-4 h-4 text-slate-900" />
-                      <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Yes</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="radio" name="hasRelated" checked={relatedEmployee.hasRelated === 'no'} onChange={() => setRelatedEmployee(r => ({ ...r, hasRelated: 'no', name: '', designation: '', location: '', company: '', relationship: '', contactNumber: '' }))} className="w-4 h-4 text-slate-900" />
-                      <span className="text-sm font-medium text-slate-700 dark:text-slate-200">No</span>
-                    </label>
+                <TabularContainer>
+                  <div className="bg-slate-100 dark:bg-slate-800/80 p-3 text-xs font-bold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 uppercase">
+                    Related Employee Details
                   </div>
+                  <TabularRow columns={1}>
+                    <TabularField label="DO YOU KNOW OR ARE YOU RELATED TO ANY EMPLOYEE OF THIS ORGANIZATION?">
+                      <div className="flex gap-6 p-3">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="hasRelated" checked={relatedEmployee.hasRelated === 'yes'} onChange={() => setRelatedEmployee(r => ({ ...r, hasRelated: 'yes' }))} className="w-4 h-4 text-slate-900 border-slate-300 focus:ring-emerald-500" />
+                          <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Yes</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="hasRelated" checked={relatedEmployee.hasRelated === 'no'} onChange={() => setRelatedEmployee(r => ({ ...r, hasRelated: 'no', name: '', designation: '', location: '', company: '', relationship: '', contactNumber: '' }))} className="w-4 h-4 text-slate-900 border-slate-300 focus:ring-emerald-500" />
+                          <span className="text-sm font-medium text-slate-700 dark:text-slate-200">No</span>
+                        </label>
+                      </div>
+                    </TabularField>
+                  </TabularRow>
                   {relatedEmployee.hasRelated === 'yes' && (
-                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-                      <div className="grid grid-cols-3 gap-2 min-w-0 md:grid-cols-6">
-                        <div className="min-w-0">
-                          <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Name</label>
-                          <input type="text" value={relatedEmployee.name} onChange={e => setRelatedEmployee(r => ({ ...r, name: e.target.value }))} className="w-full min-w-0 h-[42px] px-3 rounded-lg border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-medium text-slate-700 dark:text-slate-200 outline-none focus:border-indigo-500" placeholder="Full name" />
-                        </div>
-                        <div className="min-w-0">
-                          <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Designation</label>
-                          <input type="text" value={relatedEmployee.designation} onChange={e => setRelatedEmployee(r => ({ ...r, designation: e.target.value }))} className="w-full min-w-0 h-[42px] px-3 rounded-lg border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-medium text-slate-700 dark:text-slate-200 outline-none focus:border-indigo-500" placeholder="Designation" />
-                        </div>
-                        <div className="min-w-0">
-                          <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Location</label>
-                          <input type="text" value={relatedEmployee.location} onChange={e => setRelatedEmployee(r => ({ ...r, location: e.target.value }))} className="w-full min-w-0 h-[42px] px-3 rounded-lg border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-medium text-slate-700 dark:text-slate-200 outline-none focus:border-indigo-500" placeholder="Location" />
-                        </div>
-                        <div className="min-w-0">
-                          <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Company</label>
-                          <input type="text" value={relatedEmployee.company} onChange={e => setRelatedEmployee(r => ({ ...r, company: e.target.value }))} className="w-full min-w-0 h-[42px] px-3 rounded-lg border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-medium text-slate-700 dark:text-slate-200 outline-none focus:border-indigo-500" placeholder="Company" />
-                        </div>
-                        <div className="min-w-0">
-                          <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Relationship</label>
-                          <input type="text" value={relatedEmployee.relationship} onChange={e => setRelatedEmployee(r => ({ ...r, relationship: e.target.value }))} className="w-full min-w-0 h-[42px] px-3 rounded-lg border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-medium text-slate-700 dark:text-slate-200 outline-none focus:border-indigo-500" placeholder="Relationship" />
-                        </div>
-                        <div className="min-w-0">
-                          <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Contact Number</label>
+                    <>
+                      <TabularRow columns={3}>
+                        <TabularField label="NAME" required>
+                          <input type="text" value={relatedEmployee.name} onChange={e => setRelatedEmployee(r => ({ ...r, name: e.target.value }))} className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400" placeholder="Full name" />
+                        </TabularField>
+                        <TabularField label="DESIGNATION">
+                          <input type="text" value={relatedEmployee.designation} onChange={e => setRelatedEmployee(r => ({ ...r, designation: e.target.value }))} className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400" placeholder="Designation" />
+                        </TabularField>
+                        <TabularField label="LOCATION">
+                          <input type="text" value={relatedEmployee.location} onChange={e => setRelatedEmployee(r => ({ ...r, location: e.target.value }))} className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400" placeholder="Location" />
+                        </TabularField>
+                      </TabularRow>
+                      <TabularRow columns={3}>
+                        <TabularField label="COMPANY">
+                          <input type="text" value={relatedEmployee.company} onChange={e => setRelatedEmployee(r => ({ ...r, company: e.target.value }))} className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400" placeholder="Company" />
+                        </TabularField>
+                        <TabularField label="RELATIONSHIP" required>
+                          <input type="text" value={relatedEmployee.relationship} onChange={e => setRelatedEmployee(r => ({ ...r, relationship: e.target.value }))} className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400" placeholder="Relationship" />
+                        </TabularField>
+                        <TabularField label="CONTACT NUMBER">
                           <input
                             type="text"
                             maxLength={10}
                             value={relatedEmployee.contactNumber}
                             onChange={e => setRelatedEmployee(r => ({ ...r, contactNumber: e.target.value.replace(/\D/g, '').slice(0, 10) }))}
-                            className="w-full min-w-0 h-[42px] px-3 rounded-lg border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-medium text-slate-700 dark:text-slate-200 outline-none focus:border-indigo-500"
+                            className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400"
                             placeholder="10-digit number"
                           />
-                        </div>
-                      </div>
-                    </div>
+                        </TabularField>
+                      </TabularRow>
+                    </>
                   )}
-                </div>
+                </TabularContainer>
 
-                {/* Last two responsible people (References) */}
-                <div className="bg-white dark:bg-slate-950 p-4 rounded-xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm">
-                  <p className="text-sm font-semibold text-slate-800 dark:text-white mb-4 border-l-[3px] border-indigo-500 pl-2">
-                    Last two responsible people, not related to you, who can comment objectively on your career and capabilities
-                  </p>
+                <TabularContainer>
+                  <div className="bg-slate-100 dark:bg-slate-800/80 p-3 text-xs font-bold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 flex flex-col uppercase">
+                    <span>Professional References</span>
+                    <span className="text-[9px] font-medium text-slate-500 mt-0.5 lowercase normal-case">(Last two responsible people, not related to you, who can comment objectively on your career and capabilities)</span>
+                  </div>
                   {[0, 1].map((idx) => (
-                    <div key={idx} className={`rounded-xl border border-slate-200 dark:border-slate-700 p-4 ${idx === 1 ? 'mt-4' : ''}`}>
-                      <h4 className="text-xs font-bold text-slate-600 dark:text-slate-300 mb-3">{idx + 1}.</h4>
-                      <div className="grid grid-cols-3 gap-2 min-w-0 mb-2">
-                        <div className="min-w-0">
-                          <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Name</label>
-                          <input type="text" value={references[idx]?.name ?? ''} onChange={e => { const n = [...references]; n[idx] = { ...n[idx], name: e.target.value }; setReferences(n); }} className="w-full min-w-0 h-[42px] px-3 rounded-lg border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-medium text-slate-700 dark:text-slate-200 outline-none focus:border-indigo-500" placeholder="Full name" />
-                        </div>
-                        <div className="min-w-0">
-                          <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Company</label>
-                          <input type="text" value={references[idx]?.company ?? ''} onChange={e => { const n = [...references]; n[idx] = { ...n[idx], company: e.target.value }; setReferences(n); }} className="w-full min-w-0 h-[42px] px-3 rounded-lg border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-medium text-slate-700 dark:text-slate-200 outline-none focus:border-indigo-500" placeholder="Company" />
-                        </div>
-                        <div className="min-w-0">
-                          <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Designation / Occupation</label>
-                          <input type="text" value={references[idx]?.designation ?? ''} onChange={e => { const n = [...references]; n[idx] = { ...n[idx], designation: e.target.value }; setReferences(n); }} className="w-full min-w-0 h-[42px] px-3 rounded-lg border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-medium text-slate-700 dark:text-slate-200 outline-none focus:border-indigo-500" placeholder="Designation / Occupation" />
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-4 gap-2 min-w-0">
-                        <div className="min-w-0">
-                          <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Address</label>
-                          <input type="text" value={references[idx]?.address ?? ''} onChange={e => { const n = [...references]; n[idx] = { ...n[idx], address: e.target.value }; setReferences(n); }} className="w-full min-w-0 h-[42px] px-3 rounded-lg border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-medium text-slate-700 dark:text-slate-200 outline-none focus:border-indigo-500" placeholder="Address" />
-                        </div>
-                        <div className="min-w-0">
-                          <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">E-mail</label>
-                          <input type="email" value={references[idx]?.email ?? ''} onChange={e => { const n = [...references]; n[idx] = { ...n[idx], email: e.target.value }; setReferences(n); }} className="w-full min-w-0 h-[42px] px-3 rounded-lg border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-medium text-slate-700 dark:text-slate-200 outline-none focus:border-indigo-500" placeholder="E-mail" />
-                        </div>
-                        <div className="min-w-0">
-                          <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Phone</label>
-                          <input type="tel" value={references[idx]?.phone ?? ''} onChange={e => { const n = [...references]; n[idx] = { ...n[idx], phone: e.target.value.replace(/\D/g, '') }; setReferences(n); }} className="w-full min-w-0 h-[42px] px-3 rounded-lg border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-medium text-slate-700 dark:text-slate-200 outline-none focus:border-indigo-500" placeholder="e.g. 9876543210" maxLength={15} />
-                        </div>
-                        <div className="min-w-0">
-                          <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Period for which known</label>
-                          <input type="text" value={references[idx]?.periodKnown ?? ''} onChange={e => { const n = [...references]; n[idx] = { ...n[idx], periodKnown: e.target.value }; setReferences(n); }} className="w-full min-w-0 h-[42px] px-3 rounded-lg border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-medium text-slate-700 dark:text-slate-200 outline-none focus:border-indigo-500" placeholder="e.g. 5 years" />
-                        </div>
-                      </div>
+                    <div key={idx} className={idx === 1 ? "border-t-[3px] border-slate-200 dark:border-slate-700" : ""}>
+                      <TabularRow columns={3}>
+                        <TabularField label={`REFERENCE ${idx + 1} NAME`} required>
+                          <input type="text" value={references[idx]?.name ?? ''} onChange={e => { const n = [...references]; n[idx] = { ...n[idx], name: e.target.value }; setReferences(n); }} className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400" placeholder="Full name" />
+                        </TabularField>
+                        <TabularField label="COMPANY">
+                          <input type="text" value={references[idx]?.company ?? ''} onChange={e => { const n = [...references]; n[idx] = { ...n[idx], company: e.target.value }; setReferences(n); }} className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400" placeholder="Company" />
+                        </TabularField>
+                        <TabularField label="DESIGNATION / OCCUPATION">
+                          <input type="text" value={references[idx]?.designation ?? ''} onChange={e => { const n = [...references]; n[idx] = { ...n[idx], designation: e.target.value }; setReferences(n); }} className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400" placeholder="Designation / Occupation" />
+                        </TabularField>
+                      </TabularRow>
+                      <TabularRow columns={4}>
+                        <TabularField label="ADDRESS">
+                          <input type="text" value={references[idx]?.address ?? ''} onChange={e => { const n = [...references]; n[idx] = { ...n[idx], address: e.target.value }; setReferences(n); }} className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400" placeholder="Address" />
+                        </TabularField>
+                        <TabularField label="E-MAIL">
+                          <input type="email" value={references[idx]?.email ?? ''} onChange={e => { const n = [...references]; n[idx] = { ...n[idx], email: e.target.value }; setReferences(n); }} className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400" placeholder="E-mail" />
+                        </TabularField>
+                        <TabularField label="PHONE" required>
+                          <input type="tel" value={references[idx]?.phone ?? ''} onChange={e => { const n = [...references]; n[idx] = { ...n[idx], phone: e.target.value.replace(/\D/g, '') }; setReferences(n); }} className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400" placeholder="e.g. 9876543210" maxLength={15} />
+                        </TabularField>
+                        <TabularField label="PERIOD KNOWN">
+                          <input type="text" value={references[idx]?.periodKnown ?? ''} onChange={e => { const n = [...references]; n[idx] = { ...n[idx], periodKnown: e.target.value }; setReferences(n); }} className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400" placeholder="e.g. 5 years" />
+                        </TabularField>
+                      </TabularRow>
                     </div>
                   ))}
-                </div>
+                </TabularContainer>
               </div>
             )}
 
-            {/* Step 9: Other Perquisites */}
-            {step === 9 && (
-              <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="bg-white dark:bg-slate-950 p-4 rounded-xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm">
-                  <h3 className="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-tight mb-4 border-l-[3px] border-indigo-500 pl-2">OTHER PERQUISITES DETAILS</h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full border border-slate-200 dark:border-slate-700 text-sm">
-                      <tbody className="text-slate-700 dark:text-slate-300">
-                        {/* COMPANY'S CAR */}
-                        <tr><td colSpan={4} className="border border-slate-200 dark:border-slate-700 p-2 font-semibold bg-white dark:bg-slate-800/50">COMPANY'S CAR</td></tr>
-                        <tr>
-                          <td className="border border-slate-200 dark:border-slate-700 p-2">i.</td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-2">Model</td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-1"><input type="text" value={perquisites.companyCarModel} onChange={e => setPerquisites(p => ({ ...p, companyCarModel: e.target.value }))} className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm" placeholder="Car model" /></td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-1"><input type="text" className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm" placeholder="Remarks" readOnly disabled /></td>
-                        </tr>
-                        <tr>
-                          <td className="border border-slate-200 dark:border-slate-700 p-2">ii.</td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-2">Any limit in mileage (K.m.)</td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-1"><input type="text" value={perquisites.companyCarMileageKm} onChange={e => setPerquisites(p => ({ ...p, companyCarMileageKm: e.target.value }))} className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm" placeholder="K.m." /></td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-1"><input type="text" className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm" placeholder="Remarks" readOnly disabled /></td>
-                        </tr>
-                        <tr>
-                          <td className="border border-slate-200 dark:border-slate-700 p-2">iii.</td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-2">Petrol Consumption (Average Rs. per month)</td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-1"><input type="text" value={perquisites.companyCarPetrolRsMonth} onChange={e => setPerquisites(p => ({ ...p, companyCarPetrolRsMonth: e.target.value }))} className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm" placeholder="Rs." /></td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-1"><input type="text" className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm" placeholder="Remarks" readOnly disabled /></td>
-                        </tr>
-                        {/* COMPANY'S LEASED ACCOM. */}
-                        <tr><td colSpan={4} className="border border-slate-200 dark:border-slate-700 p-2 font-semibold bg-white dark:bg-slate-800/50">COMPANY'S LEASED ACCOM.</td></tr>
-                        <tr>
-                          <td className="border border-slate-200 dark:border-slate-700 p-2">i.</td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-2">Co.'s leased (Please specify)</td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-1"><input type="text" value={perquisites.leasedAccomSpecify} onChange={e => setPerquisites(p => ({ ...p, leasedAccomSpecify: e.target.value }))} className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm" placeholder="Specify" /></td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-1"><input type="text" className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm" placeholder="Remarks" readOnly disabled /></td>
-                        </tr>
-                        <tr>
-                          <td className="border border-slate-200 dark:border-slate-700 p-2">ii.</td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-2">Whether Flat stand in wife's name</td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-1">
-                            <div className="flex gap-4">
-                              <label className="flex items-center gap-1.5 cursor-pointer"><input type="radio" name="leasedWife" checked={perquisites.leasedAccomFlatInWifeName === 'yes'} onChange={() => setPerquisites(p => ({ ...p, leasedAccomFlatInWifeName: 'yes' }))} className="w-3.5 h-3.5 text-slate-900" /> Yes</label>
-                              <label className="flex items-center gap-1.5 cursor-pointer"><input type="radio" name="leasedWife" checked={perquisites.leasedAccomFlatInWifeName === 'no'} onChange={() => setPerquisites(p => ({ ...p, leasedAccomFlatInWifeName: 'no' }))} className="w-3.5 h-3.5 text-slate-900" /> No</label>
-                            </div>
-                          </td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-1"><input type="text" className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm" placeholder="Remarks" readOnly disabled /></td>
-                        </tr>
-                        <tr>
-                          <td className="border border-slate-200 dark:border-slate-700 p-2">iii.</td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-2">Monthly Rent (Rs.)</td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-1"><input type="text" value={perquisites.leasedAccomMonthlyRentRs} onChange={e => setPerquisites(p => ({ ...p, leasedAccomMonthlyRentRs: e.target.value }))} className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm" placeholder="Rs." /></td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-1"><input type="text" className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm" placeholder="Remarks" readOnly disabled /></td>
-                        </tr>
-                        <tr>
-                          <td className="border border-slate-200 dark:border-slate-700 p-2">iv.</td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-2">Deposit amount (Rs.)</td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-1"><input type="text" value={perquisites.leasedAccomDepositRs} onChange={e => setPerquisites(p => ({ ...p, leasedAccomDepositRs: e.target.value }))} className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm" placeholder="Rs." /></td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-1"><input type="text" className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm" placeholder="Remarks" readOnly disabled /></td>
-                        </tr>
-                        {/* HARD FURNISHING */}
-                        <tr><td colSpan={4} className="border border-slate-200 dark:border-slate-700 p-2 font-semibold bg-slate-50 dark:bg-slate-800/50">HARD FURNISHING</td></tr>
-                        <tr>
-                          <td className="border border-slate-200 dark:border-slate-700 p-2">i.</td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-2">Kindly specify limits</td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-1"><input type="text" value={perquisites.hardFurnishingLimits} onChange={e => setPerquisites(p => ({ ...p, hardFurnishingLimits: e.target.value }))} className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm" /></td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-1"><input type="text" className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm" placeholder="Remarks" readOnly disabled /></td>
-                        </tr>
-                        <tr>
-                          <td className="border border-slate-200 dark:border-slate-700 p-2">ii.</td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-2">Whether limits annualised basis or some other period (please specify)</td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-1"><input type="text" value={perquisites.hardFurnishingPeriod} onChange={e => setPerquisites(p => ({ ...p, hardFurnishingPeriod: e.target.value }))} className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm" placeholder="e.g. Annual" /></td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-1"><input type="text" className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm" placeholder="Remarks" readOnly disabled /></td>
-                        </tr>
-                        <tr>
-                          <td className="border border-slate-200 dark:border-slate-700 p-2">iii.</td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-2">What would be the cost to the company on annual basis</td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-1"><input type="text" value={perquisites.hardFurnishingAnnualCostRs} onChange={e => setPerquisites(p => ({ ...p, hardFurnishingAnnualCostRs: e.target.value }))} className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm" placeholder="Rs." /></td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-1"><input type="text" className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm" placeholder="Remarks" readOnly disabled /></td>
-                        </tr>
-                        {/* INCENTIVE IF ANY */}
-                        <tr><td colSpan={4} className="border border-slate-200 dark:border-slate-700 p-2 font-semibold bg-slate-50 dark:bg-slate-800/50">INCENTIVE IF ANY</td></tr>
-                        <tr>
-                          <td className="border border-slate-200 dark:border-slate-700 p-2">i.</td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-2">Give particulars in whatever form the same is received</td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-1"><textarea value={perquisites.incentiveParticulars} onChange={e => setPerquisites(p => ({ ...p, incentiveParticulars: e.target.value }))} rows={2} className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm resize-y" placeholder="Particulars" /></td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-1"><input type="text" className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm" placeholder="Remarks" readOnly disabled /></td>
-                        </tr>
-                        <tr>
-                          <td className="border border-slate-200 dark:border-slate-700 p-2">ii.</td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-2">If these details are already covered above, please specify to avoid duplication</td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-1"><textarea value={perquisites.incentiveAvoidDuplication} onChange={e => setPerquisites(p => ({ ...p, incentiveAvoidDuplication: e.target.value }))} rows={2} className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm resize-y" placeholder="Specify" /></td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-1"><input type="text" className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm" placeholder="Remarks" readOnly disabled /></td>
-                        </tr>
-                        {/* TELEPHONE */}
-                        <tr><td colSpan={4} className="border border-slate-200 dark:border-slate-700 p-2 font-semibold bg-slate-50 dark:bg-slate-800/50">TELEPHONE</td></tr>
-                        <tr>
-                          <td className="border border-slate-200 dark:border-slate-700 p-2">i.</td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-2">Whether it is Company's or your personal</td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-1">
-                            <div className="flex gap-4">
-                              <label className="flex items-center gap-1.5 cursor-pointer"><input type="radio" name="telType" checked={perquisites.telephoneCompanyOrPersonal === 'Company'} onChange={() => setPerquisites(p => ({ ...p, telephoneCompanyOrPersonal: 'Company' }))} className="w-3.5 h-3.5 text-slate-900" /> Company</label>
-                              <label className="flex items-center gap-1.5 cursor-pointer"><input type="radio" name="telType" checked={perquisites.telephoneCompanyOrPersonal === 'Personal'} onChange={() => setPerquisites(p => ({ ...p, telephoneCompanyOrPersonal: 'Personal' }))} className="w-3.5 h-3.5 text-slate-900" /> Personal</label>
-                            </div>
-                          </td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-1"><input type="text" className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm" placeholder="Remarks" readOnly disabled /></td>
-                        </tr>
-                        <tr>
-                          <td className="border border-slate-200 dark:border-slate-700 p-2">ii.</td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-2">Is there any limit of reimbursement</td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-1">
-                            <div className="flex gap-4">
-                              <label className="flex items-center gap-1.5 cursor-pointer"><input type="radio" name="telReimb" checked={perquisites.telephoneReimbursementLimit === 'yes'} onChange={() => setPerquisites(p => ({ ...p, telephoneReimbursementLimit: 'yes' }))} className="w-3.5 h-3.5 text-slate-900" /> Yes</label>
-                              <label className="flex items-center gap-1.5 cursor-pointer"><input type="radio" name="telReimb" checked={perquisites.telephoneReimbursementLimit === 'no'} onChange={() => setPerquisites(p => ({ ...p, telephoneReimbursementLimit: 'no' }))} className="w-3.5 h-3.5 text-slate-900" /> No</label>
-                            </div>
-                          </td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-1"><input type="text" className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm" placeholder="Remarks" readOnly disabled /></td>
-                        </tr>
-                        <tr>
-                          <td className="border border-slate-200 dark:border-slate-700 p-2">iii.</td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-2">If yes, please specify the amount</td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-1"><input type="text" value={perquisites.telephoneLimitAmountRs} onChange={e => setPerquisites(p => ({ ...p, telephoneLimitAmountRs: e.target.value }))} className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm" placeholder="Rs." disabled={perquisites.telephoneReimbursementLimit !== 'yes'} /></td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-1"><input type="text" className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm" placeholder="Remarks" readOnly disabled /></td>
-                        </tr>
-                        {/* TAX AT SOURCE */}
-                        <tr><td colSpan={4} className="border border-slate-200 dark:border-slate-700 p-2 font-semibold bg-slate-50 dark:bg-slate-800/50">TAX AT SOURCE (MONTHLY AS PER PAY SLIP)</td></tr>
-                        <tr>
-                          <td className="border border-slate-200 dark:border-slate-700 p-2">-</td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-2">Amount (Rs.)</td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-1"><input type="text" value={perquisites.taxAtSourceMonthlyRs} onChange={e => setPerquisites(p => ({ ...p, taxAtSourceMonthlyRs: e.target.value }))} className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm" placeholder="Rs." /></td>
-                          <td className="border border-slate-200 dark:border-slate-700 p-1"><input type="text" className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm" placeholder="Remarks" readOnly disabled /></td>
-                        </tr>
-                        {(perquisites.customFields || []).map((field, idx) => (
-                          <tr key={idx}>
-                            <td className="border border-slate-200 dark:border-slate-700 p-2">{idx + 1}.</td>
-                            <td className="border border-slate-200 dark:border-slate-700 p-1"><input type="text" value={field.label} onChange={e => setPerquisites(p => ({ ...p, customFields: p.customFields.map((f, i) => i === idx ? { ...f, label: e.target.value } : f) }))} className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm" placeholder="Field label" /></td>
-                            <td className="border border-slate-200 dark:border-slate-700 p-1"><input type="text" value={field.value} onChange={e => setPerquisites(p => ({ ...p, customFields: p.customFields.map((f, i) => i === idx ? { ...f, value: e.target.value } : f) }))} className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm" placeholder="Value" /></td>
-                            <td className="border border-slate-200 dark:border-slate-700 p-1">
-                              <div className="flex items-center gap-1">
-                                <input type="text" value={field.remarks} onChange={e => setPerquisites(p => ({ ...p, customFields: p.customFields.map((f, i) => i === idx ? { ...f, remarks: e.target.value } : f) }))} className="flex-1 min-w-0 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-sm" placeholder="Remarks" />
-                                <button type="button" onClick={() => setPerquisites(p => ({ ...p, customFields: p.customFields.filter((_, i) => i !== idx) }))} className="p-1 text-slate-400 hover:text-rose-500 rounded shrink-0" title="Remove"><Trash2 className="w-4 h-4" /></button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+            {/* Step 9: Additional Benefits */}
+            {actualStep === 9 && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <TabularContainer>
+                  <div className="bg-slate-100 dark:bg-slate-800/80 p-3 text-xs font-bold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 uppercase">
+                    COMPANY'S CAR
                   </div>
-                  <div className="mt-3 flex justify-start">
-                    <button type="button" onClick={() => setPerquisites(p => ({ ...p, customFields: [...(p.customFields || []), { label: '', value: '', remarks: '' }] }))} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-500 text-slate-900 dark:text-white bg-indigo-50 dark:bg-indigo-950/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 text-xs font-semibold transition-colors">
-                      <Plus className="w-4 h-4" /> Add custom field
+                  <TabularRow columns={2}>
+                    <TabularField label="MODEL">
+                      <input type="text" value={perquisites.companyCarModel} onChange={e => setPerquisites(p => ({ ...p, companyCarModel: e.target.value }))} className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400" placeholder="Car model" />
+                    </TabularField>
+                    <TabularField label="REMARKS">
+                      <input type="text" className="w-full h-[38px] px-3 bg-slate-50 dark:bg-slate-900/50 outline-none text-sm font-medium text-slate-400" placeholder="Remarks" readOnly disabled />
+                    </TabularField>
+                  </TabularRow>
+                  <TabularRow columns={2}>
+                    <TabularField label="ANY LIMIT IN MILEAGE (K.M.)">
+                      <input type="text" value={perquisites.companyCarMileageKm} onChange={e => setPerquisites(p => ({ ...p, companyCarMileageKm: e.target.value }))} className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400" placeholder="K.m." />
+                    </TabularField>
+                    <TabularField label="REMARKS">
+                      <input type="text" className="w-full h-[38px] px-3 bg-slate-50 dark:bg-slate-900/50 outline-none text-sm font-medium text-slate-400" placeholder="Remarks" readOnly disabled />
+                    </TabularField>
+                  </TabularRow>
+                  <TabularRow columns={2}>
+                    <TabularField label="PETROL CONSUMPTION (AVERAGE RS. PER MONTH)">
+                      <input type="text" value={perquisites.companyCarPetrolRsMonth} onChange={e => setPerquisites(p => ({ ...p, companyCarPetrolRsMonth: e.target.value }))} className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400" placeholder="Rs." />
+                    </TabularField>
+                    <TabularField label="REMARKS">
+                      <input type="text" className="w-full h-[38px] px-3 bg-slate-50 dark:bg-slate-900/50 outline-none text-sm font-medium text-slate-400" placeholder="Remarks" readOnly disabled />
+                    </TabularField>
+                  </TabularRow>
+                </TabularContainer>
+
+                <TabularContainer>
+                  <div className="bg-slate-100 dark:bg-slate-800/80 p-3 text-xs font-bold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 uppercase">
+                    COMPANY'S LEASED ACCOM.
+                  </div>
+                  <TabularRow columns={2}>
+                    <TabularField label="CO.'S LEASED (PLEASE SPECIFY)">
+                      <input type="text" value={perquisites.leasedAccomSpecify} onChange={e => setPerquisites(p => ({ ...p, leasedAccomSpecify: e.target.value }))} className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400" placeholder="Specify" />
+                    </TabularField>
+                    <TabularField label="REMARKS">
+                      <input type="text" className="w-full h-[38px] px-3 bg-slate-50 dark:bg-slate-900/50 outline-none text-sm font-medium text-slate-400" placeholder="Remarks" readOnly disabled />
+                    </TabularField>
+                  </TabularRow>
+                  <TabularRow columns={2}>
+                    <TabularField label="WHETHER FLAT STAND IN WIFE'S NAME">
+                      <div className="flex gap-6 p-3">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="leasedWife" checked={perquisites.leasedAccomFlatInWifeName === 'yes'} onChange={() => setPerquisites(p => ({ ...p, leasedAccomFlatInWifeName: 'yes' }))} className="w-4 h-4 text-slate-900 border-slate-300 focus:ring-emerald-500" />
+                          <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Yes</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="leasedWife" checked={perquisites.leasedAccomFlatInWifeName === 'no'} onChange={() => setPerquisites(p => ({ ...p, leasedAccomFlatInWifeName: 'no' }))} className="w-4 h-4 text-slate-900 border-slate-300 focus:ring-emerald-500" />
+                          <span className="text-sm font-medium text-slate-700 dark:text-slate-200">No</span>
+                        </label>
+                      </div>
+                    </TabularField>
+                    <TabularField label="REMARKS">
+                      <input type="text" className="w-full h-[38px] px-3 bg-slate-50 dark:bg-slate-900/50 outline-none text-sm font-medium text-slate-400" placeholder="Remarks" readOnly disabled />
+                    </TabularField>
+                  </TabularRow>
+                  <TabularRow columns={2}>
+                    <TabularField label="MONTHLY RENT (RS.)">
+                      <input type="text" value={perquisites.leasedAccomMonthlyRentRs} onChange={e => setPerquisites(p => ({ ...p, leasedAccomMonthlyRentRs: e.target.value }))} className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400" placeholder="Rs." />
+                    </TabularField>
+                    <TabularField label="REMARKS">
+                      <input type="text" className="w-full h-[38px] px-3 bg-slate-50 dark:bg-slate-900/50 outline-none text-sm font-medium text-slate-400" placeholder="Remarks" readOnly disabled />
+                    </TabularField>
+                  </TabularRow>
+                  <TabularRow columns={2}>
+                    <TabularField label="DEPOSIT AMOUNT (RS.)">
+                      <input type="text" value={perquisites.leasedAccomDepositRs} onChange={e => setPerquisites(p => ({ ...p, leasedAccomDepositRs: e.target.value }))} className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400" placeholder="Rs." />
+                    </TabularField>
+                    <TabularField label="REMARKS">
+                      <input type="text" className="w-full h-[38px] px-3 bg-slate-50 dark:bg-slate-900/50 outline-none text-sm font-medium text-slate-400" placeholder="Remarks" readOnly disabled />
+                    </TabularField>
+                  </TabularRow>
+                </TabularContainer>
+
+                <TabularContainer>
+                  <div className="bg-slate-100 dark:bg-slate-800/80 p-3 text-xs font-bold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 uppercase">
+                    HARD FURNISHING
+                  </div>
+                  <TabularRow columns={2}>
+                    <TabularField label="KINDLY SPECIFY LIMITS">
+                      <input type="text" value={perquisites.hardFurnishingLimits} onChange={e => setPerquisites(p => ({ ...p, hardFurnishingLimits: e.target.value }))} className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400" placeholder="Specify limits" />
+                    </TabularField>
+                    <TabularField label="REMARKS">
+                      <input type="text" className="w-full h-[38px] px-3 bg-slate-50 dark:bg-slate-900/50 outline-none text-sm font-medium text-slate-400" placeholder="Remarks" readOnly disabled />
+                    </TabularField>
+                  </TabularRow>
+                  <TabularRow columns={2}>
+                    <TabularField label="WHETHER LIMITS ANNUALISED BASIS OR SOME OTHER PERIOD (PLEASE SPECIFY)">
+                      <input type="text" value={perquisites.hardFurnishingPeriod} onChange={e => setPerquisites(p => ({ ...p, hardFurnishingPeriod: e.target.value }))} className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400" placeholder="e.g. Annual" />
+                    </TabularField>
+                    <TabularField label="REMARKS">
+                      <input type="text" className="w-full h-[38px] px-3 bg-slate-50 dark:bg-slate-900/50 outline-none text-sm font-medium text-slate-400" placeholder="Remarks" readOnly disabled />
+                    </TabularField>
+                  </TabularRow>
+                  <TabularRow columns={2}>
+                    <TabularField label="WHAT WOULD BE THE COST TO THE COMPANY ON ANNUAL BASIS">
+                      <input type="text" value={perquisites.hardFurnishingAnnualCostRs} onChange={e => setPerquisites(p => ({ ...p, hardFurnishingAnnualCostRs: e.target.value }))} className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400" placeholder="Rs." />
+                    </TabularField>
+                    <TabularField label="REMARKS">
+                      <input type="text" className="w-full h-[38px] px-3 bg-slate-50 dark:bg-slate-900/50 outline-none text-sm font-medium text-slate-400" placeholder="Remarks" readOnly disabled />
+                    </TabularField>
+                  </TabularRow>
+                </TabularContainer>
+
+                <TabularContainer>
+                  <div className="bg-slate-100 dark:bg-slate-800/80 p-3 text-xs font-bold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 uppercase">
+                    INCENTIVE IF ANY
+                  </div>
+                  <TabularRow columns={2}>
+                    <TabularField label="GIVE PARTICULARS IN WHATEVER FORM THE SAME IS RECEIVED">
+                      <input type="text" value={perquisites.incentiveParticulars} onChange={e => setPerquisites(p => ({ ...p, incentiveParticulars: e.target.value }))} className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400" placeholder="Particulars" />
+                    </TabularField>
+                    <TabularField label="REMARKS">
+                      <input type="text" className="w-full h-[38px] px-3 bg-slate-50 dark:bg-slate-900/50 outline-none text-sm font-medium text-slate-400" placeholder="Remarks" readOnly disabled />
+                    </TabularField>
+                  </TabularRow>
+                  <TabularRow columns={2}>
+                    <TabularField label="IF THESE DETAILS ARE ALREADY COVERED ABOVE, PLEASE SPECIFY TO AVOID DUPLICATION">
+                      <input type="text" value={perquisites.incentiveAvoidDuplication} onChange={e => setPerquisites(p => ({ ...p, incentiveAvoidDuplication: e.target.value }))} className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400" placeholder="Specify" />
+                    </TabularField>
+                    <TabularField label="REMARKS">
+                      <input type="text" className="w-full h-[38px] px-3 bg-slate-50 dark:bg-slate-900/50 outline-none text-sm font-medium text-slate-400" placeholder="Remarks" readOnly disabled />
+                    </TabularField>
+                  </TabularRow>
+                </TabularContainer>
+
+                <TabularContainer>
+                  <div className="bg-slate-100 dark:bg-slate-800/80 p-3 text-xs font-bold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 uppercase">
+                    TELEPHONE
+                  </div>
+                  <TabularRow columns={2}>
+                    <TabularField label="WHETHER IT IS COMPANY'S OR YOUR PERSONAL">
+                      <div className="flex gap-6 p-3">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="telType" checked={perquisites.telephoneCompanyOrPersonal === 'Company'} onChange={() => setPerquisites(p => ({ ...p, telephoneCompanyOrPersonal: 'Company' }))} className="w-4 h-4 text-slate-900 border-slate-300 focus:ring-emerald-500" />
+                          <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Company</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="telType" checked={perquisites.telephoneCompanyOrPersonal === 'Personal'} onChange={() => setPerquisites(p => ({ ...p, telephoneCompanyOrPersonal: 'Personal' }))} className="w-4 h-4 text-slate-900 border-slate-300 focus:ring-emerald-500" />
+                          <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Personal</span>
+                        </label>
+                      </div>
+                    </TabularField>
+                    <TabularField label="REMARKS">
+                      <input type="text" className="w-full h-[38px] px-3 bg-slate-50 dark:bg-slate-900/50 outline-none text-sm font-medium text-slate-400" placeholder="Remarks" readOnly disabled />
+                    </TabularField>
+                  </TabularRow>
+                  <TabularRow columns={2}>
+                    <TabularField label="IS THERE ANY LIMIT OF REIMBURSEMENT">
+                      <div className="flex gap-6 p-3">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="telReimb" checked={perquisites.telephoneReimbursementLimit === 'yes'} onChange={() => setPerquisites(p => ({ ...p, telephoneReimbursementLimit: 'yes' }))} className="w-4 h-4 text-slate-900 border-slate-300 focus:ring-emerald-500" />
+                          <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Yes</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="telReimb" checked={perquisites.telephoneReimbursementLimit === 'no'} onChange={() => setPerquisites(p => ({ ...p, telephoneReimbursementLimit: 'no' }))} className="w-4 h-4 text-slate-900 border-slate-300 focus:ring-emerald-500" />
+                          <span className="text-sm font-medium text-slate-700 dark:text-slate-200">No</span>
+                        </label>
+                      </div>
+                    </TabularField>
+                    <TabularField label="REMARKS">
+                      <input type="text" className="w-full h-[38px] px-3 bg-slate-50 dark:bg-slate-900/50 outline-none text-sm font-medium text-slate-400" placeholder="Remarks" readOnly disabled />
+                    </TabularField>
+                  </TabularRow>
+                  <TabularRow columns={2}>
+                    <TabularField label="IF YES, PLEASE SPECIFY THE AMOUNT">
+                      <input type="text" value={perquisites.telephoneLimitAmountRs} onChange={e => setPerquisites(p => ({ ...p, telephoneLimitAmountRs: e.target.value }))} className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400" placeholder="Rs." disabled={perquisites.telephoneReimbursementLimit !== 'yes'} />
+                    </TabularField>
+                    <TabularField label="REMARKS">
+                      <input type="text" className="w-full h-[38px] px-3 bg-slate-50 dark:bg-slate-900/50 outline-none text-sm font-medium text-slate-400" placeholder="Remarks" readOnly disabled />
+                    </TabularField>
+                  </TabularRow>
+                </TabularContainer>
+
+                <TabularContainer>
+                  <div className="bg-slate-100 dark:bg-slate-800/80 p-3 text-xs font-bold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 uppercase flex items-center justify-between">
+                    <span>TAX AT SOURCE (MONTHLY AS PER PAY SLIP) & CUSTOM BENEFITS</span>
+                    <button type="button" onClick={() => setPerquisites(p => ({ ...p, customFields: [...(p.customFields || []), { label: '', value: '', remarks: '' }] }))} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-500 text-slate-900 dark:text-white bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 text-[10px] uppercase font-black tracking-widest transition-colors">
+                      <Plus className="w-4 h-4" /> Add benefit
                     </button>
                   </div>
-                </div>
+                  <TabularRow columns={2}>
+                    <TabularField label="AMOUNT (RS.)">
+                      <input type="text" value={perquisites.taxAtSourceMonthlyRs} onChange={e => setPerquisites(p => ({ ...p, taxAtSourceMonthlyRs: e.target.value }))} className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400" placeholder="Rs." />
+                    </TabularField>
+                    <TabularField label="REMARKS">
+                      <input type="text" className="w-full h-[38px] px-3 bg-slate-50 dark:bg-slate-900/50 outline-none text-sm font-medium text-slate-400" placeholder="Remarks" readOnly disabled />
+                    </TabularField>
+                  </TabularRow>
+
+                  {(perquisites.customFields || []).map((field, idx) => (
+                    <TabularRow columns={2} key={idx}>
+                      <TabularField label={`CUSTOM FIELD ${idx + 1}`}>
+                        <div className="flex w-full divide-x divide-slate-200 dark:divide-slate-700">
+                          <input type="text" value={field.label} onChange={e => setPerquisites(p => ({ ...p, customFields: p.customFields.map((f, i) => i === idx ? { ...f, label: e.target.value } : f) }))} className="w-1/2 h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400" placeholder="Field label" />
+                          <input type="text" value={field.value} onChange={e => setPerquisites(p => ({ ...p, customFields: p.customFields.map((f, i) => i === idx ? { ...f, value: e.target.value } : f) }))} className="w-1/2 h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400" placeholder="Value" />
+                        </div>
+                      </TabularField>
+                      <TabularField label="REMARKS">
+                        <div className="flex w-full divide-x divide-slate-200 dark:divide-slate-700">
+                          <input type="text" value={field.remarks} onChange={e => setPerquisites(p => ({ ...p, customFields: p.customFields.map((f, i) => i === idx ? { ...f, remarks: e.target.value } : f) }))} className="w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400" placeholder="Remarks" />
+                          <button type="button" onClick={() => setPerquisites(p => ({ ...p, customFields: p.customFields.filter((_, i) => i !== idx) }))} className="w-12 flex items-center justify-center text-slate-400 hover:text-rose-500 shrink-0" title="Remove"><Trash2 className="w-4 h-4" /></button>
+                        </div>
+                      </TabularField>
+                    </TabularRow>
+                  ))}
+                </TabularContainer>
               </div>
             )}
 
-            {/* Step 10: Account Credentials */}
-            {step === 10 && (
+            {/* Step 10: Employment Setup */}
+            {actualStep === 10 && (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                {/* Account Credentials - High Premium UI */}
-                <div className="bg-white dark:bg-slate-950 p-6 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 shadow-xl relative overflow-hidden group/account">
-
-                  
-                  <div className="flex items-center gap-3 mb-6 relative z-10">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-600/10 flex items-center justify-center text-slate-900 shrink-0 shadow-sm border border-indigo-100 dark:border-indigo-900/30">
-                      <ShieldCheck size={20} />
-                    </div>
-                    <div>
-                      <h3 className="text-base font-black text-slate-800 dark:text-white uppercase tracking-tight">Security</h3>
-                    </div>
+                {/* Account Credentials */}
+                <TabularContainer>
+                  <div className="bg-slate-100 dark:bg-slate-800/80 p-3 text-xs font-bold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 uppercase flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-indigo-500" /> Account Setup
                   </div>
-
-                  {/* Credentials Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10 font-outfit">
-                    <div className="flex flex-col gap-2">
-                      <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                        <Mail size={20} className="text-indigo-400" />
-                        Login Email ID <span className="text-rose-500">*</span>
-                      </label>
-                      <div className="relative group/field shadow-sm rounded-xl">
-                        <input
-                          type="email"
-                          value={email}
-                          onChange={e => setEmail(e.target.value)}
-                          className={`w-full pl-5 pr-4 py-3 bg-transparent dark:bg-slate-900/50 border-2 rounded-xl outline-none transition-all text-sm font-bold text-slate-700 dark:text-slate-200 ${errors.email ? 'border-rose-200' : 'border-slate-100 dark:border-slate-800'}`}
-                          placeholder="e.g. john.doe@company.com"
-                          disabled={viewOnly && step !== 9}
-                        />
-                      </div>
-                      {errors.email && <div className="text-[9px] font-bold text-rose-500 px-1 flex items-center gap-1.5"><AlertCircle size={10} /> {errors.email}</div>}
-                    </div>
-
-                    <div className="flex flex-col gap-2">
-                      <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                        <Lock size={20} className="text-indigo-400" />
-                        Platform Access Key <span className="text-rose-500">*</span>
-                      </label>
-                      <div className="relative group/field shadow-sm rounded-xl overflow-hidden">
+                  <TabularRow columns={2}>
+                    <TabularField label="OFFICIAL EMAIL ID (LOGIN EMAIL)" required>
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={e => setEmail(e.target.value)}
+                        className={`w-full h-[38px] px-3 bg-transparent outline-none text-sm font-medium placeholder:text-slate-400 ${errors.email ? 'text-rose-500' : ''}`}
+                        placeholder="e.g. john.doe@company.com"
+                        disabled={viewOnly && step !== 9}
+                      />
+                      {errors.email && <div className="text-[9px] font-bold text-rose-500 mt-1 uppercase">{errors.email}</div>}
+                    </TabularField>
+                    <TabularField label="PLATFORM ACCESS KEY" required>
+                      <div className="relative w-full flex items-center h-[38px]">
                         <input
                           type={showPassword ? "text" : "password"}
                           value={passwordLock ? "••••••••••••" : password}
-                          onChange={e => !passwordLock && setPassword(e.target.value)}
+                          onChange={e => {
+                            if (!passwordLock) {
+                              setPassword(e.target.value);
+                              setPasswordEdited(e.target.value !== '');
+                            }
+                          }}
                           onFocus={() => { if (passwordLock) setShowPasswordConfirm(true); }}
                           readOnly={passwordLock}
-                          className={`w-full pl-5 pr-20 py-3 bg-transparent dark:bg-slate-900/50 border-2 rounded-xl outline-none transition-all text-sm font-bold tracking-[0.2em] text-slate-700 dark:text-slate-200 ${errors.password ? 'border-rose-200' : 'border-slate-100 dark:border-slate-800'} ${passwordLock ? 'cursor-not-allowed bg-slate-100/50 dark:bg-slate-950/50' : ''}`}
+                          className={`w-full h-full px-3 pr-20 bg-transparent outline-none text-sm font-medium tracking-[0.2em] placeholder:text-slate-400 ${errors.password ? 'text-rose-500' : ''} ${passwordLock ? 'cursor-not-allowed text-slate-500' : ''}`}
                           placeholder={passwordLock ? "Password is hidden" : "Enter new password"}
                           disabled={viewOnly}
                         />
-                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm px-1.5 py-1 rounded-lg border border-slate-100 dark:border-slate-800">
+                        <div className="absolute right-1 flex items-center gap-1">
                           {!passwordLock && (
                             <button 
                               type="button" 
                               onClick={() => setShowPassword(!showPassword)} 
-                              className="text-slate-400 hover:text-slate-900 transition-colors p-1.5 focus:outline-none"
+                              className="text-slate-400 hover:text-slate-900 transition-colors p-1 focus:outline-none"
                               title={showPassword ? "Hide" : "Show"}
                             >
-                              {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                             </button>
                           )}
                           {passwordLock && !viewOnly && (
                             <button 
                               type="button" 
                               onClick={() => setShowPasswordConfirm(true)} 
-                              className="text-indigo-500 hover:text-white hover:bg-indigo-600 transition-all p-1.5 rounded-md" 
+                              className="text-indigo-500 hover:text-white hover:bg-indigo-600 transition-all p-1 rounded" 
                               title="Edit Password"
                             >
-                              <Edit2 size={13} strokeWidth={3} />
+                              <Edit2 size={12} strokeWidth={3} />
                             </button>
                           )}
                         </div>
                       </div>
-                      {errors.password && <div className="text-[9px] font-bold text-rose-500 px-1 flex items-center gap-1.5"><AlertCircle size={10} /> {errors.password}</div>}
-                    </div>
-                  </div>
-
-                  {/* Compensation & Salary Assignment */}
-                  <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800 relative z-10">
-                    <div className="flex items-center gap-3 mb-6">
-                      <div className="w-10 h-10 rounded-xl bg-emerald-600/10 flex items-center justify-center text-emerald-600 shrink-0 shadow-sm border border-emerald-100 dark:border-emerald-900/30">
-                        <IndianRupee size={20} />
-                      </div>
-                      <div>
-                        <h3 className="text-base font-black text-slate-800 dark:text-white uppercase tracking-tight">Compensation Setup</h3>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Assign salary structure & effective date</p>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 font-outfit">
-                      <div className="flex flex-col gap-2">
-                        <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                          <Layers size={20} className="text-emerald-400" />
-                          Salary Template <span className="text-rose-500">*</span>
-                        </label>
-                        <select
-                          value={salaryTemplateId}
-                          onChange={e => setSalaryTemplateId(e.target.value)}
-                          className={`w-full px-5 py-3 bg-transparent dark:bg-slate-900/50 border-2 rounded-xl outline-none transition-all text-sm font-bold text-slate-700 dark:text-slate-200 ${errors.salaryTemplateId ? 'border-rose-200' : 'border-slate-100 dark:border-slate-800'}`}
-                        >
-                          <option value="">Select Structure</option>
-                          {salaryTemplates.map(t => (
-                            <option key={t._id} value={t._id}>{t.name} (CTC: {t.annualCTC})</option>
-                          ))}
-                        </select>
-                        {errors.salaryTemplateId && <div className="text-[9px] font-bold text-rose-500 px-1 flex items-center gap-1.5"><AlertCircle size={10} /> {errors.salaryTemplateId}</div>}
-                      </div>
-
-                      <div className="flex flex-col gap-2">
-                        <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                          <Calendar size={20} className="text-emerald-400" />
-                          Effective Date <span className="text-rose-500">*</span>
-                        </label>
-                        <input
-                          type="date"
-                          value={salaryEffectiveDate}
-                          onChange={e => setSalaryEffectiveDate(e.target.value)}
-                          className={`w-full px-5 py-3 bg-transparent dark:bg-slate-900/50 border-2 rounded-xl outline-none transition-all text-sm font-bold text-slate-700 dark:text-slate-200 ${errors.effectiveDate ? 'border-rose-200' : 'border-slate-100 dark:border-slate-800'}`}
-                        />
-                        {errors.effectiveDate && <div className="text-[9px] font-bold text-rose-500 px-1 flex items-center gap-1.5"><AlertCircle size={10} /> {errors.effectiveDate}</div>}
-                        <p className="text-[9px] font-medium text-slate-400 px-1">Note: Cannot be before {joiningDate || 'Joining Date'}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                </div>
-
+                      {errors.password && <div className="text-[9px] font-bold text-rose-500 mt-1 uppercase">{errors.password}</div>}
+                    </TabularField>
+                  </TabularRow>
+                </TabularContainer>
 
                 {/* Password Change Confirmation Modal */}
                 {showPasswordConfirm && (
@@ -3011,13 +2823,27 @@ export default function EmployeeForm({
                 )}
               </div>
             )}
+
+            {/* Step 11: Salary Breakup Step */}
+            {actualStep === 11 && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <SalaryBreakupStep
+                  employee={employee}
+                  joiningDate={joiningDate}
+                  salaryEffectiveDate={salaryEffectiveDate}
+                  setSalaryEffectiveDate={setSalaryEffectiveDate}
+                  viewOnly={viewOnly}
+                  onSalaryAssigned={() => setSalaryAssigned(true)}
+                />
+              </div>
+            )}
           </div>
 
           {/* BOTTOM ACTION BAR - sticky at bottom (clean) */}
           <div className="sticky bottom-0 bg-white/95 backdrop-blur -mx-4 md:-mx-6 px-4 md:px-6 pt-3 pb-3 border-t border-gray-200 flex items-center justify-end gap-2.5 z-20 shrink-0 shadow-[0_-10px_24px_-18px_rgba(0,0,0,0.35)]">
             <button
               type="button"
-              onClick={() => step > 1 ? handlePrev() : onClose()}
+              onClick={() => step > 1 ? handlePrev() : (onClose ? onClose() : window.location.reload())}
               className="px-4 py-2 rounded-lg text-[13px] font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 hover:text-gray-900 transition-all focus:ring-2 focus:ring-gray-200"
             >
               {step > 1 ? 'Go Back' : (viewOnly ? 'Finish' : 'Cancel')}

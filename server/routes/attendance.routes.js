@@ -6,6 +6,7 @@ const requireActiveEmployee = require('../middleware/requireActiveEmployee');
 const attendCtrl = require('../controllers/attendance.controller');
 const faceAttendCtrl = require('../controllers/face-attendance.controller');
 const trackingCtrl = require('../controllers/attendanceTracking.controller');
+const dashboardCtrl = require('../controllers/attendanceDashboardController');
 const { checkPermission } = require('../middleware/rbac.middleware');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
@@ -28,6 +29,25 @@ router.use((req, res, next) => {
 // permission because the controller resolves the employee from req.user.
 router.post('/punch', auth.authenticate, requireActiveEmployee, attendCtrl.punch);
 router.post('/mark', auth.authenticate, requireActiveEmployee, trackingCtrl.markAttendance);
+/**
+ * @swagger
+ * /api/attendance/my:
+ *   get:
+ *     summary: Get my attendance
+ *     description: Retrieve attendance records for the authenticated employee.
+ *     tags: [Attendance]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: A list of attendance records
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Attendance'
+ */
 router.get('/my', auth.authenticate, checkPermission('employee.attendance', 'view'), attendCtrl.getMyAttendance);
 router.get(['/today-summary', '/today_summary'], auth.authenticate, (req, res, next) => {
     console.log(`[ATTENDANCE_DEBUG] Hit today-summary. Tenant: ${req.tenantId || 'NONE'}`);
@@ -45,11 +65,17 @@ router.delete('/face/delete', auth.authenticate, checkPermission('employee.atten
 router.post('/face/request-update', auth.authenticate, requireActiveEmployee, attendCtrl.requestFaceUpdate);
 router.get('/face/requests', auth.authenticate, checkPermission('attendance.face', 'view'), auth.requireHr, attendCtrl.getFaceUpdateRequests);
 router.post('/face/action-request', auth.authenticate, checkPermission('attendance.face', 'edit'), auth.requireHr, attendCtrl.actionFaceUpdate);
+router.get('/face/registered-users', auth.authenticate, checkPermission('attendance.face', 'view'), auth.requireHr, attendCtrl.getRegisteredFaces);
+router.delete('/face/delete-user/:employeeId', auth.authenticate, checkPermission('attendance.face', 'edit'), auth.requireHr, attendCtrl.deleteEmployeeFaceHR);
 
 // --- Manager Routes ---
 router.get('/team', auth.authenticate, checkPermission('attendance.dashboard', 'view'), attendCtrl.getTeamAttendance);
 
 // --- HR / Admin Routes ---
+router.get('/dashboard-kpi', auth.authenticate, dashboardCtrl.getDashboardKPIs);
+router.get('/daily-attendance', auth.authenticate, dashboardCtrl.getDailyAttendance);
+router.get('/muster-roll', auth.authenticate, dashboardCtrl.getMusterRoll);
+router.post('/muster-roll/save', auth.authenticate, dashboardCtrl.saveMusterRoll);
 router.get('/stats', auth.authenticate, checkPermission('attendance.dashboard', 'view'), attendCtrl.getHRStats);
 router.get('/trend', auth.authenticate, checkPermission('attendance.dashboard', 'view'), attendCtrl.getTrend);
 router.get('/all', auth.authenticate, checkPermission('attendance.dashboard', 'view'), attendCtrl.getAllAttendance);

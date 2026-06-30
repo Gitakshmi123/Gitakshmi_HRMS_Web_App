@@ -20,7 +20,8 @@ const RequirementSchema = new mongoose.Schema({
     hiringManager: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
     interviewPanel: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Employee' }],
     workMode: { type: String, default: 'On-site' },
-    jobType: { type: String, default: 'Full-Time' }
+    jobType: { type: String, default: 'Full-Time' },
+    grade: { type: mongoose.Schema.Types.ObjectId, ref: 'Grade' }
   },
 
   // STEP 3: Description & Matching
@@ -60,6 +61,7 @@ const RequirementSchema = new mongoose.Schema({
     externalInterviewers: [{ name: String, email: String }], // External interviewers
     
     mode: { type: String, enum: ['Online', 'Offline', 'Telephonic', 'Virtual', 'In-person'], default: 'Online' },
+    meetingLink: { type: String }, // For online mode meeting links
     durationMinutes: { type: Number, default: 30 },
 
     feedbackFormId: { type: mongoose.Schema.Types.ObjectId, ref: 'StageFeedbackForm' }, // Custom form per stage

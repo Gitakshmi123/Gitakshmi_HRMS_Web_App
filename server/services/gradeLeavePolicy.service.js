@@ -1,4 +1,30 @@
 const mongoose = require('mongoose');
+const { Parser } = require('expr-eval');
+
+function evaluateAllocationFormula(expression) {
+    if (!expression) return 0;
+    try {
+        const parser = new Parser();
+        parser.functions.IF = function(cond, t, f) { return cond ? t : f; };
+        parser.functions.ROUND = function(num, p) { return Number(Math.round(num + 'e' + p) + 'e-' + p); };
+        
+        const vars = {
+            REMAINING_MONTHS: 12,
+            SERVICE_MONTHS: 12,
+            PRESENT_DAYS: 365,
+            OD_DAYS: 0,
+            PUBLIC_HOLIDAYS: 10,
+            WEEKLY_OFFS: 52
+        };
+        // Normalize 'and' / 'or' for expr-eval if necessary, though expr-eval handles 'and'/'or'.
+        let cleanExpr = expression.replace(/IF\(/gi, 'IF(').replace(/ROUND\(/gi, 'ROUND(');
+        return parser.evaluate(cleanExpr, vars);
+    } catch (e) {
+        console.error('[EVAL_FORMULA] Failed to evaluate allocation formula:', expression, e.message);
+        const num = parseFloat(expression);
+        return isNaN(num) ? 0 : num;
+    }
+}
 
 const QUOTA_FIELDS = [
   'totalPerYear',
@@ -15,6 +41,13 @@ const QUOTA_FIELDS = [
   'minimumTenureMonths',
   'prorateForNewJoiners',
   'color',
+  'advanceNoticeDays',
+  'halfDayAllowed',
+  'postFactoAllowed',
+  'maxPostFactoCount',
+  'medicalCertRequiredAfterDays',
+  'applicableGender',
+  'maxChildrenLimit',
 ];
 
 function normalizeLeaveType(value) {
@@ -188,6 +221,35 @@ function resolvePolicyRulesForEmployee({ policy, employee, grade }) {
     resolveEffectiveRuleForGrade({ policy, rule, employee, grade }).rule
   );
   const existingTypes = new Set(resolvedRules.map((rule) => normalizeLeaveType(rule.leaveType)));
+
+  if (Array.isArray(policy?.leaveTypes)) {
+    for (const lt of policy.leaveTypes) {
+      const typeStr = normalizeLeaveType(lt);
+      if (typeStr && !existingTypes.has(typeStr)) {
+        resolvedRules.push({ leaveType: typeStr, totalPerYear: 0 });
+        existingTypes.add(typeStr);
+      }
+    }
+  }
+  
+  if (Array.isArray(policy?.formulas)) {
+    for (const f of policy.formulas) {
+      const typeStr = normalizeLeaveType(f.leaveType);
+      if (typeStr && f.formulaType === 'Allocation') {
+        const total = evaluateAllocationFormula(f.expression);
+        const existingRule = resolvedRules.find(r => normalizeLeaveType(r.leaveType) === typeStr);
+        if (existingRule) {
+            existingRule.totalPerYear = total;
+        } else {
+            resolvedRules.push({ leaveType: typeStr, totalPerYear: total });
+            existingTypes.add(typeStr);
+        }
+      } else if (typeStr && !existingTypes.has(typeStr)) {
+        resolvedRules.push({ leaveType: typeStr, totalPerYear: 0 });
+        existingTypes.add(typeStr);
+      }
+    }
+  }
 
   if (policy?.applicableTo !== 'Grade') {
     return resolvedRules;

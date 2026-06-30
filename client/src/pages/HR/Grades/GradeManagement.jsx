@@ -11,6 +11,7 @@ import {
 import { showToast } from '../../../utils/uiNotifications';
 import api from '../../../utils/api';
 import { AnimatePresence, motion } from 'framer-motion';
+import GradeExcelUploadModal from '../../../components/HR/GradeExcelUploadModal';
 
 /**
  * GradeManagement Component
@@ -28,6 +29,7 @@ export default function GradeManagement() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingGrade, setEditingGrade] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showUploadModal, setShowUploadModal] = useState(false);
 
   // Policy Selection Demo State
   const [targetType, setTargetType] = useState('ALL');
@@ -50,21 +52,8 @@ export default function GradeManagement() {
       setDepartments(deptData);
       setDesignations(posData);
       
-      // Demo fallbacks
-      if (gradeData.length === 0) {
-        setGrades([
-          { _id: '1', name: 'Junior Associate', code: 'G1', level: 1, description: 'Entry level', isActive: true },
-          { _id: '2', name: 'Senior Associate', code: 'G2', level: 2, description: 'Experienced', isActive: true },
-          { _id: '3', name: 'Manager', code: 'M1', level: 3, description: 'Lead', isActive: true },
-        ]);
-      }
-      if (deptData.length === 0) {
-        setDepartments([
-          { _id: 'd1', name: 'Engineering' },
-          { _id: 'd2', name: 'Human Resources' },
-          { _id: 'd3', name: 'Marketing' },
-        ]);
-      }
+      // Demo fallbacks removed to ensure valid MongoDB ObjectIds are used
+
     } catch (err) {
       console.error('Failed to fetch data:', err);
       showToast('info', 'Demo Mode', 'Loading targeting data...');
@@ -198,6 +187,13 @@ export default function GradeManagement() {
             />
           </div>
           <button 
+            onClick={() => setShowUploadModal(true)}
+            className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-bold text-xs uppercase tracking-widest shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98]"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Import
+          </button>
+          <button 
             onClick={() => handleOpenModal()}
             className="flex items-center gap-2 px-5 py-2.5 bg-slate-800 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs uppercase tracking-widest shadow-lg shadow-indigo-200 transition-all hover:scale-[1.02] active:scale-[0.98]"
           >
@@ -268,9 +264,25 @@ export default function GradeManagement() {
       </div>
 
       <GradeModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSuccess={fetchData} grade={editingGrade} />
+      <GradeExcelUploadModal 
+        isOpen={showUploadModal} 
+        onClose={() => setShowUploadModal(false)} 
+        onSuccess={(result) => {
+          if (result.uploadedCount > 0) {
+            fetchData();
+          }
+        }} 
+      />
     </div>
   );
 }
+
+const ActiveSwitch = ({ value, onChange }) => (
+  <div className="h-11 flex items-center px-3 bg-white rounded-xl border border-slate-200">
+    <Switch size="small" checked={!!value} onChange={onChange} />
+    <span className="ml-3 text-xs font-bold text-slate-600 uppercase tracking-wider">Active Status</span>
+  </div>
+);
 
 function GradeModal({ isOpen, onClose, onSuccess, grade }) {
   const [form] = Form.useForm();
@@ -304,8 +316,13 @@ function GradeModal({ isOpen, onClose, onSuccess, grade }) {
       }
       onSuccess();
       onClose();
-    } catch {
-      showToast('error', 'Error', 'Failed to save grade configuration');
+    } catch (err) {
+      console.error("API Error Response:", err.response?.data || err.message || err);
+      let errorMessage = err.response?.data?.message || 'Failed to save grade configuration';
+      if (err.response?.data?.details && Array.isArray(err.response.data.details)) {
+        errorMessage = err.response.data.details.map(d => d.message).join(', ');
+      }
+      showToast('error', 'Validation Error', errorMessage);
     } finally {
       setSaving(false);
     }
@@ -347,7 +364,10 @@ function GradeModal({ isOpen, onClose, onSuccess, grade }) {
             <Form.Item
               name="name"
               label={<span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Grade Name</span>}
-              rules={[{ required: true, message: 'Required' }]}
+              rules={[
+                { required: true, message: 'Required' },
+                { min: 2, message: 'Must be at least 2 characters' }
+              ]}
             >
               <Input placeholder="e.g. Senior Associate" className="rounded-xl border-slate-200 h-11 font-medium" />
             </Form.Item>
@@ -371,12 +391,8 @@ function GradeModal({ isOpen, onClose, onSuccess, grade }) {
             <Form.Item
               name="isActive"
               label={<span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Visibility</span>}
-              valuePropName="checked"
             >
-              <div className="h-11 flex items-center px-3 bg-white rounded-xl border border-slate-200">
-                <Switch size="small" />
-                <span className="ml-3 text-xs font-bold text-slate-600 uppercase tracking-wider">Active Status</span>
-              </div>
+              <ActiveSwitch />
             </Form.Item>
           </div>
 

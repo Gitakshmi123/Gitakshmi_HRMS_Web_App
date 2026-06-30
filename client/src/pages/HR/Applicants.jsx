@@ -7,11 +7,11 @@ import { getNextStage, normalizeStatus } from './PipelineStatusManager';
 import { useAuth } from '../../context/AuthContext';
 import MatchBreakdown from '../../components/MatchBreakdown';
 
-import AssignSalaryModal from '../../components/AssignSalaryModal';
+import InitialCompensationModal from '../../components/Compensation/InitialCompensationModal';
 import { DatePicker, Pagination, Select, Modal, TimePicker, Dropdown, Menu } from 'antd';
 import { showToast, showConfirmToast } from '../../utils/uiNotifications'; // Imports fixed
 import dayjs from 'dayjs';
-import { List, Eye, Download, Edit2, RefreshCw, IndianRupee, Upload, FileText, CheckCircle, Settings, Plus, Trash2, X, GripVertical, Star, XCircle, Clock, ShieldCheck, Lock, ChevronRight, ChevronDown, RotateCcw, UserCheck, UserX, PlusCircle, UserPlus, Info, Search, Calendar, Shield, Layout, Briefcase, Mail, Zap, Link, MessageSquare, Users, Phone, MapPin, Building2, Activity } from 'lucide-react';
+import { List, Eye, Download, Edit2, RefreshCw, IndianRupee, Upload, FileText, CheckCircle, Settings, Plus, Trash2, X, GripVertical, Star, XCircle, Clock, ShieldCheck, Lock, ChevronRight, ChevronDown, RotateCcw, UserCheck, UserX, PlusCircle, UserPlus, Info, Search, Calendar, Shield, Layout, Briefcase, Mail, Zap, Link, MessageSquare, Users, Phone, MapPin, Building2, Activity, AlertCircle } from 'lucide-react';
 import JobBasedBGVModal from './modals/JobBasedBGVModal';
 import StageFeedbackModal from './modals/StageFeedbackModal';
 import PipelineManagerModal from './modals/PipelineManagerModal';
@@ -19,6 +19,7 @@ import InterviewScheduleModal from './modals/InterviewScheduleModal';
 import { notification } from '../../utils/antdGlobal';
 import usePagePermissions from '../../hooks/usePagePermissions';
 import { Can } from '../../components/rbac/PermissionGate';
+import OfferLetterPreview from '../../components/OfferLetterPreview';
 
 /**
  * Internal vs external HR pipeline. Uses applicant.source when set; also detects legacy internal applies
@@ -447,6 +448,7 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
     };
     const [applicants, setApplicants] = useState([]);
     const [templates, setTemplates] = useState([]);
+    const [emailTemplates, setEmailTemplates] = useState([]);
 
     const [resumeUrl, setResumeUrl] = useState(null);
     const [isResumeModalOpen, setIsResumeModalOpen] = useState(false);
@@ -497,11 +499,30 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
     };
 
     const canGenerateOffer = (app) => {
-        // Strict: only from INTERVIEW stage
-        if (!isInterviewStage(app)) return false;
-        // Block if offer already active/pending/accepted/signed
+        const status = String(app?.status || '');
         if (isOfferPendingStage(app) || isOfferAcceptedStage(app) || isOfferSignedStage(app)) return false;
-        return true;
+        
+        // Allow generating offer if they are finalized/selected OR if documents are submitted/approved
+        const stage = String(app?.currentStage?.stageName || '').toLowerCase();
+        if (status === 'Finalized' || status === 'Selected' || stage === 'finalized') return true;
+        if (app?.documentRequestStatus === 'Submitted' || app?.documentRequestStatus === 'Approved') return true;
+        
+        // Fallback for candidates who bypassed the external onboarding flow
+        const hasApprovedDraft = Boolean(app?.employeeId) && ['Draft Employee', 'Document Verified', 'Profile Approved'].includes(status);
+        return hasApprovedDraft;
+    };
+
+    const canSendDocuments = (app) => {
+        const status = String(app?.status || '');
+        const stage = String(app?.currentStage?.stageName || '').toLowerCase();
+        
+        // Allow sending document request at Finalized or anywhere during the Offer stage
+        const isEligibleStage = status === 'Finalized' || status === 'Selected' || stage === 'finalized' || 
+                                isOfferPendingStage(app) || isOfferAcceptedStage(app) || isOfferSignedStage(app);
+                                
+        return isEligibleStage
+            && !app?.employeeId
+            && !['Document Requested', 'Document Draft Saved', 'Profile Submitted', 'Draft Employee'].includes(status);
     };
 
     const canIssueJoining = (app) => {
@@ -1315,7 +1336,7 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
     // Helper: Check if a status is terminal/finalized
     const isFinalizedStatus = (s) => {
         const ns = normalizeStatus(s);
-        return ns === 'Finalized' || ['Finalized', 'Selected', 'Joining Letter Issued', 'Offer Issued', 'Offer Accepted', 'Offer Accepted – Awaiting Company Approval', 'Fully Signed', 'Hired', 'Joined'].includes(s);
+        return ns === 'Finalized' || ['Finalized', 'Selected', 'Joining Letter Issued', 'Offer Issued', 'Offer Accepted', 'Offer Accepted – Awaiting Company Approval', 'Fully Signed', 'Hired', 'Joined', 'Document Requested', 'Profile Submitted', 'Document Verification Pending', 'Resubmitted', 'Reupload Required'].includes(s);
     };
 
     // Cumulative Filtering Logic: Check if a candidate's status has reached or passed a specific tab
@@ -1473,6 +1494,7 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
         expiryAt: '',
         location: '',
         templateId: '',
+        emailTemplateId: '',
         position: '',
         jobCategory: 'Full Time', // Intern vs Full Time
         probationPeriod: '',
@@ -1905,7 +1927,8 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
             loadApplicants();
             return true;
         } catch (error) {
-            showToast('error', 'Error', "Failed: " + error.message);
+            const errorMsg = error.response?.data?.message || error.message;
+            showToast('error', 'Error', "Failed: " + errorMsg);
             return false;
         }
     };
@@ -2083,6 +2106,21 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
         }
     }
 
+    async function lockApplicantSalary(app) {
+        try {
+            if (!window.confirm('Are you sure you want to lock this salary? Once locked, you cannot modify it.')) return;
+            const res = await api.post(`/salary/confirm`, { applicantId: app._id });
+            if (res.data?.success) {
+                showToast('success', 'Success', 'Salary Locked successfully!');
+                loadApplicants();
+            } else {
+                showToast('error', 'Error', res.data?.message || 'Failed to lock salary');
+            }
+        } catch (err) {
+            console.error('Lock Salary Error:', err);
+            showToast('error', 'Error', err.response?.data?.message || err.message || 'Failed to lock salary');
+        }
+    }
     async function fetchTemplates() {
         // Fetch Offer Templates
         try {
@@ -2099,6 +2137,15 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
         } catch (err) {
             // Non-critical, just log
             console.warn("Failed to load joining templates (might be empty or missing permission)", err.message);
+        }
+
+        // Fetch Email Templates (independently)
+        try {
+            const emailRes = await api.get('/email-templates');
+            const templatesList = emailRes.data?.templates || emailRes.data || [];
+            setEmailTemplates(templatesList.filter(t => t.isActive !== false));
+        } catch (err) {
+            console.warn("Failed to load email templates (might be empty or missing permission)", err.message);
         }
     }
 
@@ -2380,6 +2427,18 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
         setPreviewPdfUrl(null);
     };
 
+    const handleSendDocumentRequest = async (applicant) => {
+        try {
+            const res = await api.post(`/recruitment/candidate-documents/request/${applicant._id || applicant.applicationId}`);
+            if (res.data.success) {
+                notification.success({ message: 'Success', description: 'Document upload link sent to candidate', placement: 'topRight' });
+                loadApplicants(); // Refresh list to get updated status
+            }
+        } catch (err) {
+            notification.error({ message: 'Error', description: err.response?.data?.message || 'Failed to send request', placement: 'topRight' });
+        }
+    };
+
     const openOfferModal = async (applicant) => {
         resetJoiningLetterUi();
         setSelectedApplicant(applicant);
@@ -2411,6 +2470,7 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
             expiryAt: defaultExpiry.toISOString(),
             location: applicant.workLocation || applicant.location || 'Ahmedabad',
             templateId: '',
+            emailTemplateId: '',
             position: applicant.requirementId?.jobTitle || '',
             jobCategory: applicant.jobCategory || 'Full Time',
             probationPeriod: candidateProbationPeriod,
@@ -2705,11 +2765,12 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
             return;
         }
 
-        // Validation for Full Time candidates: Salary must be locked
-        if (offerData.jobCategory === 'Full Time' && !selectedApplicant.salaryLocked) {
+        // Validation: Only block if job category explicitly requires salary (Salary Mandatory)
+        const isSalaryMandatoryCategory = String(offerData.jobCategory || '').toLowerCase().includes('salary mandatory');
+        if (isSalaryMandatoryCategory && !selectedApplicant.salaryLocked) {
             notification.error({ 
                 message: 'Salary Missing', 
-                description: 'For Full Time offers, you must first assign and lock the candidate salary breakdown.', 
+                description: 'This offer template requires a salary breakdown. Please assign and lock the candidate salary first.', 
                 placement: 'topRight' 
             });
             return;
@@ -2721,6 +2782,7 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
                 const payload = {
                     applicantId: selectedApplicant._id,
                     templateId: offerData.templateId,
+                    emailTemplateId: offerData.emailTemplateId,
                     joiningDate: offerData.joiningDate,
                     expiryAt: offerData.expiryAt,
                     location: offerData.location,
@@ -2935,11 +2997,12 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
             return;
         }
 
-        // Validation for Full Time candidates: Salary must be locked
-        if (offerData.jobCategory === 'Full Time' && !selectedApplicant.salaryLocked) {
+        // Validation: Only block if job category explicitly requires salary (Salary Mandatory)
+        const isSalaryMandatoryForGenerate = String(offerData.jobCategory || '').toLowerCase().includes('salary mandatory');
+        if (isSalaryMandatoryForGenerate && !selectedApplicant.salaryLocked) {
             notification.error({ 
                 message: 'Salary Required', 
-                description: 'For Full Time offers, you must assign and lock the candidate salary before generating the final offer.', 
+                description: 'This offer template requires a salary breakdown. Please assign and lock the candidate salary before generating the final offer.', 
                 placement: 'topRight' 
             });
             return;
@@ -2953,6 +3016,7 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
             const payload = {
                 applicantId: selectedApplicant._id,
                 templateId: offerData.templateId,
+                emailTemplateId: offerData.emailTemplateId,
                 joiningDate: offerData.joiningDate,
                 expiryAt: offerData.expiryAt,
                 location: offerData.location,
@@ -3671,15 +3735,6 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
                         <h1 className="text-xl font-black text-slate-900 tracking-tight whitespace-nowrap">
                             {showAllCandidates ? 'All Candidates' : (jobSpecific && selectedRequirement ? selectedRequirement.jobTitle : 'Candidate Pipeline')}
                         </h1>
-                        {jobSpecific && selectedRequirement && (
-                            <button
-                                onClick={() => setShowPipelineManager(true)}
-                                className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 text-slate-800 hover:bg-slate-100 rounded-lg text-xs font-bold transition-all border border-slate-200 shadow-sm"
-                            >
-                                <Settings size={14} className="animate-spin-slow" />
-                                <span>MANAGE PIPELINE</span>
-                            </button>
-                        )}
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 justify-start sm:justify-end w-full">
@@ -3821,23 +3876,9 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
                                                 {count}
                                             </div>
                                         </button>
-                                    );
+                                     );
                                 })}
                             </div>
-
-                            {/* Inline Pipeline Controls */}
-                            {selectedRequirement && (
-                                <div className="flex flex-wrap items-center gap-2 sm:gap-3 lg:ml-2 lg:pl-4 lg:border-l border-slate-100 flex-shrink-0 w-full lg:w-auto bg-white/80 lg:bg-transparent pt-1 lg:pt-0">
-                                    <button
-                                        onClick={() => setShowPipelineManager(true)}
-                                        className="h-9 sm:h-10 px-3 sm:px-4 flex items-center gap-1.5 sm:gap-2 bg-white text-slate-600 border border-slate-200 rounded-xl shadow-sm hover:bg-slate-50 hover:text-slate-950 hover:border-slate-300 transition font-bold text-[10px] sm:text-xs uppercase tracking-wider whitespace-nowrap group"
-                                    >
-                                        <Settings size={16} />
-                                        <span className="hidden sm:inline">Manage Pipeline</span>
-                                        <span className="sm:hidden">Manage</span>
-                                    </button>
-                                </div>
-                            )}
                         </div>
                     )}
                 </div>
@@ -4084,7 +4125,7 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
 
                                                 {/* Action Area */}
                                                 <div className="mt-auto border-t border-slate-100 p-3 bg-slate-50/50 group-hover:bg-slate-50 transition-colors">
-                                                    <div className="grid grid-cols-3 gap-2">
+                                                    <div className="grid grid-cols-2 gap-2 mb-2">
                                                         {/* Slot 1: Interview Action/Status */}
                                                         {app.interview?.date ? (
                                                             <button
@@ -4106,8 +4147,25 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
                                                                 SCHEDULE
                                                             </button>
                                                         )}
-
-                                                        {/* Slot 2: Resume */}
+                                                        
+                                                        {/* Slot 2: Line up Interview Panel */}
+                                                        <button
+                                                            onClick={(e) => { 
+                                                                e.stopPropagation(); 
+                                                                // Ensure we edit the pipeline for this candidate's requirement
+                                                                if (app.requirementId && (!selectedRequirement || selectedRequirement._id !== app.requirementId._id)) {
+                                                                    setSelectedRequirement(app.requirementId);
+                                                                }
+                                                                setShowPipelineManager(true); 
+                                                            }}
+                                                            className="py-2 rounded-lg bg-indigo-600 border border-indigo-700 text-white text-[10px] font-black uppercase tracking-wider hover:bg-indigo-700 hover:shadow-md transition-all flex items-center justify-center gap-1.5 shadow-sm text-center"
+                                                            title="Line Up Interview Panel"
+                                                        >
+                                                            <Users size={12} /> LINE UP
+                                                        </button>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        {/* Slot 3: Resume */}
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); handleViewResume(app.resume); }}
                                                             className="py-2 rounded-lg bg-white border border-slate-200 text-slate-600 text-[10px] font-black uppercase tracking-wider hover:bg-slate-100 hover:text-slate-950 hover:border-slate-300 transition-all flex items-center justify-center gap-1.5 shadow-sm"
@@ -4116,7 +4174,7 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
                                                             <FileText size={12} /> RESUME
                                                         </button>
 
-                                                        {/* Slot 3: Actions */}
+                                                        {/* Slot 4: Actions */}
                                                         <div className="relative">
                                                             <button
                                                                 onClick={(e) => {
@@ -4268,7 +4326,10 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
                                                         {app.salaryAssigned ? (
                                                             <div className="flex flex-col items-end lg:items-center gap-1">
                                                                 <button onClick={(e) => { e.stopPropagation(); setSelectedApplicant(app); setShowSalaryPreview(true); }} className="text-[10px] font-black text-slate-700 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-400 hover:text-indigo-600 transition shadow-sm uppercase tracking-widest whitespace-nowrap">VIEW PAY</button>
-                                                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Pay Fixed</span>
+                                                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{app.salaryLocked ? 'Pay Locked' : 'Pay Draft'}</span>
+                                                                {!app.salaryLocked && (
+                                                                    <button onClick={(e) => { e.stopPropagation(); lockApplicantSalary(app); }} className="text-[9px] font-bold text-emerald-600 hover:text-emerald-700 hover:underline uppercase tracking-widest whitespace-nowrap">Lock Salary</button>
+                                                                )}
                                                             </div>
                                                         ) : (
                                                             <button onClick={(e) => { e.stopPropagation(); setSelectedApplicant(app); setShowSalaryModal(true); }} className="text-[10px] font-black text-[#4F46E5] hover:underline uppercase tracking-widest">Assign Pay</button>
@@ -4319,14 +4380,48 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
                                                                         )}
                                                                     </div>
                                                                 </div>
+                                                            ) : canSendDocuments(app) ? (
+                                                                <button
+                                                                    onClick={async (e) => {
+                                                                        e.stopPropagation();
+                                                                        try {
+                                                                            const res = await api.post(`/applications/${app._id}/request-documents`);
+                                                                            if (res.data.success) {
+                                                                                showToast('success', 'Documents Sent', 'Candidate has been notified to complete their employment profile.');
+                                                                                loadApplicants();
+                                                                            }
+                                                                        } catch (err) {
+                                                                            showToast('error', 'Request Failed', err.response?.data?.message || 'Failed to send documents');
+                                                                        }
+                                                                    }}
+                                                                    className="w-full lg:w-auto px-6 py-2.5 text-[10px] font-black rounded-2xl transition-all shadow-lg dark:shadow-none uppercase tracking-widest bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-100"
+                                                                >
+                                                                    Send Documents
+                                                                </button>
                                                             ) : (
+                                                              <div className="flex flex-col gap-2 w-full lg:w-auto">
+                                                                {app.documentRequestStatus !== 'Approved' && (
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleSendDocumentRequest(app);
+                                                                        }}
+                                                                        className={`w-full lg:w-auto px-6 py-2.5 text-[10px] font-black rounded-2xl transition-all shadow-lg uppercase tracking-widest ${
+                                                                            app.documentRequestStatus 
+                                                                                ? 'bg-amber-500 text-white hover:bg-amber-600' 
+                                                                                : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
+                                                                        }`}
+                                                                    >
+                                                                        {app.documentRequestStatus ? `Docs: ${app.documentRequestStatus}` : 'Request Docs'}
+                                                                    </button>
+                                                                )}
                                                                 <button
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
                                                                         if (!canGenerateOffer(app)) {
                                                                             notification.error({
                                                                                 message: 'Action blocked',
-                                                                                description: 'Offer can only be issued from Interview stage (no bypass allowed).',
+                                                                                description: app.documentRequestStatus !== 'Approved' ? 'Candidate documents must be approved before generating an offer.' : 'Offer can only be issued from Interview stage (no bypass allowed).',
                                                                                 placement: 'topRight'
                                                                             });
                                                                             return;
@@ -4339,8 +4434,9 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
                                                                         : 'bg-slate-100 text-slate-300 cursor-not-allowed shadow-none'
                                                                         }`}
                                                                 >
-                                                                    Generate
+                                                                    Generate Offer
                                                                 </button>
+                                                              </div>
                                                             )}
                                                         </div>
                                                     </div>
@@ -4685,6 +4781,27 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
                         </p>
                     </div>
 
+                    {/* Email Template Selection */}
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase text-slate-600 dark:text-slate-400 tracking-wider flex items-center gap-2">
+                            <Mail size={12} className="text-blue-500" />
+                            Email Template
+                        </label>
+                        <select
+                            value={offerData.emailTemplateId || ''}
+                            onChange={(e) => setOfferData(prev => ({ ...prev, emailTemplateId: e.target.value }))}
+                            className="w-full text-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 rounded-xl p-3 h-12 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all shadow-sm"
+                        >
+                            <option value="">-- Default Email Format --</option>
+                            {emailTemplates?.map(t => (
+                                <option key={t._id} value={t._id}>{t.name}</option>
+                            ))}
+                        </select>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                            Select a custom email template to be sent to the candidate upon final approval.
+                        </p>
+                    </div>
+
                     <div className="space-y-4">
                         {Array.isArray(approvalEmails) && approvalEmails.map((approver, index) => (
                             <div key={index} className="flex gap-2 items-start">
@@ -4956,7 +5073,8 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
                                                 onChange={handleOfferChange}
                                                 className="mt-1 block w-full border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 p-2 h-[42px]"
                                             >
-                                                <option value="Full Time">Full Time (Salary Mandatory)</option>
+                                                <option value="Full Time">Full Time</option>
+                                                <option value="Full Time (Salary Mandatory)">Full Time (Salary Mandatory)</option>
                                                 <option value="Intern">Intern (Salary Optional)</option>
                                             </select>
                                         </div>
@@ -5498,14 +5616,17 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
                 )
             }
 
-            {/* Assign Salary Modal */}
+            {/* Initial Compensation Modal */}
             {
                 showSalaryModal && selectedApplicant && (
-                    <AssignSalaryModal
-                        isOpen={showSalaryModal}
-                        onClose={() => setShowSalaryModal(false)}
+                    <InitialCompensationModal
                         applicant={selectedApplicant}
-                        onSuccess={handleSalaryAssigned}
+                        onClose={() => setShowSalaryModal(false)}
+                        onSuccess={() => {
+                            loadApplicants();
+                            setShowSalaryModal(false);
+                            showToast('success', 'Salary Configured', 'Candidate salary configuration has been saved successfully.');
+                        }}
                     />
                 )
             }
@@ -5808,6 +5929,80 @@ export default function Applicants({ internalMode = false, jobSpecific = false }
                                     >
                                         <Download size={16} /> Download Resume
                                     </button>
+                                    {canSendDocuments(selectedApplicant) && (
+                                        <button
+                                            onClick={async () => {
+                                                try {
+                                                    const res = await api.post(`/applications/${selectedApplicant._id}/request-documents`);
+                                                    if (res.data.success) {
+                                                        showToast('success', 'Documents Requested', 'Candidate has been notified to complete their profile.');
+                                                        loadApplicants(); // Refresh list
+                                                    }
+                                                } catch (err) {
+                                                    showToast('error', 'Request Failed', err.response?.data?.message || 'Failed to request documents');
+                                                }
+                                            }}
+                                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm flex items-center gap-2 shadow-sm transition"
+                                        >
+                                            <FileText size={16} /> Send Documents
+                                        </button>
+                                    )}
+                                    {selectedApplicant.status === 'Profile Submitted' && (
+                                        <>
+                                            <button
+                                                onClick={async () => {
+                                                    try {
+                                                        const res = await api.post(`/applications/${selectedApplicant._id}/approve-profile`);
+                                                        if (res.data.success) {
+                                                            showToast('success', 'Profile Approved', 'Candidate profile and documents have been verified.');
+                                                            loadApplicants();
+                                                        }
+                                                    } catch (err) {
+                                                        showToast('error', 'Approval Failed', err.response?.data?.message || 'Failed to approve profile');
+                                                    }
+                                                }}
+                                                className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium text-sm flex items-center gap-2 shadow-sm transition"
+                                            >
+                                                <CheckCircle size={16} /> Approve Profile
+                                            </button>
+                                            <button
+                                                onClick={async () => {
+                                                    const reason = window.prompt("Enter reason for requesting re-upload:");
+                                                    if (reason === null) return;
+                                                    try {
+                                                        const res = await api.post(`/applications/${selectedApplicant._id}/request-reupload`, { reason });
+                                                        if (res.data.success) {
+                                                            showToast('success', 'Re-upload Requested', 'Candidate has been notified to re-upload documents.');
+                                                            loadApplicants();
+                                                        }
+                                                    } catch (err) {
+                                                        showToast('error', 'Request Failed', err.response?.data?.message || 'Failed to request re-upload');
+                                                    }
+                                                }}
+                                                className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 font-medium text-sm flex items-center gap-2 shadow-sm transition"
+                                            >
+                                                <AlertCircle size={16} /> Request Re-upload
+                                            </button>
+                                        </>
+                                    )}
+                                    {selectedApplicant.status === 'Document Verified' && (
+                                        <button
+                                            onClick={async () => {
+                                                try {
+                                                    const res = await api.post(`/applications/${selectedApplicant._id}/convert-to-employee`);
+                                                    if (res.data.success) {
+                                                        showToast('success', 'Candidate Hired!', 'Candidate successfully converted to Employee.');
+                                                        loadApplicants();
+                                                    }
+                                                } catch (err) {
+                                                    showToast('error', 'Conversion Failed', err.response?.data?.message || 'Failed to convert to employee');
+                                                }
+                                            }}
+                                            className="px-6 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg hover:from-emerald-600 hover:to-teal-600 font-bold text-sm flex items-center gap-2 shadow-lg shadow-emerald-200"
+                                        >
+                                            <UserCheck size={16} /> Convert to Employee
+                                        </button>
+                                    )}
                                     {(selectedApplicant.offerStatus === 'REQUESTED' || selectedApplicant.offerRevisionRequested) && (
                                         <button
                                             onClick={() => {

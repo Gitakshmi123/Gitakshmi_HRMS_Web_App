@@ -28,6 +28,10 @@ router.get('/parent-companies', auth.authenticate, auth.requirePsa, ctrl.getPare
 router.get('/sub-companies', auth.authenticate, auth.requirePsa, ctrl.getSubCompaniesByParent);
 router.get('/gst/:gstin', auth.authenticate, auth.requirePsa, gstCtrl.lookupGstin);
 
+// DMS Integration — MUST be before /:id to avoid Express treating 'dms-integration' as an ID
+router.get('/dms-integration', auth.authenticate, auth.requireHr, ctrl.getDmsIntegration);
+router.put('/dms-integration', auth.authenticate, auth.requireHr, ctrl.saveDmsIntegration);
+
 // List & create (PSA only)
 router.get('/', auth.authenticate, auth.requirePsa, ctrl.listTenants);
 router.post('/company', auth.authenticate, auth.requirePsa, ctrl.createCompany);
@@ -55,5 +59,7 @@ router.put('/:id/modules', auth.authenticate, auth.requirePsa, ctrl.updateModule
 
 router.put('/:id', auth.authenticate, auth.requirePsa, ctrl.updateTenant);
 router.delete('/:id', auth.authenticate, auth.requirePsa, ctrl.deleteTenant);
+
+// DMS Integration routes moved above /:id (see above)
 
 module.exports = router;

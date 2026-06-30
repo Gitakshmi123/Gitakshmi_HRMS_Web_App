@@ -83,15 +83,18 @@ exports.createPolicy = async (req, res) => {
         const { LeavePolicy, Employee, LeaveBalance } = getModels(req);
         const { 
             name, 
+            policyId,
             applicableTo = 'All', 
             rules = [], 
             departmentIds = [], 
+            branchIds = [],
             roles = [], 
             gradeIds = [], 
             gradeCodes = [], 
             designations = [], 
             applicableJobTypes = [], 
             applicableBands = [], 
+            applicableEmployeeTypes = [],
             specificEmployeeId, 
             status = 'ACTIVE' 
         } = req.body;
@@ -106,34 +109,65 @@ exports.createPolicy = async (req, res) => {
             return res.status(400).json({ error: 'name_required', message: 'Policy name is required' });
         }
 
-        if (normalizedRules.length === 0) {
-            return res.status(400).json({ error: 'rules_required', message: 'At least one leave type rule is required' });
+        // Check for duplicate policy name case-insensitively
+        const duplicatePolicy = await LeavePolicy.findOne({
+            tenant: tenantId,
+            name: { $regex: new RegExp(`^\\s*${name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'i') }
+        });
+        if (duplicatePolicy) {
+            return res.status(400).json({ error: 'duplicate_name', message: 'A leave policy with this name already exists.' });
         }
+
+        // Validation for empty rules removed to support creating Leave Groups without rules initially
+
+
+        // Derive leaveTypes array from rules if not explicitly provided
+        const derivedLeaveTypes = (req.body.leaveTypes && Array.isArray(req.body.leaveTypes) && req.body.leaveTypes.length > 0)
+            ? req.body.leaveTypes
+            : normalizedRules.map(r => String(r.leaveType || '').trim()).filter(Boolean);
 
         const policy = new LeavePolicy({
             tenant: tenantId,
             name,
+            policyId,
             status: normalizedStatus,
             isActive: normalizedStatus === 'ACTIVE',
             applicableTo,
-            departmentIds,
+            leaveTypes: derivedLeaveTypes,
+            departmentIds: departmentIds || [],
+            branchIds: branchIds || [],
             roles,
             gradeIds,
             gradeCodes,
             designations: designations || [],
             applicableJobTypes: applicableJobTypes || [],
             applicableBands: applicableBands || [],
+            applicableEmployeeTypes: applicableEmployeeTypes || [],
             specificEmployeeIds: req.body.specificEmployeeIds?.length > 0 
                 ? req.body.specificEmployeeIds 
                 : (specificEmployeeId ? [specificEmployeeId] : []),
-            rules: normalizedRules
+            rules: normalizedRules,
+            formulas: req.body.formulas || [],
+            effectiveFrom: req.body.effectiveFrom || null,
+            expiryDate: req.body.expiryDate || null
         });
 
         await policy.save();
 
+        // Sync this specific new policy to all applicable employees immediately
         let applyResult = null;
-        if (policy.isActive) {
-            applyResult = await syncAllActivePoliciesForTenant(req, tenantId);
+        if (policy.isActive && normalizedRules.length > 0) {
+            try {
+                applyResult = await leaveManagementService.applyPolicyToExistingEmployees({
+                    tenantId,
+                    tenantDB: req.tenantDB,
+                    policyId: policy._id,
+                    prorate: true
+                });
+                console.log(`[CREATE_POLICY] Auto-synced policy "${name}" to ${applyResult?.employeesProcessed || 0} employees.`);
+            } catch (syncErr) {
+                console.warn('[CREATE_POLICY] Auto-sync warning:', syncErr.message);
+            }
         }
 
         res.status(201).json({
@@ -209,6 +243,10 @@ exports.getPolicies = async (req, res) => {
 
         const { LeavePolicy } = getModels(req);
         await healPolicyTenantScope(LeavePolicy, tenantId);
+
+
+
+
         const policies = await LeavePolicy.find({ tenant: tenantId }).sort({ createdAt: -1 }).lean();
         res.json(policies.map((policy) => ({
             ...policy,
@@ -233,12 +271,16 @@ exports.getMyPolicies = async (req, res) => {
 
         const { LeavePolicy, LeaveBalance } = getModels(req);
         let emp = await resolveAuthenticatedEmployee(req, {
-            select: 'leavePolicy tenant joiningDate employeeType role department departmentId grade gradeId designation jobType band'
+            select: 'leavePolicy tenant joiningDate employeeType role department departmentId grade gradeId designation jobType band gender maritalStatus'
         });
 
         if (!emp) {
             return res.status(404).json({ error: 'Employee not found' });
         }
+
+        const empGender = String(emp.gender || '').trim().toLowerCase();
+        const empMarital = String(emp.maritalStatus || '').trim().toLowerCase();
+        const isMarried = ['married', 'मेरेड', 'मेरेડ', 'विवाहित', 'vivahit'].includes(empMarital);
 
         // Ensure employee has a policy (auto-assign default if missing)
         try {
@@ -260,11 +302,12 @@ exports.getMyPolicies = async (req, res) => {
         const applicablePolicies = activePolicies.filter((policy) =>
             leaveManagementService.isPolicyApplicableToEmployee(policy, emp, resolvedGrade)
         );
-        const effectivePolicy = leaveManagementService.selectBestPolicyForEmployee({
+        const assignedPolicy = await leaveManagementService.getAssignedLeavePolicyForEmployee({ LeavePolicy, tenantId, employee: emp });
+        const effectivePolicy = assignedPolicy || leaveManagementService.selectBestPolicyForEmployee({
             policies: activePolicies,
             employee: emp,
             grade: resolvedGrade
-        }) || await leaveManagementService.getAssignedLeavePolicyForEmployee({ LeavePolicy, tenantId, employee: emp }) ||
+        }) ||
             await restorePolicyFromExistingBalance({
                 employee: emp,
                 LeaveBalance,
@@ -291,6 +334,16 @@ exports.getMyPolicies = async (req, res) => {
                 policy: effectivePolicy
             });
 
+            // Calculate joining month payable days for accurate CL/SL proration
+            const currentYear = now.getFullYear();
+            const isJoiningYear = emp.joiningDate && new Date(emp.joiningDate).getFullYear() === currentYear;
+            let joiningPayableDays = null;
+            if (isJoiningYear) {
+                try {
+                    joiningPayableDays = await leaveManagementService.getJoiningMonthPayableDays(emp, tenantId, req.tenantDB, currentYear);
+                } catch (_e) { /* non-critical */ }
+            }
+
             await leaveManagementService.repairZeroLeaveBalancesFromPolicy({
                 employee: emp,
                 policy: effectivePolicy,
@@ -299,8 +352,9 @@ exports.getMyPolicies = async (req, res) => {
                     LeaveBalance,
                     Grade
                 },
-                year: now.getFullYear(),
-                prorate: true
+                year: currentYear,
+                prorate: true,
+                joiningPayableDays
             });
         }
 
@@ -316,6 +370,14 @@ exports.getMyPolicies = async (req, res) => {
                 grade: resolvedGrade
             });
             for (const rule of effectiveRules) {
+                const lt = String(rule.leaveType || '').toUpperCase();
+                if (lt === 'MATERNITY') {
+                    if (empGender !== 'female' || !isMarried) continue;
+                }
+                if (lt === 'PATERNITY') {
+                    if (empGender !== 'male' || !isMarried) continue;
+                }
+
                 // balance lookup
                 const bal = await LeaveBalance.findOne({ tenant: tenantId, employee: emp._id, policy: policy._id, leaveType: rule.leaveType, year }).lean();
 
@@ -414,8 +476,18 @@ exports.updatePolicy = async (req, res) => {
             return res.status(404).json({ error: 'Policy not found' });
         }
 
-        // Ensure specificEmployeeId maps to specificEmployeeIds if provided
         const updateData = { ...req.body };
+
+        if (updateData.name) {
+            const duplicatePolicy = await LeavePolicy.findOne({
+                tenant: tenantId,
+                name: { $regex: new RegExp(`^\\s*${updateData.name.trim().replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}\\s*$`, 'i') },
+                _id: { $ne: new mongoose.Types.ObjectId(req.params.id) }
+            });
+            if (duplicatePolicy) {
+                return res.status(400).json({ error: 'duplicate_name', message: 'A leave policy with this name already exists.' });
+            }
+        }
         if (updateData.specificEmployeeId && (!updateData.specificEmployeeIds || updateData.specificEmployeeIds.length === 0)) {
             updateData.specificEmployeeIds = [updateData.specificEmployeeId];
         }
@@ -430,10 +502,14 @@ exports.updatePolicy = async (req, res) => {
             }));
         }
 
+        if (req.body.formulas !== undefined) {
+            updateData.formulas = req.body.formulas;
+        }
+
         // Update the policy document
         const policy = await LeavePolicy.findOneAndUpdate(
             { _id: req.params.id, tenant: tenantId },
-            updateData,
+            { $set: updateData },
             { new: true, runValidators: true }
         );
 
@@ -516,13 +592,20 @@ exports.deletePolicy = async (req, res) => {
             return res.status(404).json({ error: 'Policy not found' });
         }
 
-        // 1. Remove policy reference from all employees
-        const employeesUpdated = await Employee.updateMany(
-            { leavePolicy: policyObjectId, tenant: tenantId },
-            { $unset: { leavePolicy: "" } }
-        );
+        // 1. Check if policy is assigned to any employees
+        const inUse = await Employee.exists({ leavePolicy: policyObjectId, tenant: tenantId });
+        if (inUse) {
+            return res.status(400).json({ error: `Cannot delete: Leave Policy is currently assigned to one or more employees.` });
+        }
 
-        // 2. Delete all leave balances associated with this policy
+        const HolidayGroupSchema = require('../models/HolidayGroup');
+        const HolidayGroup = req.tenantDB.models.HolidayGroup || req.tenantDB.model('HolidayGroup', HolidayGroupSchema);
+        const inGroup = await HolidayGroup.exists({ tenant: tenantId, "applicability.leavePolicies": policyObjectId });
+        if (inGroup) {
+            return res.status(400).json({ error: `Cannot delete: Leave Policy is currently assigned to a Holiday Group.` });
+        }
+
+        // 2. Delete all leave balances associated with this policy (if any, though shouldn't exist if not assigned)
         const balancesDeleted = await LeaveBalance.deleteMany({
             policy: policyObjectId,
             tenant: tenantId
@@ -535,7 +618,7 @@ exports.deletePolicy = async (req, res) => {
 
         res.json({
             message: 'Policy deleted successfully',
-            employeesAffected: employeesUpdated.modifiedCount,
+            employeesAffected: 0,
             balancesDeleted: balancesDeleted.deletedCount,
             reassignedEmployees: resyncResult.employeesProcessed
         });
@@ -889,7 +972,7 @@ exports.assignPolicyToEmployee = async (req, res) => {
             employee,
             tenantId,
             policy,
-            year: new Date(employee.joiningDate || new Date()).getFullYear(),
+            year: new Date().getFullYear(),
             prorate: true,
             models
         });

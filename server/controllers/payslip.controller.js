@@ -148,8 +148,8 @@ exports.getPayslipByEmployeeAndMonth = async (req, res) => {
 
         // Find the payslip for the period
         const payslip = await Payslip.findOne({
-            tenantId,
-            employeeId,
+            tenantId: mongoose.Types.ObjectId.isValid(tenantId) ? new mongoose.Types.ObjectId(tenantId) : tenantId,
+            employeeId: mongoose.Types.ObjectId.isValid(employeeId) ? new mongoose.Types.ObjectId(employeeId) : employeeId,
             month: parseInt(currMonth),
             year: parseInt(currYear)
         }).lean();
@@ -163,14 +163,19 @@ exports.getPayslipByEmployeeAndMonth = async (req, res) => {
 
         // Populate department name if needed
         if (employee.department) {
-            const Department = req.tenantDB.model('Department');
-            const dept = await Department.findById(employee.department);
-            if (dept) employee.departmentName = dept.name;
+            if (mongoose.Types.ObjectId.isValid(employee.department)) {
+                const Department = req.tenantDB.model('Department');
+                const dept = await Department.findById(employee.department);
+                if (dept) employee.departmentName = dept.name;
+            } else {
+                employee.departmentName = employee.department;
+            }
         }
 
         res.json({
             success: true,
             data: {
+                ...payslip,
                 employeeDetails: employee,
                 payslipDate: new Date(payslip.year, payslip.month - 1, 1),
                 earnings: payslip.earningsSnapshot || payslip.earnings || [],

@@ -178,6 +178,26 @@ export default function CandidateDashboard() {
                                 </div>
                             </div>
                         </div>
+
+                        {/* Pending HR Documents Widget */}
+                        {applications.some(a => ['Document Requested', 'Reupload Required', 'Resubmitted', 'Document Verification Pending'].includes(a.status)) && (
+                            <div className="bg-gradient-to-br from-orange-500 to-amber-600 rounded-[2rem] p-8 text-white relative overflow-hidden shadow-xl shadow-orange-500/20">
+                                <AlertCircle className="w-8 h-8 text-white/80 mb-4" />
+                                <h3 className="text-xl font-bold mb-2">Pending HR Documents</h3>
+                                <p className="text-white/80 text-sm leading-relaxed mb-6">
+                                    HR has requested your profile details and documents to proceed with your application.
+                                </p>
+                                <button 
+                                    onClick={() => {
+                                        const targetApp = applications.find(a => ['Document Requested', 'Reupload Required', 'Resubmitted', 'Document Verification Pending'].includes(a.status));
+                                        if (targetApp) navigate(`/candidate/application/${String(targetApp._id || targetApp.id || targetApp.applicationId)}`);
+                                    }}
+                                    className="w-full py-3 bg-white text-orange-600 rounded-xl font-bold hover:bg-orange-50 transition"
+                                >
+                                    Complete Profile
+                                </button>
+                            </div>
+                        )}
                     </div>
 
                     {/* Right Panel: Stats & Applications */}

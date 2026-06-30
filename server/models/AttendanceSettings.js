@@ -23,6 +23,9 @@ const AttendanceSettingsSchema = new mongoose.Schema({
 
     // Leave Policy Quota Configuration
     leaveCycleStartMonth: { type: Number, default: 0 }, // 0 = Jan, 3 = April etc.
+    maxConsecutiveLeaves: { type: Number, default: 15 },
+    clPriorNotice: { type: Number, default: 1 },
+    elPriorNotice: { type: Number, default: 15 },
 
     // ========== PUNCH POLICY CONFIGURATION ==========
 
@@ -48,8 +51,17 @@ const AttendanceSettingsSchema = new mongoose.Schema({
     officeLatitude: { type: Number }, // Office location latitude
     officeLongitude: { type: Number }, // Office location longitude
     allowedRadiusMeters: { type: Number, default: 100 }, // Allowed radius in meters
-
-
+    geofenceMode: { type: String, enum: ['polygon', 'radius'], default: 'polygon' },
+    officeGeofence: {
+        enabled: { type: Boolean, default: false },
+        name: { type: String, default: 'Main Office' },
+        points: [
+            {
+                lat: Number,
+                lng: Number
+            }
+        ]
+    },
     geofance: [
         {
             lat: Number,

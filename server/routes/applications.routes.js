@@ -5,12 +5,31 @@ const auth = require('../middleware/auth.jwt');
 const workflowController = require('../controllers/recruitment.workflow.controller');
 const { validateHiringFlow, isStrictHiringStatus } = require('../utils/validateHiringFlow');
 const applicantCtrl = require('../controllers/applicant.controller');
+const externalRecordCtrl = require('../controllers/externalEmployeeRecord.controller');
 
 // Same auth behavior as recruitment workflow routes
 router.use(auth.authenticate);
 
+// External employee records created from candidate document upload tokens.
+router.get('/external-records/list', externalRecordCtrl.list);
+router.post('/external-records/:id/approve', externalRecordCtrl.approve);
+router.post('/external-records/:id/reject', externalRecordCtrl.reject);
+router.post('/external-records/:id/request-changes', externalRecordCtrl.requestChanges);
+
 // GET /api/applications/:id — Fetch single application with status
 router.get('/:id', applicantCtrl.getApplicantById);
+
+// POST /api/applications/:id/request-documents — HR requests documents from candidate
+router.post('/:id/request-documents', applicantCtrl.requestDocuments);
+
+// POST /api/applications/:id/approve-profile - HR approves profile
+router.post('/:id/approve-profile', applicantCtrl.approveProfile);
+
+// POST /api/applications/:id/request-reupload - HR requests profile re-upload
+router.post('/:id/request-reupload', applicantCtrl.requestReupload);
+
+// POST /api/applications/:id/convert-to-employee - Convert to Employee
+router.post('/:id/convert-to-employee', applicantCtrl.convertToEmployee);
 
 router.patch('/:id/status', (req, res, next) => {
   // Enforce strict flow on this alias endpoint

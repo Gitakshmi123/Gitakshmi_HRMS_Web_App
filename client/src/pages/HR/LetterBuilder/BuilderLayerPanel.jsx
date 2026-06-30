@@ -4,6 +4,7 @@ import {
     Type, Building2, User, FileText, Minus, Square,
     Plus, Layers, Image as ImageIcon
 } from 'lucide-react';
+import { Droppable, Draggable } from '@hello-pangea/dnd';
 
 export default function BuilderLayerPanel({ sections, selectedId, onSelect, onAdd, onRemove, onMove, onDuplicate }) {
     const componentTypes = [
@@ -53,58 +54,73 @@ export default function BuilderLayerPanel({ sections, selectedId, onSelect, onAd
                             </p>
                         </div>
                     ) : (
-                        sections.map((section, index) => {
-                            const isSelected = selectedId === section.id;
-                            const Icon = componentTypes.find(c => c.type === section.type)?.icon || Type;
-
-                            return (
+                        <Droppable droppableId="layers">
+                            {(provided) => (
                                 <div
-                                    key={section.id}
-                                    onClick={() => onSelect(section.id)}
-                                    className={`
-                                        group flex items-center gap-3 p-3 rounded-2xl border transition-all cursor-pointer
-                                        ${isSelected ? 'bg-indigo-600 border-indigo-600 shadow-lg shadow-indigo-200' : 'bg-white border-slate-100 hover:border-indigo-200'}
-                                    `}
+                                    {...provided.droppableProps}
+                                    ref={provided.innerRef}
+                                    className="space-y-2"
                                 >
-                                    <div className={`shrink-0 w-8 h-8 rounded-lg flex items-center justify-center ${isSelected ? 'bg-white/20 text-white' : 'bg-slate-50 text-slate-400'}`}>
-                                        <Icon size={16} />
-                                    </div>
+                                    {sections.map((section, index) => {
+                                        const isSelected = selectedId === section.id;
+                                        const Icon = componentTypes.find(c => c.type === section.type)?.icon || Type;
 
-                                    <div className="flex-1 min-w-0">
-                                        <p className={`text-[10px] font-black uppercase tracking-tight truncate ${isSelected ? 'text-white' : 'text-slate-700'}`}>
-                                            {section.type.replace(/-/g, ' ')}
-                                        </p>
-                                        <p className={`text-[9px] font-medium truncate ${isSelected ? 'text-white/60' : 'text-slate-400'}`}>
-                                            Section {index + 1}
-                                        </p>
-                                    </div>
+                                        return (
+                                            <Draggable key={section.id} draggableId={section.id} index={index}>
+                                                {(provided) => (
+                                                    <div
+                                                        ref={provided.innerRef}
+                                                        {...provided.draggableProps}
+                                                        onClick={() => onSelect(section.id)}
+                                                        className={`
+                                                            group flex items-center gap-3 p-3 rounded-2xl border transition-all cursor-pointer
+                                                            ${isSelected ? 'bg-indigo-600 border-indigo-600 shadow-lg shadow-indigo-200' : 'bg-white border-slate-100 hover:border-indigo-200'}
+                                                        `}
+                                                    >
+                                                        <div 
+                                                            {...provided.dragHandleProps}
+                                                            className={`shrink-0 w-8 h-8 rounded-lg flex items-center justify-center cursor-grab active:cursor-grabbing ${isSelected ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
+                                                        >
+                                                            <GripVertical size={14} />
+                                                        </div>
 
-                                    <div className={`flex items-center gap-1 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); onMove(section.id, 'up'); }}
-                                            disabled={index === 0}
-                                            className={`p-1 rounded-md transition-all ${isSelected ? 'hover:bg-white/20 text-white disabled:opacity-20' : 'hover:bg-slate-100 text-slate-400'}`}
-                                        >
-                                            <MoveUp size={12} />
-                                        </button>
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); onMove(section.id, 'down'); }}
-                                            disabled={index === sections.length - 1}
-                                            className={`p-1 rounded-md transition-all ${isSelected ? 'hover:bg-white/20 text-white disabled:opacity-20' : 'hover:bg-slate-100 text-slate-400'}`}
-                                        >
-                                            <MoveDown size={12} />
-                                        </button>
-                                        <div className={`w-px h-4 mx-1 ${isSelected ? 'bg-white/20' : 'bg-slate-100'}`}></div>
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); onRemove(section.id); }}
-                                            className={`p-1 rounded-md transition-all ${isSelected ? 'hover:bg-white/20 text-white' : 'hover:bg-red-50 text-slate-400 hover:text-red-500'}`}
-                                        >
-                                            <Trash2 size={12} />
-                                        </button>
-                                    </div>
+                                                        <div className={`shrink-0 w-8 h-8 rounded-lg flex items-center justify-center ${isSelected ? 'bg-white/20 text-white' : 'bg-slate-50 text-slate-400'}`}>
+                                                            <Icon size={16} />
+                                                        </div>
+
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className={`text-[10px] font-black uppercase tracking-tight truncate ${isSelected ? 'text-white' : 'text-slate-700'}`}>
+                                                                {section.type.replace(/-/g, ' ')}
+                                                            </p>
+                                                            <p className={`text-[9px] font-medium truncate ${isSelected ? 'text-white/60' : 'text-slate-400'}`}>
+                                                                Section {index + 1}
+                                                            </p>
+                                                        </div>
+
+                                                        <div className={`flex items-center gap-1 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); onDuplicate(section.id); }}
+                                                                className={`p-1 rounded-md transition-all ${isSelected ? 'hover:bg-white/20 text-white' : 'hover:bg-slate-100 text-slate-400'}`}
+                                                            >
+                                                                <Copy size={12} />
+                                                            </button>
+                                                            <div className={`w-px h-4 mx-1 ${isSelected ? 'bg-white/20' : 'bg-slate-100'}`}></div>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); onRemove(section.id); }}
+                                                                className={`p-1 rounded-md transition-all ${isSelected ? 'hover:bg-white/20 text-white' : 'hover:bg-red-50 text-slate-400 hover:text-red-500'}`}
+                                                            >
+                                                                <Trash2 size={12} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </Draggable>
+                                        );
+                                    })}
+                                    {provided.placeholder}
                                 </div>
-                            );
-                        })
+                            )}
+                        </Droppable>
                     )}
                 </div>
             </div>

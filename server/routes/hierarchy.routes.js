@@ -45,6 +45,7 @@ router.put('/departments/:id', authorizeRoles('MAIN_COMPANY_ADMIN', 'SUB_COMPANY
 
 // Designations
 router.post('/designations', authorizeRoles('MAIN_COMPANY_ADMIN', 'SUB_COMPANY_ADMIN', 'BRANCH_HEAD', 'DIVISION_HEAD', 'DEPARTMENT_HEAD'), hierarchyValidationMiddleware, hierarchyController.createDesignation);
+router.post('/designations/bulk-upload', authorizeRoles('MAIN_COMPANY_ADMIN', 'SUB_COMPANY_ADMIN', 'BRANCH_HEAD', 'DIVISION_HEAD', 'DEPARTMENT_HEAD'), hierarchyController.bulkUploadDesignations);
 router.get('/designations', hierarchyController.listDesignations);
 router.get('/designations/:id', hierarchyController.getDesignation);
 router.put('/designations/:id', authorizeRoles('MAIN_COMPANY_ADMIN', 'SUB_COMPANY_ADMIN', 'BRANCH_HEAD', 'DIVISION_HEAD', 'DEPARTMENT_HEAD'), hierarchyValidationMiddleware, hierarchyController.updateDesignation);

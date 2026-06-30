@@ -11,8 +11,15 @@ const { authenticate, requireHr } = require('../middleware/auth.jwt');
 // CRUD Routes for Shift Policies
 router.get('/', authenticate, requireHr, shiftMasterController.getShifts);
 router.get('/:id', authenticate, requireHr, shiftMasterController.getShiftById);
-router.post('/', authenticate, requireHr, shiftMasterController.createShift);
-router.put('/:id', authenticate, requireHr, shiftMasterController.updateShift);
+
+// CREATE NEW SHIFT
+router.post('/', authenticate, shiftMasterController.createShift);
+
+// BULK CREATE SHIFTS
+router.post('/bulk', authenticate, shiftMasterController.bulkCreateShifts);
+
+// UPDATE SHIFT
+router.put('/:id', authenticate, shiftMasterController.updateShift);
 router.delete('/:id', authenticate, requireHr, shiftMasterController.deleteShift);
 
 // Rule Builder / Policy Versioning Routes

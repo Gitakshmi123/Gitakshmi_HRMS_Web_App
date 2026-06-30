@@ -401,3 +401,143 @@ exports.getFullOrgHierarchy = async function (req, res) {
     });
   }
 };
+
+/* ----------------------------------------------------
+   BULK UPLOAD DEPARTMENTS
+   ---------------------------------------------------- */
+exports.bulkUploadDepartments = async function (req, res) {
+  try {
+    const { records } = req.body;
+
+    if (!records || !Array.isArray(records)) {
+      return res.status(400).json({
+        success: false,
+        message: "Records must be an array",
+        uploadedCount: 0,
+        failedCount: 0,
+        errors: ["Invalid request format - records must be an array"]
+      });
+    }
+
+    if (records.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No records provided",
+        uploadedCount: 0,
+        failedCount: 0,
+        errors: ["No department records to upload"]
+      });
+    }
+
+    if (records.length > 1000) {
+      return res.status(400).json({
+        success: false,
+        message: "Maximum 1000 records allowed per upload",
+        uploadedCount: 0,
+        failedCount: records.length,
+        errors: ["Exceeded maximum record limit of 1000 records"]
+      });
+    }
+
+    const { Department } = getModels(req);
+    const tenantId = req.tenantId;
+
+    if (!tenantId) {
+      return res.status(400).json({
+        success: false,
+        message: "Tenant context missing for bulk upload",
+        uploadedCount: 0,
+        failedCount: records.length,
+        errors: ["Tenant context missing"]
+      });
+    }
+
+    let uploadedCount = 0;
+    let failedCount = 0;
+    const errors = [];
+    const warnings = [];
+
+    // Process each record sequentially to handle duplicates properly
+    for (let i = 0; i < records.length; i++) {
+      const record = records[i];
+      const rowNum = i + 2; // Assuming Excel row (1-indexed + header)
+
+      try {
+        const name = record.Name || record.name || record['Department Name'];
+        const code = record.Code || record.code || record['Department Code'];
+        const description = record.Description || record.description || '';
+
+        if (!name || typeof name !== "string" || name.trim().length < 2) {
+          failedCount++;
+          errors.push(`Row ${rowNum}: Department name must be at least 2 characters`);
+          continue;
+        }
+
+        if (!code || typeof code !== "string" || code.trim().length < 1) {
+          failedCount++;
+          errors.push(`Row ${rowNum}: Department code is required`);
+          continue;
+        }
+
+        const deptName = name.trim();
+        const deptCode = code.trim().toUpperCase();
+
+        // Find existing department by code or name
+        const existingDept = await Department.findOne({
+          $or: [
+            { code: deptCode },
+            { name: deptName }
+          ]
+        });
+
+        if (existingDept) {
+          // Update existing
+          existingDept.name = deptName;
+          existingDept.code = deptCode;
+          existingDept.description = description.trim();
+          existingDept.status = 'active';
+          await existingDept.save();
+          uploadedCount++;
+          warnings.push(`Row ${rowNum}: Updated existing department (${deptName})`);
+        } else {
+          // Create new
+          await Department.create({
+            name: deptName,
+            code: deptCode,
+            status: 'active',
+            description: description.trim(),
+            mainCompanyId: tenantId,
+            subCompanyId: req.user?.subCompanyId || null,
+            branchId: req.user?.branchId || null,
+            divisionId: req.user?.divisionId || null
+          });
+          uploadedCount++;
+        }
+
+      } catch (rowErr) {
+        failedCount++;
+        errors.push(`Row ${rowNum}: ${rowErr.message || "Failed to process record"}`);
+      }
+    }
+
+    res.json({
+      success: uploadedCount > 0,
+      message: uploadedCount > 0 ? "Bulk upload completed" : "Bulk upload failed",
+      uploadedCount,
+      failedCount,
+      errors,
+      warnings
+    });
+
+  } catch (err) {
+    console.error("bulkUploadDepartments error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Server error during bulk upload",
+      uploadedCount: 0,
+      failedCount: req.body?.records?.length || 0,
+      errors: [err.message || "An unexpected error occurred"]
+    });
+  }
+};
+

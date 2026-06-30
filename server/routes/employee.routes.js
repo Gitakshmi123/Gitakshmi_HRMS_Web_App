@@ -23,7 +23,49 @@ const hierarchy = require('../middleware/hierarchy.middleware');
 
 // Enterprise hierarchy employee collection:
 // GET/POST /api/employees
+/**
+ * @swagger
+ * /api/employees:
+ *   get:
+ *     summary: Retrieve a list of employees
+ *     description: Retrieve all employees based on hierarchy scope.
+ *     tags: [Employees]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: A list of employees
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Employee'
+ */
 router.get('/', auth.authenticate, hierarchy.filterByScope, hierarchyController.listEmployees);
+/**
+ * @swagger
+ * /api/employees:
+ *   post:
+ *     summary: Create a new employee
+ *     description: Admins and heads can create a new employee.
+ *     tags: [Employees]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/Employee'
+ *     responses:
+ *       201:
+ *         description: Employee created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Success'
+ */
 router.post(
     '/',
     auth.authenticate,
@@ -49,6 +91,17 @@ router.post('/leaves/early-return/:id', auth.authenticate, leaveCheck, checkPerm
 router.get('/leaves/history', auth.authenticate, leaveCheck, checkPermission('employee.attendance', 'view'), requestCtrl.getMyLeaves);
 router.get('/leaves/balances', auth.authenticate, leaveCheck, checkPermission('employee.attendance', 'view'), requestCtrl.getMyBalances);
 router.get('/leaves/approved-dates', auth.authenticate, leaveCheck, checkPermission('employee.attendance', 'view'), requestCtrl.getApprovedDates);
+router.post('/leaves/opening-balance', auth.authenticate, leaveCheck, auth.requireHr, requestCtrl.setOpeningBalance);
+router.get('/leaves/ledger', auth.authenticate, leaveCheck, requestCtrl.getLeaveLedger);
+router.get('/leaves/workforce-visibility', auth.authenticate, leaveCheck, checkPermission('employee.attendance', 'view'), requestCtrl.getWorkforceVisibility);
+
+
+// leave encashment (employee side)
+const encashmentCtrl = require('../controllers/leaveEncashment.controller');
+router.get('/leaves/encashment/config', auth.authenticate, leaveCheck, encashmentCtrl.getConfig);
+router.get('/leaves/encashment/requests', auth.authenticate, leaveCheck, checkPermission('employee.attendance', 'view'), encashmentCtrl.getMyRequests);
+router.post('/leaves/encashment/requests', auth.authenticate, leaveCheck, checkPermission('employee.attendance', 'view'), requireActiveEmployee, encashmentCtrl.applyRequest);
+router.post('/leaves/encashment/requests/:id/cancel', auth.authenticate, leaveCheck, checkPermission('employee.attendance', 'delete'), requireActiveEmployee, encashmentCtrl.cancelRequest);
 
 // leave policies applicable to the current employee
 router.get(['/leaves/policies', '/leave-policies'], auth.authenticate, leaveCheck, checkPermission('employee.attendance', 'view'), leavePolicyCtrl.getMyPolicies);

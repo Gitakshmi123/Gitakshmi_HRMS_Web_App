@@ -12,6 +12,7 @@ import {
     Search, UserCircle, LayoutGrid, List
 } from 'lucide-react';
 import usePagePermissions from '../../hooks/usePagePermissions';
+import DepartmentExcelUploadModal from '../../components/HR/DepartmentExcelUploadModal';
 import './Departments.css';
 
 const BACKEND_URL = API_ROOT || '';
@@ -28,6 +29,9 @@ export default function Departments() {
     const [searchTerm, setSearchTerm] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const pageSize = 8;
+
+    // Bulk Upload Modal State
+    const [showUploadModal, setShowUploadModal] = useState(false);
 
     // List Modal States
     const [showEmpList, setShowEmpList] = useState(null);
@@ -128,17 +132,30 @@ export default function Departments() {
                     />
                 </div>
                 {canCreate && (
-                    <button 
-                        type="button"
-                        className="btn-add-dept h-[40px]" 
-                        onClick={(e) => { 
-                            e.stopPropagation();
-                            setEditing(null); 
-                            setOpenForm(true); 
-                        }}
-                    >
-                        <Plus size={18} /> Add Department
-                    </button>
+                    <div className="flex gap-2">
+                        <button 
+                            type="button"
+                            className="btn-outline-premium h-[40px] px-4 flex items-center gap-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition-colors font-semibold text-slate-700 text-sm" 
+                            onClick={(e) => { 
+                                e.stopPropagation();
+                                setShowUploadModal(true); 
+                            }}
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                            Import
+                        </button>
+                        <button 
+                            type="button"
+                            className="btn-add-dept h-[40px]" 
+                            onClick={(e) => { 
+                                e.stopPropagation();
+                                setEditing(null); 
+                                setOpenForm(true); 
+                            }}
+                        >
+                            <Plus size={18} /> Add Department
+                        </button>
+                    </div>
                 )}
             </div>
 
@@ -329,6 +346,16 @@ export default function Departments() {
                     }}
                 />
             )}
+            
+            <DepartmentExcelUploadModal 
+                isOpen={showUploadModal} 
+                onClose={() => setShowUploadModal(false)}
+                onSuccess={(result) => {
+                    if (result.uploadedCount > 0) {
+                        loadData();
+                    }
+                }}
+            />
         </div>
     );
 }
@@ -336,6 +363,7 @@ export default function Departments() {
 function DeptFormModal({ dept, depts, employees, onClose }) {
     const [form] = Form.useForm();
     const [saving, setSaving] = useState(false);
+    const [idGenMode, setIdGenMode] = useState('AUTO');
 
     useEffect(() => {
         if (dept) {
@@ -348,8 +376,27 @@ function DeptFormModal({ dept, depts, employees, onClose }) {
                 status: dept.status === 'active',
                 location: dept.meta?.location || 'Main Branch'
             });
+            setIdGenMode('MANUAL');
         } else {
             form.resetFields();
+            const fetchNextCode = async () => {
+                try {
+                    const res = await api.post('/company-id-config/next', {
+                        entityType: 'DEPT',
+                        increment: false
+                    });
+                    if (res.data && res.data.success) {
+                        const mode = res.data.data?.generationMode || 'AUTO';
+                        setIdGenMode(mode);
+                        if (mode === 'AUTO') {
+                            form.setFieldsValue({ code: res.data.nextId || res.data.data?.id });
+                        }
+                    }
+                } catch (err) {
+                    console.error('Failed to fetch next department code:', err);
+                }
+            };
+            fetchNextCode();
         }
     }, [dept, form]);
 
@@ -381,7 +428,7 @@ function DeptFormModal({ dept, depts, employees, onClose }) {
     };
 
     const handleValuesChange = (changedValues) => {
-        if (!dept && changedValues.name !== undefined) {
+        if (!dept && idGenMode === 'MANUAL' && changedValues.name !== undefined) {
             const name = changedValues.name || '';
             const code = name.includes(' ') 
                 ? name.split(' ').filter(w => w).map(w => w[0]).join('').substring(0, 3).toUpperCase()
@@ -404,7 +451,7 @@ function DeptFormModal({ dept, depts, employees, onClose }) {
                     <Input placeholder="Engineering" />
                 </Form.Item>
                 <Form.Item name="code" label="Code" rules={[{ required: true }]}>
-                    <Input placeholder="ENG" />
+                    <Input placeholder="ENG" disabled={!!dept || idGenMode === 'AUTO'} readOnly={!!dept || idGenMode === 'AUTO'} />
                 </Form.Item>
             </div>
 

@@ -35,7 +35,7 @@ function registerModels(db, tenantId, forceRefresh = false) {
     "BGVTimeline", "BGVEvidenceConfig", "BGVConsent", "BGVRiskScore", "BGVTaskAssignment",
     "DocumentAudit", "DocumentAccess", "LetterRevocation", "DocumentViewConfig", "SignedLetter",
     "OnboardingTemplate", "OnboardingDocument", "OnboardingSubmission", "TicketTemplate", "RequirementTemplate",
-    "PayslipTemplate"
+    "PayslipTemplate", "Shift", "ShiftAssignment", "ShiftMaster", "ShiftPolicy", "EmailTemplate"
   ];
 
   // MONKEYPATCH: Transparently redirect shared models to global connection (CRITICAL for 500 limit)
@@ -90,9 +90,11 @@ function registerModels(db, tenantId, forceRefresh = false) {
     const LetterTemplateSchema = require("../models/LetterTemplate");
     const GeneratedLetterSchema = require("../models/GeneratedLetter");
     const LeavePolicySchema = require("../models/LeavePolicy");
+    const LeaveTypeSchema = require("../models/LeaveType");
     const LeavePolicyCustomMappingSchema = require("../models/LeavePolicyCustomMapping");
     const LeaveBalanceSchema = require("../models/LeaveBalance");
     const LeaveAccrualLogSchema = require("../models/LeaveAccrualLog");
+    const LeaveLedgerSchema = require("../models/LeaveLedger");
     const BandSchema = require("../models/Band");
     const DesignationGradeMapSchema = require("../models/DesignationGradeMap");
     const PromotionHistorySchema = require("../models/PromotionHistory");
@@ -175,6 +177,8 @@ function registerModels(db, tenantId, forceRefresh = false) {
     const OnboardingInstanceSchema = require("../models/OnboardingInstance");
     const OnboardingTaskSchema = require("../models/OnboardingTask");
     const OnboardingDocumentSchema = require("../models/OnboardingDocument");
+    const CandidateDocumentRequestSchema = require("../models/CandidateDocumentRequest");
+    const ExternalEmployeeRecordSchema = require("../models/ExternalEmployeeRecord");
 
     // Enterprise Social Media (avoids conflict with legacy models)
     const SocialAccountSchema = require("../models/social/SocialAccount");
@@ -225,6 +229,7 @@ function registerModels(db, tenantId, forceRefresh = false) {
     register("LetterTemplate", LetterTemplateSchema);
     register("GeneratedLetter", GeneratedLetterSchema);
     register("LeavePolicy", LeavePolicySchema);
+    register("LeaveType", LeaveTypeSchema);
     register("LeavePolicyCustomMapping", LeavePolicyCustomMappingSchema);
     register("Band", BandSchema);
     register("DesignationGradeMap", DesignationGradeMapSchema);
@@ -232,6 +237,7 @@ function registerModels(db, tenantId, forceRefresh = false) {
     register("Branch", BranchSchema);
     register("LeaveBalance", LeaveBalanceSchema);
     register("LeaveAccrualLog", LeaveAccrualLogSchema);
+    register("LeaveLedger", LeaveLedgerSchema);
     register("Notification", NotificationSchema);
     register("Regularization", RegularizationSchema);
     register("AuditLog", AuditLogSchema);
@@ -298,6 +304,8 @@ function registerModels(db, tenantId, forceRefresh = false) {
     register("OnboardingInstance", OnboardingInstanceSchema);
     register("OnboardingTask", OnboardingTaskSchema);
     register("OnboardingDocument", OnboardingDocumentSchema);
+    register("CandidateDocumentRequest", CandidateDocumentRequestSchema);
+    register("ExternalEmployeeRecord", ExternalEmployeeRecordSchema);
     register("SocialAccountEnterprise", SocialAccountSchema);
     register("SocialCampaign", SocialCampaignSchema);
     register("SocialPostEnterprise", SocialPostSchema);
@@ -413,23 +421,22 @@ async function ensureLeavePolicy(employee, db, tenantIdOverride = null) {
   });
 
   // Step 2: Resolve the best active policy for the employee based on scope.
-  // Existing employee.leavePolicy is treated as a stored result, not as the source of truth,
-  // so HR updates to Grade/Band/Department/Personal policies immediately win over stale links.
+  // The explicitly assigned policy takes precedence over automatic matching.
   try {
-    if (activePolicies.length > 0) {
-      resolvedPolicy = leaveManagementService.selectBestPolicyForEmployee({
-        policies: activePolicies.filter((policy) => Array.isArray(policy.rules) && policy.rules.length > 0),
-        employee,
-        grade: resolvedGrade
-      });
-    }
-
-    if (!resolvedPolicy && employee.leavePolicy) {
+    if (employee.leavePolicy) {
       try {
         resolvedPolicy = await leaveManagementService.getAssignedLeavePolicyForEmployee({ LeavePolicy, tenantId, employee });
       } catch (e) {
         console.error(`[POLICY_ENFORCEMENT] Verification error:`, e.message);
       }
+    }
+
+    if (!resolvedPolicy && activePolicies.length > 0) {
+      resolvedPolicy = leaveManagementService.selectBestPolicyForEmployee({
+        policies: activePolicies.filter((policy) => Array.isArray(policy.rules) && policy.rules.length > 0),
+        employee,
+        grade: resolvedGrade
+      });
     }
 
     if (resolvedPolicy) {

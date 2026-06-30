@@ -196,18 +196,23 @@ async function comparePassword(candidatePassword, storedPassword) {
 }
 
 async function verifyEmployeePortalPassword(employee, tenant, password) {
-  if (!password || !employee?.email || !tenant?._id) return false;
-  if (employee.password && await comparePassword(password, employee.password)) return true;
+  if (!password || !employee?.email || !tenant?._id) { console.log('DEBUG: missing inputs'); return false; }
+  console.log('DEBUG: checking employee.password');
+  if (employee.password && await comparePassword(password, employee.password)) { console.log('DEBUG: matched employee.password'); return true; }
 
   try {
     const User = getUserModel();
-    const portalUser = await User.findOne({ email: normalizeEmail(employee.email) }).select('password role tenant').lean();
-    if (!portalUser?.password) return false;
-    if (String(portalUser.tenant) !== String(tenant._id)) return false;
+    const portalUser = await User.findOne({ email: normalizeEmail(employee.email) }).select('password role tenant mainCompanyId').lean();
+    if (!portalUser?.password) { console.log('DEBUG: no portalUser password'); return false; }
+    const portalTenantId = portalUser.tenant || portalUser.mainCompanyId;
+    if (String(portalTenantId) !== String(tenant._id)) { console.log('DEBUG: tenant mismatch', portalTenantId, tenant._id); return false; }
     const r = String(portalUser.role || '').toLowerCase();
-    if (!EMPLOYEE_PORTAL_USER_ROLES.has(r)) return false;
-    return comparePassword(password, portalUser.password);
-  } catch (_e) {
+    if (!EMPLOYEE_PORTAL_USER_ROLES.has(r)) { console.log('DEBUG: bad role', r); return false; }
+    const match = await comparePassword(password, portalUser.password);
+    console.log('DEBUG: matched portalUser.password:', match);
+    return match;
+  } catch (err) {
+    console.log('DEBUG: error in verify:', err);
     return false;
   }
 }
@@ -288,7 +293,11 @@ function buildPsaAuthContextFromDb(dbUser) {
 
 function buildAdminAuthContext(userDoc, tenant) {
   const role = normalizeRoleName(userDoc?.role?.name || userDoc?.role || 'hr');
-  const permissions = sanitizePermissions(userDoc?.permissions || []);
+  let permissions = sanitizePermissions(userDoc?.permissions || []);
+  if (!permissions || permissions.length === 0) {
+    const { getDefaultPerms } = require('../utils/defaultRolePermissions');
+    permissions = getDefaultPerms(role);
+  }
   const tenantPayload = buildTenantPayload(tenant);
   return {
     authSubject: { id: userDoc._id, subjectType: 'user', email: normalizeEmail(userDoc.email), role, tenantId: tenant._id, companyCode: tenant.code || null, companyId: userDoc.companyId || tenant._id, mainCompanyId: userDoc.mainCompanyId || tenant._id, subCompanyId: userDoc.subCompanyId || null, branchId: userDoc.branchId || null, divisionId: userDoc.divisionId || null, departmentId: userDoc.departmentId || null, designationId: userDoc.designationId || null, groupId: userDoc.groupId || tenant.groupId || null },
@@ -299,7 +308,11 @@ function buildAdminAuthContext(userDoc, tenant) {
 
 function buildEmployeeAuthContext(employeeDoc, tenant, userDoc = null) {
   const role = normalizeRoleName(userDoc?.role || employeeDoc?.role || 'employee');
-  const permissions = sanitizePermissions(userDoc?.permissions || []);
+  let permissions = sanitizePermissions(userDoc?.permissions || []);
+  if (!permissions || permissions.length === 0) {
+    const { getDefaultPerms } = require('../utils/defaultRolePermissions');
+    permissions = getDefaultPerms(role);
+  }
   const tenantPayload = buildTenantPayload(tenant);
   return {
     authSubject: { id: employeeDoc._id, subjectType: 'employee', email: normalizeEmail(employeeDoc.email), role, tenantId: tenant._id, companyCode: tenant.code || null, companyId: userDoc?.companyId || tenant._id, mainCompanyId: employeeDoc.mainCompanyId || tenant._id, subCompanyId: employeeDoc.subCompanyId || null, branchId: employeeDoc.branchId || null, divisionId: employeeDoc.divisionId || null, departmentId: employeeDoc.departmentId || null, designationId: employeeDoc.designationId || null, groupId: userDoc?.groupId || tenant.groupId || null },
@@ -481,11 +494,14 @@ async function resolveEmployeeAuthContext(identifier, password, companyCode = nu
     }
   }
 
+  if (foundEmployee && foundTenant) {
+    if (isEmployeeDeactivated(foundEmployee)) return { error: 'account_deactivated' };
+    const userDoc = await findUserPermissionsByEmail(foundEmployee.email, foundTenant._id);
+    return buildEmployeeAuthContext(foundEmployee, foundTenant, userDoc);
+  }
+
   if (passwordFailed) return { error: 'invalid_password' };
-  if (!foundEmployee || !foundTenant) return { error: 'invalid_email' };
-  if (isEmployeeDeactivated(foundEmployee)) return { error: 'account_deactivated' };
-  const userDoc = await findUserPermissionsByEmail(foundEmployee.email, foundTenant._id);
-  return buildEmployeeAuthContext(foundEmployee, foundTenant, userDoc);
+  return { error: 'invalid_email' };
 }
 
 async function resolveUnifiedAuthContext(identifier, password, companyCode = null) {
@@ -569,7 +585,10 @@ exports.unifiedLogin = async (req, res) => {
     const authContext = await resolveUnifiedAuthContext(identifier, password, companyCode);
     if (!authContext || authContext.error) return res.status(401).json({ success: false, message: authContext?.error || 'invalid_credentials' });
     return finishLogin(req, res, authContext);
-  } catch (err) { return res.status(500).json({ success: false, message: 'server_error' }); }
+  } catch (err) {
+    console.error('DEBUG UNIFIED LOGIN ERROR:', err);
+    return res.status(500).json({ success: false, message: 'server_error' });
+  }
 };
 
 exports.getMe = async (req, res) => {
@@ -758,9 +777,15 @@ exports.getMyPermissions = async (req, res) => {
     if (!userId || !tenantId) return res.status(401).json({ success: false, message: 'unauthorized' });
 
     const userDoc = await findUserPermissionsByEmail(req.user.email, tenantId);
+    let permissions = sanitizePermissions(userDoc?.permissions || []);
+    if (!permissions || permissions.length === 0) {
+       const { getDefaultPerms } = require('../utils/defaultRolePermissions');
+       permissions = getDefaultPerms(req.user.role || 'employee');
+    }
+    
     return res.json({
       success: true,
-      permissions: sanitizePermissions(userDoc?.permissions || []),
+      permissions: permissions,
       role: req.user.role
     });
   } catch (error) {

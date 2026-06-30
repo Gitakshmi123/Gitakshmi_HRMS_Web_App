@@ -33,6 +33,8 @@ const AttendanceSchema = new mongoose.Schema({
   leaveColor: { type: String },
 
   // Punch Details
+  scheduledIn: { type: Date, default: null },
+  scheduledOut: { type: Date, default: null },
   checkIn: { type: Date },
   checkOut: { type: Date },
   checkInTime: { type: Date, default: null },
@@ -126,6 +128,8 @@ const AttendanceSchema = new mongoose.Schema({
     similarity: { type: Number, default: 0 },
     method: { type: String, default: 'SYSTEM' }
   },
+  checkInImage: { type: String, default: '' },
+  checkOutImage: { type: String, default: '' },
   tracking: {
     sessionId: { type: mongoose.Schema.Types.ObjectId, ref: 'LiveTrackingSession', default: null },
     status: {

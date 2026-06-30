@@ -6,16 +6,20 @@ const mongoose = require('mongoose');
  * Dynamic Rules (Late Marks, OT, Half Day) are stored in ShiftPolicy.
  */
 const ShiftMasterSchema = new mongoose.Schema({
-    tenant: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', required: true, index: true },
+    tenant: { type: String, required: true, index: true },
     name: { type: String, required: [true, 'Shift name is required'], trim: true },
     code: { type: String, required: [true, 'Shift code is required'], uppercase: true, trim: true },
     description: { type: String, trim: true },
     
-    // Support: General Shift, Morning Shift, Evening Shift, Night Shift, Flexible Shift
+    // Support: Regular, Support, 24x7 Support, Client Based, Flexible, Project Based, Hybrid Work, Short Shift, Learning, Special Shift
     type: { 
         type: String, 
-        enum: ['General', 'Morning', 'Evening', 'Night', 'Flexible'], 
-        default: 'General' 
+        enum: [
+            'General', 'Morning', 'Evening', 'Night', 'Flexible', // Keeping legacy ones just in case
+            'Regular', 'Support', '24x7 Support', 'Client Based', 
+            'Project Based', 'Hybrid Work', 'Short Shift', 'Learning', 'Special Shift'
+        ], 
+        default: 'Regular' 
     },
 
     // Core Timing

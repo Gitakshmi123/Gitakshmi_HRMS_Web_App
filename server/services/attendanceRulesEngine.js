@@ -246,7 +246,9 @@ function evaluateLateAndEarly({ date, logs, settings, shiftStart: shiftStartOver
             // However, some systems only mark 'isLate' flag if diff > threshold.
             // Let's stick to: isLate = True if (Arrival > ShiftStart + Grace)
 
-            if (lateMinutes > (isFlexibleGradeTiming ? 0 : graceTime)) {
+            // CUSTOM IMPLEMENTATION: User explicitly requested 15 mins allowance
+            const effectiveGraceTime = Math.max(graceTime || 0, 15);
+            if (lateMinutes > (isFlexibleGradeTiming ? 0 : effectiveGraceTime)) {
                 isLate = true;
             }
 
@@ -304,6 +306,7 @@ function applyAttendanceRules(params) {
         graceMin: graceMinOverride = null,
         lateMin: _lateMinOverride = null, // reserved for future use in policy expansion
         isNightShift: shiftIsNightShift = false,
+        shiftPolicy = null, // Dynamic ShiftPolicy from DB
     } = params;
 
     // Safety check for settings
@@ -408,26 +411,83 @@ function applyAttendanceRules(params) {
 
         // A. LATE MARKS LOGIC
         if (isLate) {
-            // Always notify of late arrival regardless of penalty config
             meta.policyViolations.push(`Late Arrival Detected (${lateMinutes} min)`);
 
-            if (lateCfg.enabled) {
-                const currentLateCount = accumulatedLateCount + 1;
-
-                // Check LOP Threshold First (Severity High)
-                if (lateCfg.lateMarksToFullDay > 0 && currentLateCount % lateCfg.lateMarksToFullDay === 0) {
-                    status = 'absent'; // Full Day LOP implies Absent equivalent for payroll
-                    lopDays = 1;
-                    meta.policyViolations.push(`Late Mark Policy: ${currentLateCount} late marks = 1 Day LOP`);
-                    meta.penaltyApplied = 'late_lop_full';
-                }
-                // Check Half Day Threshold (Severity Medium)
-                else if (lateCfg.lateMarksToHalfDay > 0 && currentLateCount % lateCfg.lateMarksToHalfDay === 0) {
-                    if (status !== 'absent') { // Don't downgrade if already absent
+            // Check Daily Late Marks from Dynamic ShiftPolicy
+            let dailyActionApplied = false;
+            if (shiftPolicy?.attendanceRules?.lateMarks && shiftPolicy.attendanceRules.lateMarks.length > 0) {
+                // Find matching rule (assuming sorted or we just find first match where lateMinutes > rule.minutes)
+                const matchingRule = [...shiftPolicy.attendanceRules.lateMarks]
+                    .sort((a, b) => b.minutes - a.minutes) // Sort descending to match highest penalty first
+                    .find(r => r.conditionType === 'GREATER_THAN' ? lateMinutes > r.minutes : lateMinutes < r.minutes);
+                
+                if (matchingRule) {
+                    dailyActionApplied = true;
+                    const action = matchingRule.action;
+                    if (action === 'HALF_DAY' && status !== 'absent') {
                         status = 'half_day';
-                        lopDays = 0.5;
-                        meta.policyViolations.push(`Late Mark Policy: ${currentLateCount} late marks = Half Day`);
+                        lopDays = Math.max(lopDays, 0.5);
+                        meta.policyViolations.push(`Daily Policy: Late > ${matchingRule.minutes}m = Half Day`);
                         meta.penaltyApplied = 'late_half_day';
+                    } else if (action === 'FULL_DAY' || action === 'ABSENT') {
+                        status = 'absent';
+                        lopDays = Math.max(lopDays, 1);
+                        meta.policyViolations.push(`Daily Policy: Late > ${matchingRule.minutes}m = Full Day Absent`);
+                        meta.penaltyApplied = 'late_lop_full';
+                    } else if (action === 'DEDUCT_LEAVE') {
+                        meta.policyViolations.push(`Daily Policy: Late > ${matchingRule.minutes}m = Deduct Leave`);
+                        meta.penaltyApplied = 'late_deduct_leave';
+                        meta.leaveDeductType = matchingRule.leaveTypeToDeduct;
+                    }
+                }
+            }
+
+            // Monthly Late Conversion (e.g. 3 late marks = 1 LWP)
+            if (!dailyActionApplied || status !== 'absent') {
+                if (shiftPolicy?.attendanceRules) {
+                    const currentLateCount = accumulatedLateCount + 1;
+                    const convToHalfDay = shiftPolicy.attendanceRules.monthlyLateToHalfDayConversion;
+                    const lateAction = shiftPolicy.attendanceRules.monthlyLateAction;
+                    
+                    if (convToHalfDay > 0 && currentLateCount % convToHalfDay === 0) {
+                        if (lateAction === 'HALF_DAY' && status !== 'absent') {
+                            status = 'half_day';
+                            lopDays = Math.max(lopDays, 0.5);
+                            meta.policyViolations.push(`Monthly Policy: ${currentLateCount} late marks = Half Day`);
+                            meta.penaltyApplied = 'late_half_day';
+                        } else if (lateAction === 'DEDUCT_LEAVE') {
+                            meta.policyViolations.push(`Monthly Policy: ${currentLateCount} late marks = Deduct ${shiftPolicy.attendanceRules.monthlyLateLeaveDeductType}`);
+                            meta.penaltyApplied = 'late_deduct_leave';
+                            meta.leaveDeductType = shiftPolicy.attendanceRules.monthlyLateLeaveDeductType;
+                        } else if (lateAction === 'LWP' || lateAction === 'FULL_DAY') {
+                            status = 'absent';
+                            lopDays = Math.max(lopDays, 1);
+                            meta.policyViolations.push(`Monthly Policy: ${currentLateCount} late marks = 1 Day LOP`);
+                            meta.penaltyApplied = 'late_lop_full';
+                        }
+                    }
+                // CUSTOM IMPLEMENTATION: 15 min late 3 times allowed, 4th time = Half Day
+                } else if (lateCfg.enabled || true) {
+                    const currentLateCount = accumulatedLateCount + 1;
+
+                    // Fallback to 4 if user didn't explicitly configure it
+                    const marksToHalfDay = lateCfg.lateMarksToHalfDay || 4; 
+
+                    // Check LOP Threshold First (Severity High)
+                    if (lateCfg.lateMarksToFullDay > 0 && currentLateCount % lateCfg.lateMarksToFullDay === 0) {
+                        status = 'absent'; // Full Day LOP implies Absent equivalent for payroll
+                        lopDays = Math.max(lopDays, 1);
+                        meta.policyViolations.push(`Late Mark Policy: ${currentLateCount} late marks = 1 Day LOP`);
+                        meta.penaltyApplied = 'late_lop_full';
+                    }
+                    // Check Half Day Threshold (Severity Medium)
+                    else if (marksToHalfDay > 0 && currentLateCount % marksToHalfDay === 0) {
+                        if (status !== 'absent') { // Don't downgrade if already absent
+                            status = 'half_day';
+                            lopDays = Math.max(lopDays, 0.5);
+                            meta.policyViolations.push(`Late Mark Policy: ${currentLateCount} late marks = Half Day`);
+                            meta.penaltyApplied = 'late_half_day';
+                        }
                     }
                 }
             }
@@ -435,26 +495,56 @@ function applyAttendanceRules(params) {
 
         // B. EARLY EXIT LOGIC
         if (isEarlyOut) {
-            // Always notify of early exit regardless of penalty config
             meta.policyViolations.push(`Early Exit Detected (${earlyExitMinutes} min)`);
 
-            if (earlyCfg.enabled) {
-                const currentEarlyCount = accumulatedEarlyExitCount + 1;
-
-                // Check LOP Threshold
-                if (earlyCfg.earlyExitsToFullDay > 0 && currentEarlyCount % earlyCfg.earlyExitsToFullDay === 0) {
-                    status = 'absent';
-                    lopDays = 1;
-                    meta.policyViolations.push(`Early Exit Policy: ${currentEarlyCount} early exits = 1 Day LOP`);
-                    meta.penaltyApplied = 'early_lop_full';
-                }
-                // Check Half Day Threshold
-                else if (earlyCfg.earlyExitsToHalfDay > 0 && currentEarlyCount % earlyCfg.earlyExitsToHalfDay === 0) {
-                    if (status !== 'absent') {
+            // Check Daily Early Exits from Dynamic ShiftPolicy
+            let dailyEarlyActionApplied = false;
+            if (shiftPolicy?.attendanceRules?.earlyExits && shiftPolicy.attendanceRules.earlyExits.length > 0) {
+                // Find matching rule
+                const matchingRule = [...shiftPolicy.attendanceRules.earlyExits]
+                    .sort((a, b) => b.minutes - a.minutes)
+                    .find(r => r.conditionType === 'GREATER_THAN' ? earlyExitMinutes > r.minutes : earlyExitMinutes < r.minutes);
+                
+                if (matchingRule) {
+                    dailyEarlyActionApplied = true;
+                    const action = matchingRule.action;
+                    if (action === 'HALF_DAY' && status !== 'absent') {
                         status = 'half_day';
-                        lopDays = Math.max(lopDays, 0.5); // Keep existing LOP if higher
-                        meta.policyViolations.push(`Early Exit Policy: ${currentEarlyCount} early exits = Half Day`);
+                        lopDays = Math.max(lopDays, 0.5);
+                        meta.policyViolations.push(`Daily Policy: Early Exit > ${matchingRule.minutes}m = Half Day`);
                         meta.penaltyApplied = 'early_half_day';
+                    } else if (action === 'FULL_DAY' || action === 'ABSENT') {
+                        status = 'absent';
+                        lopDays = Math.max(lopDays, 1);
+                        meta.policyViolations.push(`Daily Policy: Early Exit > ${matchingRule.minutes}m = Full Day Absent`);
+                        meta.penaltyApplied = 'early_lop_full';
+                    } else if (action === 'DEDUCT_LEAVE') {
+                        meta.policyViolations.push(`Daily Policy: Early Exit > ${matchingRule.minutes}m = Deduct Leave`);
+                        meta.penaltyApplied = 'early_deduct_leave';
+                        meta.leaveDeductType = matchingRule.leaveTypeToDeduct;
+                    }
+                }
+            }
+
+            if (!dailyEarlyActionApplied || status !== 'absent') {
+                if (earlyCfg.enabled) {
+                    const currentEarlyCount = accumulatedEarlyExitCount + 1;
+
+                    // Check LOP Threshold
+                    if (earlyCfg.earlyExitsToFullDay > 0 && currentEarlyCount % earlyCfg.earlyExitsToFullDay === 0) {
+                        status = 'absent';
+                        lopDays = Math.max(lopDays, 1);
+                        meta.policyViolations.push(`Early Exit Policy: ${currentEarlyCount} early exits = 1 Day LOP`);
+                        meta.penaltyApplied = 'early_lop_full';
+                    }
+                    // Check Half Day Threshold
+                    else if (earlyCfg.earlyExitsToHalfDay > 0 && currentEarlyCount % earlyCfg.earlyExitsToHalfDay === 0) {
+                        if (status !== 'absent') {
+                            status = 'half_day';
+                            lopDays = Math.max(lopDays, 0.5); // Keep existing LOP if higher
+                            meta.policyViolations.push(`Early Exit Policy: ${currentEarlyCount} early exits = Half Day`);
+                            meta.penaltyApplied = 'early_half_day';
+                        }
                     }
                 }
             }
@@ -467,6 +557,33 @@ function applyAttendanceRules(params) {
             status = 'half_day';
             lopDays = Math.max(lopDays, 0.5);
             meta.policyViolations.push("Working hours below full-day threshold");
+        }
+    }
+
+    // --- PRIORITY 5: OVERTIME ENGINE ---
+    let otMinutes = 0;
+    let otMultiplierApplied = 1.0;
+
+    if (shiftPolicy?.overtimeEngine?.isEligible && workingHours > 0) {
+        // Find required working hours for the shift
+        let requiredHours = 8; // Default fallback
+        if (shiftStartOverride && shiftEndOverride) {
+            const sStart = buildShiftDate(date, shiftStartOverride, false);
+            const sEnd = buildShiftDate(date, shiftEndOverride, shiftIsNightShift);
+            if (sStart && sEnd) {
+                requiredHours = diffMinutes(sEnd, sStart) / 60;
+            }
+        }
+        
+        const excessMinutes = Math.round((workingHours - requiredHours) * 60);
+        if (excessMinutes >= (shiftPolicy.overtimeEngine.minimumMinutesToQualify || 0)) {
+            otMinutes = Math.min(excessMinutes, shiftPolicy.overtimeEngine.maximumMinutesPerDay || 9999);
+            
+            // Determine Multiplier
+            if (isHoliday) otMultiplierApplied = shiftPolicy.overtimeEngine.holidayMultiplier || 2.0;
+            else if (isWeeklyOff) otMultiplierApplied = shiftPolicy.overtimeEngine.weeklyOffMultiplier || 2.0;
+            else if (shiftIsNightShift) otMultiplierApplied = shiftPolicy.overtimeEngine.nightShiftMultiplier || 1.5;
+            else otMultiplierApplied = shiftPolicy.overtimeEngine.normalMultiplier || 1.0;
         }
     }
 
@@ -483,6 +600,8 @@ function applyAttendanceRules(params) {
         isCompOffDay: !!meta.isCompOffDay,
         isNightShift: !!shiftIsNightShift || (!!nightCfg.enabled && !!nightCfg.shiftSpansMidnight),
         lopDays,
+        otMinutes,
+        otMultiplierApplied,
         engineVersion: 2,
         meta,
         policyViolations: meta.policyViolations // Expose at top level for easy access

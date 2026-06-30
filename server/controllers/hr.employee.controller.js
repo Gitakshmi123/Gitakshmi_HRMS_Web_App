@@ -8,10 +8,14 @@ const idGenerator = require('../utils/idGenerator');
 const leaveManagementService = require('../services/leaveManagement.service');
 const gradeBandAssignmentService = require('../services/gradeBandAssignment.service');
 const UserSchema = require('../models/User');
+const CandidateSchema = require('../models/Candidate');
+const ExternalEmployeeRecordSchema = require('../models/ExternalEmployeeRecord');
 const { sanitizeEmployee } = require('../utils/apiSanitizer');
+const { getDefaultPerms } = require('../utils/defaultRolePermissions');
 const companyIdConfigController = require('./companyIdConfig.controller');
 const salarySnapshotCanonicalSync = require('../services/salarySnapshotCanonicalSync.service');
 const employeeHierarchyService = require('../services/employeeHierarchy.service');
+const { syncEmployeeToDMS, notifyDMSEmployeeDeleted } = require('../services/dmsEmployeeSync.service');
 
 // Global counter model (stored in main connection, not tenant databases)
 let GlobalCounter;
@@ -88,6 +92,12 @@ function getModels(req) {
     if (!db.models.Grade) {
       try { db.model('Grade', require('../models/Grade')); } catch (e) { }
     }
+    if (!db.models.Candidate) {
+      try { db.model('Candidate', CandidateSchema); } catch (e) { }
+    }
+    if (!db.models.ExternalEmployeeRecord) {
+      try { db.model('ExternalEmployeeRecord', ExternalEmployeeRecordSchema); } catch (e) { }
+    }
 
     return {
       Employee: db.model("Employee"),
@@ -102,13 +112,52 @@ function getModels(req) {
       BGVCase: db.model("BGVCase"),
       Applicant: db.model("Applicant"),
       Shift: db.model("Shift"),
-      EmployeeSalarySnapshot: db.model("EmployeeSalarySnapshot")
+      EmployeeSalarySnapshot: db.model("EmployeeSalarySnapshot"),
+      Candidate: db.model("Candidate"),
+      ExternalEmployeeRecord: db.model("ExternalEmployeeRecord")
     };
   } catch (err) {
     console.error("[getModels] Error retrieving models:", err.message);
     console.error("[getModels] Error stack:", err.stack);
     throw new Error(`Failed to retrieve models from tenant database: ${err.message}`);
   }
+}
+
+const firstNonEmpty = (...values) => values.find((value) => typeof value === 'string' && value.trim());
+
+async function backfillExternalCandidateProfilePic(req, emp) {
+  if (!emp || emp.profilePic || !emp.meta?.candidateId) return emp;
+
+  try {
+    const { Employee, Candidate, ExternalEmployeeRecord } = getModels(req);
+    const [candidate, externalRecord] = await Promise.all([
+      Candidate.findById(emp.meta.candidateId).select('profilePic').lean(),
+      ExternalEmployeeRecord.findOne({
+        candidateId: emp.meta.candidateId,
+        ...(emp.meta.jobId ? { jobId: emp.meta.jobId } : {})
+      }).select('personalDetails documentDetails').lean()
+    ]);
+
+    const profilePic = firstNonEmpty(
+      externalRecord?.personalDetails?.profilePic,
+      externalRecord?.personalDetails?.profileImage,
+      externalRecord?.personalDetails?.photo,
+      externalRecord?.documentDetails?.profilePic,
+      externalRecord?.documentDetails?.profileImage,
+      externalRecord?.documentDetails?.profilePhoto,
+      externalRecord?.documentDetails?.photo,
+      candidate?.profilePic
+    );
+
+    if (profilePic) {
+      await Employee.updateOne({ _id: emp._id }, { $set: { profilePic } });
+      emp.profilePic = profilePic;
+    }
+  } catch (error) {
+    console.warn('[EMPLOYEE_PROFILE_PIC_BACKFILL_SKIPPED]', error.message);
+  }
+
+  return emp;
 }
 
 function hasTenantValue(value) {
@@ -1078,6 +1127,7 @@ exports.create = async (req, res) => {
             mainCompanyId: tenantId,
             tenant: tenantId,
             companyId: tenantId,
+            permissions: getDefaultPerms('employee'),
           });
         } else if (String(existingUser.role || '').toLowerCase() === 'employee') {
           await User.findByIdAndUpdate(existingUser._id, {
@@ -1095,8 +1145,23 @@ exports.create = async (req, res) => {
       console.warn('[EMPLOYEE_CREATE] Global login sync warning:', syncErr.message);
     }
 
+    try {
+      const enterpriseRosterController = require('./enterpriseRoster.controller');
+      await enterpriseRosterController.assignCompanyDefaultToEmployee(req, tenantId, emp._id);
+    } catch (e) {
+      console.warn("[EMPLOYEE_CREATE] Failed to auto assign default roster:", e.message);
+    }
+
     _invalidateOrgCache(tenantId);
     await emp.populate('gradeId', GRADE_PUBLIC_SELECT);
+    
+    // ── NEW: Trigger background sync to DMS ──
+    setImmediate(() => {
+      syncEmployeeToDMS(emp, req.tenantDB).catch(err =>
+        console.error('[DMS-HOOK] Auto-sync failed:', err.message)
+      );
+    });
+    
     res.json({ success: true, data: sanitizeEmployee(emp) });
 
   } catch (err) {
@@ -1166,6 +1231,7 @@ exports.get = async (req, res) => {
       .lean();
     if (!emp) return res.status(404).json({ success: false, error: "not_found" });
     await backfillEmployeeTenant(Employee, emp, tenantId);
+    await backfillExternalCandidateProfilePic(req, emp);
     // Security: strip sensitive fields before responding
     res.json({ success: true, data: sanitizeEmployee(emp) });
 
@@ -1479,6 +1545,13 @@ exports.update = async (req, res) => {
 
     _invalidateOrgCache(tenantId);
     if (!res.headersSent) {
+      // ── NEW: Trigger background sync to DMS ──
+      setImmediate(() => {
+        syncEmployeeToDMS(emp, req.tenantDB).catch(err =>
+          console.error('[DMS-HOOK] Auto-sync failed:', err.message)
+        );
+      });
+      
       return res.json({ success: true, data: sanitizeEmployee(emp) });
     }
 
@@ -1539,6 +1612,14 @@ exports.remove = async (req, res) => {
       return res.status(404).json({ error: "not_found" });
 
     _invalidateOrgCache(tenantId);
+    
+    // ── NEW: Sync deletion to DMS ──
+    setImmediate(() => {
+      notifyDMSEmployeeDeleted(emp.employeeId || emp._id).catch(err =>
+        console.error('[DMS-HOOK] Auto-sync delete failed:', err.message)
+      );
+    });
+
     res.json({ success: true });
 
   } catch (err) {
@@ -3230,7 +3311,8 @@ exports.bulkUploadEmployees = async (req, res) => {
       errors: [],
       warnings: [],
       processedIds: [],
-      autoGeneratedIds: []
+      autoGeneratedIds: [],
+      extractedCredentials: []
     };
     const tenantUserLimit = await getTenantUserLimitContext(Employee, tenantId);
     if (tenantUserLimit) {
@@ -3531,7 +3613,7 @@ exports.bulkUploadEmployees = async (req, res) => {
         }
 
         if (rowValues['email']) {
-          const companyEmail = rowValues['email'].find(m => (m.key.includes('company') || m.key.includes('work')) && String(m.value || '').trim() !== '');
+          const companyEmail = rowValues['email'].find(m => (m.key.includes('company') || m.key.includes('work') || m.key.includes('official')) && String(m.value || '').trim() !== '');
           const chosenEmail = companyEmail || rowValues['email'].find(m => String(m.value || '').trim() !== '');
           email = chosenEmail && chosenEmail.value ? chosenEmail.value.toString().trim().toLowerCase() : '';
         }
@@ -3560,6 +3642,7 @@ exports.bulkUploadEmployees = async (req, res) => {
         if (rowValues['bankLocation']) bankLocation = rowValues['bankLocation'][0].value ? rowValues['bankLocation'][0].value.toString().trim() : '';
         if (rowValues['policyName']) policyName = rowValues['policyName'][0].value ? rowValues['policyName'][0].value.toString().trim() : '';
         if (rowValues['password']) password = rowValues['password'][0].value ? rowValues['password'][0].value.toString().trim() : '';
+        if (!password && row['_generatedPassword']) password = String(row['_generatedPassword']).trim();
         if (rowValues['panNumber']) panNumber = rowValues['panNumber'][0].value ? rowValues['panNumber'][0].value.toString().trim() : '';
         if (rowValues['aadharNumber']) aadharNumber = rowValues['aadharNumber'][0].value ? rowValues['aadharNumber'][0].value.toString().trim() : '';
 
@@ -3963,13 +4046,29 @@ exports.bulkUploadEmployees = async (req, res) => {
         }
 
         // If no password provided and it's a new user, generate default password
+        let generatedPlainPassword = '';
         if (!isUpdate && !hashedPassword) {
           try {
+            let sSur = (lastName || '').toLowerCase().substring(0, 3);
+            let sFirst = (firstName || '').toLowerCase().substring(0, 3);
+            if (!sSur) sSur = 'emp';
+            if (!sFirst) sFirst = 'usr';
+
+            let birthYear = '1995'; // Fallback if DOB is missing
+            if (dobDate && !isNaN(dobDate.getTime())) {
+              birthYear = dobDate.getFullYear().toString();
+            } else if (dob) {
+               const match = String(dob).match(/\b(19|20)\d{2}\b/);
+               if (match) birthYear = match[0];
+            }
+
+            generatedPlainPassword = `${sSur}${sFirst}@${birthYear}`;
+
             const bcrypt = require('bcryptjs');
             const salt = await bcrypt.genSalt(10);
-            const defaultPassword = empId;
-            hashedPassword = await bcrypt.hash(defaultPassword, salt);
-            results.warnings.push(`Row ${rowIdx}: No password provided - default password set to Employee ID (${empId})`);
+            hashedPassword = await bcrypt.hash(generatedPlainPassword, salt);
+            
+            results.warnings.push(`Row ${rowIdx}: No password provided - auto-generated as ${generatedPlainPassword}`);
           } catch (hashErr) {
             results.warnings.push(`Row ${rowIdx}: Failed to generate default password`);
           }
@@ -4108,6 +4207,24 @@ exports.bulkUploadEmployees = async (req, res) => {
         try {
           await finalEmployee.save();
 
+          if (!isUpdate) {
+            try {
+              const enterpriseRosterController = require('./enterpriseRoster.controller');
+              await enterpriseRosterController.assignCompanyDefaultToEmployee(req, tenantId, finalEmployee._id);
+            } catch (e) {
+              console.warn("[BULK_UPLOAD] Failed to auto assign default roster:", e.message);
+            }
+          }
+          
+          if (!isUpdate && generatedPlainPassword) {
+            results.extractedCredentials.push({
+              _generatedEmpCode: finalEmployee.employeeId,
+              _generatedName: `${finalEmployee.firstName} ${finalEmployee.lastName}`.trim(),
+              _generatedEmail: finalEmployee.email,
+              _generatedPassword: generatedPlainPassword
+            });
+          }
+
           // Keep GT ONE/global auth in sync for employee email login (non-fatal on failure)
           try {
             const User = getGlobalUserModel();
@@ -4122,7 +4239,8 @@ exports.bulkUploadEmployees = async (req, res) => {
                   role: 'employee',
                   mainCompanyId: tenantId,
                   tenant: tenantId,
-                  companyId: tenantId
+                  companyId: tenantId,
+                  permissions: getDefaultPerms('employee')
                 });
               } else if (String(existingUser.role || '').toLowerCase() === 'employee') {
                 await User.findByIdAndUpdate(existingUser._id, {
@@ -4233,6 +4351,7 @@ exports.bulkUploadEmployees = async (req, res) => {
       errors: results.errors,
       warnings: results.warnings,
       autoGeneratedIds: results.autoGeneratedIds,
+      extractedCredentials: results.extractedCredentials,
       message
     });
 
