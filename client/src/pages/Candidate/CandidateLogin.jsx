@@ -207,7 +207,7 @@ export default function CandidateLogin() {
                         )}
                     </div>
                     <h1 className="text-2xl font-bold text-slate-900 tracking-tight mb-1">
-                        {isForgotMode ? 'Reset Password' : 'Welcome Back'}
+                        {isForgotMode ? 'Reset Password' : 'Welcome'}
                     </h1>
                     <p className="text-slate-500 font-medium text-xs">
                         {isForgotMode ? 'Recover your account access for ' : 'Continue your journey with '}

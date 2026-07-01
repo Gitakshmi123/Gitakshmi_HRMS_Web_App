@@ -65,7 +65,7 @@ export default function SuperAdminLogin() {
           <div className="w-full max-w-[560px] rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_20px_50px_rgba(15,23,42,0.14)] md:p-8">
             <div className="mb-6">
               <p className="text-xs font-medium text-[#2563EB]">Super Admin Access</p>
-              <h2 className="mt-2 text-3xl font-semibold leading-tight text-[#0F172A]">Welcome back</h2>
+              <h2 className="mt-2 text-3xl font-semibold leading-tight text-[#0F172A]">Welcome</h2>
               <p className="mt-2 text-lg text-slate-500">Sign in to your account to continue</p>
             </div>
 
