@@ -4391,7 +4391,15 @@ exports.generateOfferLetter = async (req, res) => {
                     grade: applicantGrade.name,
                     gradeCode: applicantGrade.code,
                     gradeLevel: applicantGrade.level,
-                    customData,
+                    customData: {
+                        currentCompany: applicant.currentCompany,
+                        currentDesignation: applicant.currentDesignation,
+                        currentCTC: applicant.currentCTC,
+                        current_ctc: applicant.currentCTC,
+                        expectedCTC: applicant.expectedCTC,
+                        ...(applicant.customData || {}),
+                        ...(customData || {})
+                    },
                     generatedVariables,
                     missingVariables,
                     emailTemplateId: emailTemplateId

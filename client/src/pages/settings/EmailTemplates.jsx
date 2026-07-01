@@ -711,8 +711,44 @@ export default function EmailTemplates() {
       }
       setIsCustomRecipient(isRecCustom);
 
+      const defaultVisibility = {
+        currentDepartment: { visible: true, label: "Current Department" },
+        currentCTC: { visible: true, label: "Current CTC" },
+        offerCTC: { visible: true, label: "Offer CTC" },
+        percentageIncrease: { visible: true, label: "Percentage Increase (% Hike)" },
+        currentDesignation: { visible: true, label: "Current Designation" },
+        offerDesignation: { visible: true, label: "Offer Designation" },
+        department: { visible: true, label: "Offered Department" },
+        takeHomeMonthly: { visible: true, label: "Monthly Take Home" },
+        joiningDate: { visible: true, label: "Joining Date" },
+        workLocation: { visible: true, label: "Work Location" },
+        email: { visible: true, label: "Email" },
+        mobile: { visible: true, label: "Mobile" }
+      };
+
+      const normalizedVisibility = { ...defaultVisibility };
+      if (record && record.sidebarVisibility) {
+        Object.keys(defaultVisibility).forEach(key => {
+          const val = record.sidebarVisibility[key];
+          if (val !== undefined && val !== null) {
+            if (typeof val === 'object') {
+              normalizedVisibility[key] = {
+                visible: val.visible !== false,
+                label: val.label || defaultVisibility[key].label
+              };
+            } else {
+              normalizedVisibility[key] = {
+                visible: val !== false,
+                label: defaultVisibility[key].label
+              };
+            }
+          }
+        });
+      }
+
       form.setFieldsValue({
         ...record,
+        sidebarVisibility: normalizedVisibility,
         module: initialModule,
         customModule: customModValue,
         triggerType: initialTrigger,
@@ -729,7 +765,24 @@ export default function EmailTemplates() {
       setIsCustomModule(false);
       setIsCustomTrigger(false);
       setIsCustomRecipient(false);
-      form.setFieldsValue({ module: 'Recruitment', isActive: true });
+      form.setFieldsValue({ 
+        module: 'Recruitment', 
+        isActive: true,
+        sidebarVisibility: {
+          currentDepartment: { visible: true, label: "Current Department" },
+          currentCTC: { visible: true, label: "Current CTC" },
+          offerCTC: { visible: true, label: "Offer CTC" },
+          percentageIncrease: { visible: true, label: "Percentage Increase (% Hike)" },
+          currentDesignation: { visible: true, label: "Current Designation" },
+          offerDesignation: { visible: true, label: "Offer Designation" },
+          department: { visible: true, label: "Offered Department" },
+          takeHomeMonthly: { visible: true, label: "Monthly Take Home" },
+          joiningDate: { visible: true, label: "Joining Date" },
+          workLocation: { visible: true, label: "Work Location" },
+          email: { visible: true, label: "Email" },
+          mobile: { visible: true, label: "Mobile" }
+        }
+      });
       setHtmlContent('');
     }
     setIsEditingMode(true);
@@ -1074,41 +1127,98 @@ export default function EmailTemplates() {
                     </Form.Item>
                   )}
                 </div>
-                <Form.Item label="Subject" name="subject" rules={[{ required: true }]}>
-                  <Input placeholder="e.g. Offer Letter - {{candidateName}}" />
-                </Form.Item>
-                
-                <div className="mb-4">
-                  <div className="flex justify-between items-center mb-2">
-                    <label className="font-medium">Email Content</label>
-                    <Button 
-                      size="small" 
-                      onClick={() => setIsHtmlMode(!isHtmlMode)}
-                      type={isHtmlMode ? "primary" : "default"}
-                    >
-                      {isHtmlMode ? "Switch to Visual Editor" : "Switch to HTML Editor"}
-                    </Button>
-                  </div>
-                  <div className="bg-white" style={{ minHeight: '400px' }}>
-                    {isHtmlMode ? (
-                      <Input.TextArea
-                        value={htmlContent}
-                        onChange={(e) => setHtmlContent(e.target.value)}
-                        style={{ height: '350px', fontFamily: 'monospace', fontSize: '13px' }}
-                        placeholder="Paste your HTML code here..."
-                      />
-                    ) : (
-                      <ReactQuill
-                        ref={reactQuillRef}
-                        theme="snow"
-                        value={htmlContent}
-                        onChange={setHtmlContent}
-                        style={{ height: '350px' }}
-                        modules={quillModules}
-                      />
-                    )}
-                  </div>
-                </div>
+                <Tabs
+                  defaultActiveKey="content"
+                  className="mb-4"
+                  items={[
+                    {
+                      key: 'content',
+                      label: <span className="font-semibold">Email Content & Subject</span>,
+                      children: (
+                        <div className="space-y-4">
+                          <Form.Item label="Subject" name="subject" rules={[{ required: true }]}>
+                            <Input placeholder="e.g. Offer Letter - {{candidateName}}" />
+                          </Form.Item>
+                          
+                          <div className="mb-4">
+                            <div className="flex justify-between items-center mb-2">
+                              <label className="font-medium">Email Content</label>
+                              <Button 
+                                size="small" 
+                                onClick={() => setIsHtmlMode(!isHtmlMode)}
+                                type={isHtmlMode ? "primary" : "default"}
+                              >
+                                {isHtmlMode ? "Switch to Visual Editor" : "Switch to HTML Editor"}
+                              </Button>
+                            </div>
+                            <div className="bg-white" style={{ minHeight: '400px' }}>
+                              {isHtmlMode ? (
+                                <Input.TextArea
+                                  value={htmlContent}
+                                  onChange={(e) => setHtmlContent(e.target.value)}
+                                  style={{ height: '350px', fontFamily: 'monospace', fontSize: '13px' }}
+                                  placeholder="Paste your HTML code here..."
+                                />
+                              ) : (
+                                <ReactQuill
+                                  ref={reactQuillRef}
+                                  theme="snow"
+                                  value={htmlContent}
+                                  onChange={setHtmlContent}
+                                  style={{ height: '350px' }}
+                                  modules={quillModules}
+                                />
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    },
+                    {
+                      key: 'sidebar',
+                      label: <span className="font-semibold text-indigo-600">Portal Sidebar Visibility</span>,
+                      children: (
+                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200/80 mb-6">
+                          <h3 className="font-bold text-slate-800 text-sm mb-1">Configure Sidebar Candidate Information Fields</h3>
+                          <p className="text-xs text-slate-500 mb-6 leading-relaxed">
+                            💡 Toggle the switches below to customize what information sequence approvers can view on the left-sidebar of the magic link Offer Approval Portal.
+                          </p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                            {[
+                              { key: 'currentDepartment', defaultLabel: 'Current Department' },
+                              { key: 'currentCTC', defaultLabel: 'Current CTC' },
+                              { key: 'offerCTC', defaultLabel: 'Offer CTC' },
+                              { key: 'percentageIncrease', defaultLabel: 'Percentage Increase (% Hike)' },
+                              { key: 'currentDesignation', defaultLabel: 'Current Designation' },
+                              { key: 'offerDesignation', defaultLabel: 'Offer Designation' },
+                              { key: 'department', defaultLabel: 'Offered Department' },
+                              { key: 'takeHomeMonthly', defaultLabel: 'Monthly Take Home' },
+                              { key: 'joiningDate', defaultLabel: 'Joining Date' },
+                              { key: 'workLocation', defaultLabel: 'Work Location' },
+                              { key: 'email', defaultLabel: 'Email' },
+                              { key: 'mobile', defaultLabel: 'Mobile' }
+                            ].map((item) => (
+                              <div key={item.key} className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col gap-3 shadow-sm hover:border-indigo-200 transition-all">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-xs font-semibold text-slate-700">{item.defaultLabel}</span>
+                                  <Form.Item name={['sidebarVisibility', item.key, 'visible']} valuePropName="checked" noStyle>
+                                    <Switch checkedChildren="Show" unCheckedChildren="Hide" size="small" />
+                                  </Form.Item>
+                                </div>
+                                <div className="space-y-1">
+                                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Custom Label</span>
+                                  <Form.Item name={['sidebarVisibility', item.key, 'label']} noStyle>
+                                    <Input placeholder={item.defaultLabel} size="small" className="text-xs rounded-lg" />
+                                  </Form.Item>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    }
+                  ]}
+                />
               </Form>
             </div>
 

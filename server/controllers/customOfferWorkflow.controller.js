@@ -160,7 +160,21 @@ exports.startCustomWorkflow = async (req, res) => {
       );
     } else {
       const triggerType = `OFFER_APPROVAL_${firstStep.name.toUpperCase().replace(/\s+/g, '_')}`;
-      const template = await EmailTemplate.findOne({ tenantId, triggerType, isActive: true });
+      let template = await EmailTemplate.findOne({ tenantId, triggerType, isActive: true });
+      if (!template) {
+        template = await EmailTemplate.findOne({
+          tenantId,
+          name: new RegExp(firstStep.name.trim(), 'i'),
+          isActive: true
+        });
+      }
+      if (!template) {
+        template = await EmailTemplate.findOne({
+          tenantId,
+          customTriggerName: firstStep.name.trim(),
+          isActive: true
+        });
+      }
       if (template) customTemplate = template;
 
       await emailService.sendOfferApprovalRequestEmail(

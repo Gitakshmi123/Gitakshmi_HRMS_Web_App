@@ -112,15 +112,14 @@ export default function ApplyPageBuilder() {
                 ]
             },
             {
-                id: 'professional_details',
+                id: 'candidate_apply_form',
                 type: 'group',
-                title: "Professional Details",
+                title: "candidate apply form",
                 fields: [
-                    { id: 'experience', label: "Total Experience", type: "text", required: true, width: "half", placeholder: "e.g. 2 Years" },
-                    { id: 'currentCompany', label: "Current Company", type: "text", required: false, width: "half", placeholder: "e.g. Tech Corp" },
-                    { id: 'currentDesignation', label: "Current Designation", type: "text", required: false, width: "half", placeholder: "e.g. Developer" },
-                    { id: 'expectedCTC', label: "Expected CTC", type: "text", required: true, width: "half", placeholder: "e.g. 5 LPA" },
-                    { id: 'linkedin', label: "LinkedIn URL", type: "url", required: false, width: "half", placeholder: "https://linkedin.com/in/..." }
+                    { id: 'current_company', label: "current company", type: "text", required: true, width: "half", placeholder: "enter company" },
+                    { id: 'current_department', label: "current department", type: "text", required: true, width: "half", placeholder: "enter department..." },
+                    { id: 'current_designation', label: "current designation", type: "text", required: true, width: "half", placeholder: "enter designation" },
+                    { id: 'current_ctc', label: "current ctc", type: "text", required: true, width: "half", placeholder: "enter ctc" }
                 ]
             },
             {

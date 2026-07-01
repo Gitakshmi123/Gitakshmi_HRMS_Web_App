@@ -71,53 +71,170 @@ const formatObjectId = (value) => value ? String(value) : null;
 const buildCandidateDetails = (applicant, letter) => {
     const requirement = applicant?.requirementId || {};
     const salarySnapshot = applicant?.salarySnapshotId || applicant?.salarySnapshot || {};
-    const generatedVariables = letter?.generatedVariables;
-    const snapshotData = letter?.snapshotData;
+    
+    // Safely retrieve customData object and generatedVariables from letter snapshots
+    let customDataObj = {};
+    if (letter?.snapshotData) {
+        if (typeof letter.snapshotData.get === 'function') {
+            customDataObj = letter.snapshotData.get('customData') || {};
+        } else {
+            customDataObj = letter.snapshotData.customData || {};
+        }
+    }
 
+    const val = (key) => {
+        let res;
+        // Search customDataObj first
+        if (customDataObj) {
+            if (typeof customDataObj.get === 'function') {
+                res = customDataObj.get(key);
+            } else {
+                res = customDataObj[key];
+            }
+        }
+        if (res !== undefined && res !== null && res !== '') return res;
+        
+        // Search generatedVariables
+        if (letter?.generatedVariables) {
+            if (typeof letter.generatedVariables.get === 'function') {
+                res = letter.generatedVariables.get(key);
+            } else {
+                res = letter.generatedVariables[key];
+            }
+        }
+        if (res !== undefined && res !== null && res !== '') return res;
+
+        // Search snapshotData
+        if (letter?.snapshotData) {
+            if (typeof letter.snapshotData.get === 'function') {
+                res = letter.snapshotData.get(key);
+            } else {
+                res = letter.snapshotData[key];
+            }
+        }
+        if (res !== undefined && res !== null && res !== '') return res;
+
+        // Search applicant document
+        if (applicant) {
+            res = applicant[key];
+        }
+        return res;
+    };
+
+    // Offered CTC
     const offeredCtc = pickFirst(
         salarySnapshot.annualCTC,
         salarySnapshot.ctc,
         salarySnapshot.ctcYearly,
-        valueFromMap(snapshotData, 'salary_ctc_yearly'),
-        valueFromMap(snapshotData, 'salary_ctc'),
-        valueFromMap(generatedVariables, 'ctcYearly'),
-        valueFromMap(generatedVariables, 'annualCTC'),
-        valueFromMap(generatedVariables, 'ctc'),
-        valueFromMap(snapshotData, 'ctcYearly'),
+        val('salary_ctc_yearly'),
+        val('salary_ctc'),
+        val('ctcYearly'),
+        val('annualCTC'),
+        val('ctc'),
+        val('offer_ctc'),
+        val('offerCTC'),
+        val('offer ctc'),
         applicant?.ctcYearly,
         applicant?.expectedCTC,
         applicant?.currentCTC
     );
+
+    // Current CTC
     const currentCtc = pickFirst(
         applicant?.currentCTC,
+        val('current_ctc'),
+        val('currentCTC'),
+        val('current ctc'),
         customValue(applicant, 'currentCTC'),
         customValue(applicant, 'currentCtc'),
         customValue(applicant, 'current_ctc')
     );
+
+    // Offered Department
     const offerDepartment = pickFirst(
         displayName(requirement?.department),
         displayName(applicant?.offerDepartment),
+        val('department'),
+        val('offerDepartment'),
+        val('offer_department'),
+        val('offer department'),
         customValue(applicant, 'offerDepartment'),
         customValue(applicant, 'department'),
         displayName(applicant?.department)
     );
+
+    // Current Department
     const currentDepartment = pickFirst(
         displayName(applicant?.currentDepartment),
+        val('current_department'),
+        val('currentDepartment'),
+        val('current department'),
         customValue(applicant, 'currentDepartment'),
-        customValue(applicant, 'current_department'),
-        displayName(applicant?.department)
+        customValue(applicant, 'current_department')
     );
+
+    // Offered Designation
     const offerDesignation = pickFirst(
+        val('desingnation'), // handle typos in templates
+        val('designation'),
+        val('offerDesignation'),
+        val('offer_designation'),
+        val('offer designation'),
         requirement?.jobTitle,
         customValue(applicant, 'offerDesignation'),
         customValue(applicant, 'offer_designation'),
         applicant?.designation
     );
+
+    // Current Designation
     const currentDesignation = pickFirst(
         applicant?.currentDesignation,
+        val('current_designation'),
+        val('currentDesignation'),
+        val('current designation'),
         customValue(applicant, 'currentDesignation'),
         customValue(applicant, 'current_designation')
     );
+
+    // Hike Percentage & CTC Normalization
+    const currentCtcNum = parseMoneyNumber(currentCtc);
+    const offeredCtcNum = parseMoneyNumber(offeredCtc);
+    
+    let displayCurrentCtc = currentCtc;
+    let displayOfferedCtc = offeredCtc;
+    let percentageIncrease = val('percentage_increase') || val('percentageIncrease') || val('% increase') || val('% increate');
+    
+    if (currentCtcNum && offeredCtcNum) {
+        // Threshold: 150,000 to differentiate monthly vs yearly
+        const isCurrentMonthly = currentCtcNum <= 150000;
+        const isOfferYearly = offeredCtcNum > 150000;
+        
+        let normalizedCurrent = currentCtcNum;
+        let normalizedOffer = offeredCtcNum;
+        
+        if (isCurrentMonthly && isOfferYearly) {
+            normalizedOffer = Math.round(offeredCtcNum / 12);
+            displayOfferedCtc = `₹${normalizedOffer.toLocaleString('en-IN')} / Month`;
+            displayCurrentCtc = `₹${currentCtcNum.toLocaleString('en-IN')} / Month`;
+        } else if (!isCurrentMonthly && !isOfferYearly) {
+            normalizedOffer = Math.round(offeredCtcNum * 12);
+            displayOfferedCtc = `₹${normalizedOffer.toLocaleString('en-IN')} / Year`;
+            displayCurrentCtc = `₹${currentCtcNum.toLocaleString('en-IN')} / Year`;
+        } else if (isCurrentMonthly && !isOfferYearly) {
+            displayOfferedCtc = `₹${offeredCtcNum.toLocaleString('en-IN')} / Month`;
+            displayCurrentCtc = `₹${currentCtcNum.toLocaleString('en-IN')} / Month`;
+        } else {
+            displayOfferedCtc = `₹${offeredCtcNum.toLocaleString('en-IN')} / Year`;
+            displayCurrentCtc = `₹${currentCtcNum.toLocaleString('en-IN')} / Year`;
+        }
+        
+        const percentage = ((normalizedOffer - normalizedCurrent) / normalizedCurrent) * 100;
+        percentageIncrease = `${percentage.toFixed(2)}%`;
+    } else {
+        if ((!percentageIncrease || String(percentageIncrease).toUpperCase().trim() === 'N/A' || String(percentageIncrease).trim() === '') && currentCtc && offeredCtc) {
+            percentageIncrease = formatPercentageIncrease(currentCtc, offeredCtc);
+        }
+    }
 
     return {
         id: formatObjectId(applicant?._id),
@@ -134,19 +251,19 @@ const buildCandidateDetails = (applicant, letter) => {
         jobCategory: applicant?.jobCategory || requirement?.jobDetails?.jobType || null,
         workLocation: applicant?.workLocation || applicant?.location || null,
         workMode: requirement?.jobDetails?.workMode || null,
-        offeredCtc,
-        offerCtc: offeredCtc,
-        percentageIncrease: formatPercentageIncrease(currentCtc, offeredCtc),
-        ctcMonthly: pickFirst(salarySnapshot.monthlyCTC, salarySnapshot.ctcMonthly, valueFromMap(snapshotData, 'salary_ctc_monthly'), valueFromMap(generatedVariables, 'ctcMonthly')),
-        takeHomeMonthly: pickFirst(salarySnapshot.breakdown?.netPay, salarySnapshot.summary?.netPay, salarySnapshot.takeHomeMonthly, valueFromMap(snapshotData, 'salary_take_home_monthly'), applicant?.takeHome),
+        offeredCtc: displayOfferedCtc,
+        offerCtc: displayOfferedCtc,
+        percentageIncrease,
+        ctcMonthly: pickFirst(salarySnapshot.monthlyCTC, salarySnapshot.ctcMonthly, val('salary_ctc_monthly'), val('ctcMonthly')),
+        takeHomeMonthly: pickFirst(salarySnapshot.breakdown?.netPay, salarySnapshot.summary?.netPay, salarySnapshot.takeHomeMonthly, val('salary_take_home_monthly'), applicant?.takeHome),
         expectedCTC: applicant?.expectedCTC || null,
-        currentCTC: currentCtc || null,
+        currentCTC: displayCurrentCtc || null,
         experience: applicant?.relevantExperience || applicant?.experience || null,
         currentCompany: applicant?.currentCompany || null,
         currentDesignation: currentDesignation || null,
         offerDesignation,
         noticePeriod: applicant?.noticePeriod ? 'Yes' : 'No',
-        joiningDate: applicant?.joiningDate || valueFromMap(generatedVariables, 'joiningDate') || valueFromMap(snapshotData, 'joiningDate') || null,
+        joiningDate: applicant?.joiningDate || val('joining_date') || val('joiningDate') || null,
         status: applicant?.status || null,
         offerStatus: applicant?.offerStatus || null
     };
@@ -306,6 +423,42 @@ router.get('/:token', async (req, res) => {
     try {
         const { assignment, instance, letter, applicant } = await getOfferBundle(req, req.params.token);
         
+        let sidebarVisibility = null;
+        try {
+            if (assignment && assignment.stepName) {
+                const mongoose = require('mongoose');
+                const EmailTemplate = mongoose.model('EmailTemplate');
+                const triggerType = `OFFER_APPROVAL_${assignment.stepName.toUpperCase().replace(/\s+/g, '_')}`;
+                let template = await EmailTemplate.findOne({ 
+                    tenantId: assignment.tenantId, 
+                    triggerType, 
+                    isActive: true 
+                }).lean();
+                
+                if (!template) {
+                    template = await EmailTemplate.findOne({
+                        tenantId: assignment.tenantId,
+                        name: new RegExp(assignment.stepName.trim(), 'i'),
+                        isActive: true
+                    }).lean();
+                }
+                
+                if (!template) {
+                    template = await EmailTemplate.findOne({
+                        tenantId: assignment.tenantId,
+                        customTriggerName: assignment.stepName.trim(),
+                        isActive: true
+                    }).lean();
+                }
+                
+                if (template && template.sidebarVisibility) {
+                    sidebarVisibility = template.sidebarVisibility;
+                }
+            }
+        } catch (err) {
+            console.error('Error resolving template sidebar visibility:', err);
+        }
+        
         let documentUrl = null;
         let documentAvailable = false;
         
@@ -357,7 +510,8 @@ router.get('/:token', async (req, res) => {
                 currentStep: instance.currentStepKey,
                 currentStepOrder: instance.currentStepOrder,
                 status: instance.status
-            }
+            },
+            sidebarVisibility
         });
 
     } catch (error) {
@@ -515,7 +669,21 @@ router.post('/:token/action', async (req, res) => {
                 if (EmailTemplate) {
                     try {
                         const triggerType = `OFFER_APPROVAL_${nextStep.name.toUpperCase().replace(/\s+/g, '_')}`;
-                        const template = await EmailTemplate.findOne({ tenantId: instance.tenantId, triggerType, isActive: true });
+                        let template = await EmailTemplate.findOne({ tenantId: instance.tenantId, triggerType, isActive: true });
+                        if (!template) {
+                            template = await EmailTemplate.findOne({
+                                tenantId: instance.tenantId,
+                                name: new RegExp(nextStep.name.trim(), 'i'),
+                                isActive: true
+                            });
+                        }
+                        if (!template) {
+                            template = await EmailTemplate.findOne({
+                                tenantId: instance.tenantId,
+                                customTriggerName: nextStep.name.trim(),
+                                isActive: true
+                            });
+                        }
                         if (template) customTemplate = template;
                     } catch (e) {}
                 }

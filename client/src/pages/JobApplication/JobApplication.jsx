@@ -655,6 +655,18 @@ export default function JobApplication() {
       }
     }
 
+    const extractedCompany = getValueByLabelPattern(/\b(current company|current employer|company)\b/i);
+    if (extractedCompany) curData.currentCompany = extractedCompany;
+
+    const extractedDept = getValueByLabelPattern(/\b(current department|department)\b/i);
+    if (extractedDept) curData.currentDepartment = extractedDept;
+
+    const extractedDesig = getValueByLabelPattern(/\b(current designation|designation|current role|role)\b/i);
+    if (extractedDesig) curData.currentDesignation = extractedDesig;
+
+    const extractedCTC = getValueByLabelPattern(/\b(current ctc|ctc|current salary|salary)\b/i);
+    if (extractedCTC) curData.currentCTC = extractedCTC;
+
     // 2. Validation
     if (!curData.name || !curData.email) {
       setError('Name and Email are required properties.');

@@ -294,7 +294,61 @@ exports.applyJob = async (req, res, next) => {
     // 5. Generate Application ID
     const applicationId = await generateApplicationId(tenantDB);
 
-    // 6. Create Application
+    // 6. Extract dynamic career fields from req.body
+    const findBodyValue = (patterns) => {
+      for (const pattern of patterns) {
+        const key = Object.keys(req.body).find(k => {
+          const normalizedKey = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+          const normalizedPattern = pattern.toLowerCase().replace(/[^a-z0-9]/g, '');
+          return normalizedKey === normalizedPattern;
+        });
+        if (key && req.body[key] !== undefined && req.body[key] !== null && String(req.body[key]).trim() !== '') {
+          return String(req.body[key]).trim();
+        }
+      }
+      return undefined;
+    };
+
+    const currentCompany = findBodyValue(['current_company', 'currentCompany', 'current company', 'company']);
+    const currentDesignation = findBodyValue(['current_designation', 'currentDesignation', 'current designation', 'designation']);
+    const currentCTC = findBodyValue(['current_ctc', 'currentCTC', 'current ctc', 'ctc', 'salary']);
+    const currentDepartment = findBodyValue(['current_department', 'currentDepartment', 'current department']);
+    const expectedCTC = findBodyValue(['expected_ctc', 'expectedCTC', 'expected ctc']);
+
+    const customData = {
+      coverLetter,
+      appliedVia: 'Public Career Portal',
+    };
+
+    const excludedKeys = ['jobId', 'fullName', 'email', 'phone', 'coverLetter', 'resume'];
+    Object.keys(req.body).forEach(k => {
+      if (!excludedKeys.includes(k)) {
+        customData[k] = req.body[k];
+        const camelKey = k.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
+        if (camelKey !== k) {
+          customData[camelKey] = req.body[k];
+        }
+      }
+    });
+
+    if (currentDepartment) {
+      customData.currentDepartment = currentDepartment;
+      customData.current_department = currentDepartment;
+    }
+    if (currentCTC) {
+      customData.currentCTC = currentCTC;
+      customData.current_ctc = currentCTC;
+    }
+    if (currentDesignation) {
+      customData.currentDesignation = currentDesignation;
+      customData.current_designation = currentDesignation;
+    }
+    if (currentCompany) {
+      customData.currentCompany = currentCompany;
+      customData.current_company = currentCompany;
+    }
+
+    // 7. Create Application
     const applicant = await Applicant.create({
       applicationId,
       tenant: tenant._id,
@@ -305,10 +359,11 @@ exports.applyJob = async (req, res, next) => {
       mobile: phone,
       resume: req.file.filename,
       status: 'Applied',
-      customData: {
-        coverLetter,
-        appliedVia: 'Public Career Portal',
-      },
+      currentCompany,
+      currentDesignation,
+      currentCTC,
+      expectedCTC,
+      customData,
       timeline: [
         {
           status: 'Applied',

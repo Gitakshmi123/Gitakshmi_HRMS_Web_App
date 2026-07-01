@@ -10,6 +10,7 @@ const EmailTemplateSchema = new mongoose.Schema({
   bodyHtml: { type: String, required: true },
   designJson: { type: Object },
   placeholders: [{ type: String }],
+  sidebarVisibility: { type: Object, default: null },
   isActive: { type: Boolean, default: true },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }

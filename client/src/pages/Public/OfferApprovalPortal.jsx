@@ -28,6 +28,9 @@ const formatValue = (value) => {
 
 const formatMoney = (value) => {
     if (value === undefined || value === null || value === '') return 'N/A';
+    if (String(value).includes('/') || String(value).toLowerCase().includes('month') || String(value).toLowerCase().includes('year')) {
+        return String(value);
+    }
     const numeric = Number(String(value).replace(/[^0-9.-]/g, ''));
     if (Number.isFinite(numeric) && String(value).replace(/[^0-9]/g, '').length >= 4) {
         return new Intl.NumberFormat('en-IN', {
@@ -152,10 +155,25 @@ const OfferApprovalPortal = () => {
         );
     }
 
-    const { candidate, offer, assignment } = data;
+    const { candidate, offer, assignment, sidebarVisibility } = data;
     const isPending = assignment.status === 'PENDING';
     const documentUrl = offer?.documentUrl ? offer.documentUrl : `${API_URL}/public/offer/${token}/document`;
     const documentUrlWithToolbar = documentUrl.includes('?') ? `${documentUrl}&toolbar=0` : `${documentUrl}#toolbar=0`;
+
+    const isVisible = (key) => {
+        if (!sidebarVisibility) return true;
+        const cfg = sidebarVisibility[key];
+        if (cfg === undefined || cfg === null) return true;
+        if (typeof cfg === 'object') return cfg.visible !== false;
+        return cfg !== false;
+    };
+
+    const getLabel = (key, defaultLabel) => {
+        if (sidebarVisibility && sidebarVisibility[key] && typeof sidebarVisibility[key] === 'object' && sidebarVisibility[key].label) {
+            return sidebarVisibility[key].label;
+        }
+        return defaultLabel;
+    };
 
     return (
         <div className="min-h-screen bg-slate-50 font-sans text-slate-900 selection:bg-blue-500/30">
@@ -205,18 +223,18 @@ const OfferApprovalPortal = () => {
                         <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Candidate Information</h2>
 
                         <div className="space-y-5">
-                            <DetailRow icon={Building} label="Current Department" value={candidate?.currentDepartment} />
-                            <DetailRow icon={IndianRupee} label="Current CTC" value={formatMoney(candidate?.currentCTC)} />
-                            <DetailRow icon={IndianRupee} label="Offer CTC" value={formatMoney(candidate?.offerCtc || candidate?.offeredCtc)} />
-                            <DetailRow icon={IndianRupee} label="Percentage Increase" value={candidate?.percentageIncrease} />
-                            <DetailRow icon={Briefcase} label="Current Designation" value={candidate?.currentDesignation} />
-                            <DetailRow icon={Briefcase} label="Offer Designation" value={candidate?.offerDesignation || candidate?.designation || candidate?.role} />
-                            <DetailRow icon={Building} label="Department" value={candidate?.department || candidate?.offerDepartment} />
-                            <DetailRow icon={IndianRupee} label="Monthly Take Home" value={formatMoney(candidate?.takeHomeMonthly)} />
-                            <DetailRow icon={CalendarDays} label="Joining Date" value={formatDate(candidate?.joiningDate)} />
-                            <DetailRow icon={MapPin} label="Work Location" value={candidate?.workLocation || candidate?.workMode} />
-                            <DetailRow icon={Mail} label="Email" value={candidate?.email} />
-                            <DetailRow icon={Phone} label="Mobile" value={candidate?.mobile} />
+                            {isVisible('currentDepartment') && <DetailRow icon={Building} label={getLabel('currentDepartment', 'Current Department')} value={candidate?.currentDepartment} />}
+                            {isVisible('currentCTC') && <DetailRow icon={IndianRupee} label={getLabel('currentCTC', 'Current CTC')} value={formatMoney(candidate?.currentCTC)} />}
+                            {isVisible('offerCTC') && <DetailRow icon={IndianRupee} label={getLabel('offerCTC', 'Offer CTC')} value={formatMoney(candidate?.offerCtc || candidate?.offeredCtc)} />}
+                            {isVisible('percentageIncrease') && <DetailRow icon={IndianRupee} label={getLabel('percentageIncrease', 'Percentage Increase')} value={candidate?.percentageIncrease} />}
+                            {isVisible('currentDesignation') && <DetailRow icon={Briefcase} label={getLabel('currentDesignation', 'Current Designation')} value={candidate?.currentDesignation} />}
+                            {isVisible('offerDesignation') && <DetailRow icon={Briefcase} label={getLabel('offerDesignation', 'Offer Designation')} value={candidate?.offerDesignation || candidate?.designation || candidate?.role} />}
+                            {isVisible('department') && <DetailRow icon={Building} label={getLabel('department', 'Department')} value={candidate?.department || candidate?.offerDepartment} />}
+                            {isVisible('takeHomeMonthly') && <DetailRow icon={IndianRupee} label={getLabel('takeHomeMonthly', 'Monthly Take Home')} value={formatMoney(candidate?.takeHomeMonthly)} />}
+                            {isVisible('joiningDate') && <DetailRow icon={CalendarDays} label={getLabel('joiningDate', 'Joining Date')} value={formatDate(candidate?.joiningDate)} />}
+                            {isVisible('workLocation') && <DetailRow icon={MapPin} label={getLabel('workLocation', 'Work Location')} value={candidate?.workLocation || candidate?.workMode} />}
+                            {isVisible('email') && <DetailRow icon={Mail} label={getLabel('email', 'Email')} value={candidate?.email} />}
+                            {isVisible('mobile') && <DetailRow icon={Phone} label={getLabel('mobile', 'Mobile')} value={candidate?.mobile} />}
                         </div>
                     </div>
 

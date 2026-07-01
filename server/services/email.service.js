@@ -333,6 +333,69 @@ class EmailService {
         return this.sendApplicationStatusEmail(to, candidateName, jobTitle, applicationId, status, null, null, tenantId);
     }
 
+    // Helper function to dynamically replace placeholders (supporting user's custom templates like CEO template)
+    replaceEmailPlaceholders(html, {
+        candidateName = '',
+        jobTitle = '',
+        companyName = '',
+        department = '',
+        ctcYearly = '',
+        joiningDate = '',
+        currentDesignation = '',
+        currentCTC = '',
+        hikePercentage = '',
+        ctcBreakdown = '',
+        candidateDetails = '',
+        approvalUrl = ''
+    }) {
+        if (!html) return html;
+
+        const formattedJoiningDate = joiningDate 
+            ? (isNaN(Date.parse(joiningDate)) ? joiningDate : new Date(joiningDate).toLocaleDateString())
+            : '';
+
+        return html
+            .replace(/{{candidateName}}/g, candidateName)
+            .replace(/{{jobTitle}}/g, jobTitle)
+            .replace(/{{designation}}/g, jobTitle)
+            .replace(/{{companyName}}/g, companyName)
+            .replace(/{{department}}/g, department)
+            .replace(/{{ctcYearly}}/g, ctcYearly)
+            .replace(/{{joiningDate}}/g, formattedJoiningDate)
+            .replace(/{{currentDesignation}}/g, currentDesignation)
+            .replace(/{{currentCTC}}/g, currentCTC)
+            .replace(/{{hikePercentage}}/g, hikePercentage)
+            .replace(/{{ctcBreakdown}}/g, ctcBreakdown)
+            .replace(/{{candidateDetails}}/g, candidateDetails)
+            .replace(/{{approvalUrl}}/g, approvalUrl)
+            
+            // Dynamic Case-Insensitive replacements for CEO/Workflow template matching user requirements
+            .replace(/{{current_department}}/gi, department)
+            .replace(/{{currentDepartment}}/gi, department)
+            .replace(/{{current department}}/gi, department)
+            
+            .replace(/{{current_ctc}}/gi, currentCTC)
+            .replace(/{{currentCTC}}/gi, currentCTC)
+            .replace(/{{current ctc}}/gi, currentCTC)
+            
+            .replace(/{{offer_ctc}}/gi, ctcYearly)
+            .replace(/{{offerCTC}}/gi, ctcYearly)
+            .replace(/{{offer ctc}}/gi, ctcYearly)
+            
+            .replace(/{{percentage_increase}}/gi, hikePercentage)
+            .replace(/{{percentageIncrease}}/gi, hikePercentage)
+            .replace(/{{% increase}}/gi, hikePercentage)
+            .replace(/{{% increate}}/gi, hikePercentage)
+            
+            .replace(/{{current_designation}}/gi, currentDesignation)
+            .replace(/{{currentDesignation}}/gi, currentDesignation)
+            .replace(/{{current designation}}/gi, currentDesignation)
+            
+            .replace(/{{offer_designation}}/gi, jobTitle)
+            .replace(/{{offerDesignation}}/gi, jobTitle)
+            .replace(/{{offer designation}}/gi, jobTitle);
+    }
+
     /**
      * Send Offer Letter Email with Attachment
      * @param {string} to - Recipient Email
@@ -350,17 +413,26 @@ class EmailService {
              const ctcBreakdown = applicant ? generateCTCBreakdownHtml(applicant.salarySnapshotId || applicant.salarySnapshot) : '';
              const candidateDetails = applicant ? generateCandidateDetailsHtml(applicant) : '';
 
-             html = html.replace(/{{candidateName}}/g, candidateName)
-                        .replace(/{{jobTitle}}/g, jobTitle)
-                        .replace(/{{designation}}/g, jobTitle)
-                        .replace(/{{companyName}}/g, companyName)
-                        .replace(/{{ctcBreakdown}}/g, ctcBreakdown)
-                        .replace(/{{candidateDetails}}/g, candidateDetails)
-                        .replace(/{{department}}/g, applicant?.department || '')
-                        .replace(/{{ctcYearly}}/g, applicant?.ctcYearly || '')
-                        .replace(/{{joiningDate}}/g, applicant?.joiningDate ? new Date(applicant.joiningDate).toLocaleDateString() : '')
-                        .replace(/{{currentDesignation}}/g, applicant?.currentDesignation || '')
-                        .replace(/{{currentCTC}}/g, applicant?.currentCTC || '');
+             const ctcYearlyNum = parseFloat(String(applicant?.ctcYearly || '').replace(/,/g, '')) || 0;
+             const currentCTCNum = parseFloat(String(applicant?.currentCTC || '').replace(/,/g, '')) || 0;
+             let hikePercentage = '';
+             if (currentCTCNum > 0 && ctcYearlyNum > 0) {
+                 hikePercentage = (((ctcYearlyNum - currentCTCNum) / currentCTCNum) * 100).toFixed(2) + '%';
+             }
+
+             html = this.replaceEmailPlaceholders(html, {
+                 candidateName,
+                 jobTitle,
+                 companyName,
+                 department: applicant?.department || '',
+                 ctcYearly: applicant?.ctcYearly || '',
+                 joiningDate: applicant?.joiningDate || '',
+                 currentDesignation: applicant?.currentDesignation || '',
+                 currentCTC: applicant?.currentCTC || '',
+                 hikePercentage,
+                 ctcBreakdown,
+                 candidateDetails
+             });
         }
 
         if (!html) {
@@ -730,39 +802,42 @@ class EmailService {
         let html = customTemplate?.bodyHtml || null;
 
         if (customTemplate?.subject) {
-            subject = customTemplate.subject
-                       .replace(/{{candidateName}}/g, candidateName)
-                       .replace(/{{jobTitle}}/g, jobTitle)
-                       .replace(/{{designation}}/g, jobTitle)
-                       .replace(/{{companyName}}/g, companyName)
-                       .replace(/{{department}}/g, details.department || '');
+             subject = this.replaceEmailPlaceholders(customTemplate.subject, {
+                 candidateName,
+                 jobTitle,
+                 designation: jobTitle,
+                 companyName,
+                 department: details.department || ''
+             });
         }
 
         if (html) {
-            const applicant = details.applicant;
-            const ctcBreakdown = applicant ? generateCTCBreakdownHtml(applicant.salarySnapshotId || applicant.salarySnapshot) : '';
-            const candidateDetails = applicant ? generateCandidateDetailsHtml(applicant) : '';
+             const applicant = details.applicant;
+             const ctcBreakdown = applicant ? generateCTCBreakdownHtml(applicant.salarySnapshotId || applicant.salarySnapshot) : '';
+             const candidateDetails = applicant ? generateCandidateDetailsHtml(applicant) : '';
 
-            const ctcYearlyNum = parseFloat((details.ctcYearly || '').replace(/,/g, '')) || 0;
-            const currentCTCNum = parseFloat(String(details.currentCTC || (applicant ? applicant.currentCTC : '') || '').replace(/,/g, '')) || 0;
-            let hikePercentage = '';
-            if (currentCTCNum > 0 && ctcYearlyNum > 0) {
-                hikePercentage = (((ctcYearlyNum - currentCTCNum) / currentCTCNum) * 100).toFixed(2) + '%';
-            }
+             const ctcYearlyNum = parseFloat((details.ctcYearly || '').replace(/,/g, '')) || 0;
+             const currentCTCNum = parseFloat(String(details.currentCTC || (applicant ? applicant.currentCTC : '') || '').replace(/,/g, '')) || 0;
+             let hikePercentage = '';
+             if (currentCTCNum > 0 && ctcYearlyNum > 0) {
+                 hikePercentage = (((ctcYearlyNum - currentCTCNum) / currentCTCNum) * 100).toFixed(2) + '%';
+             }
 
-            html = html.replace(/{{candidateName}}/g, candidateName)
-                       .replace(/{{jobTitle}}/g, jobTitle)
-                       .replace(/{{designation}}/g, jobTitle)
-                       .replace(/{{companyName}}/g, companyName)
-                       .replace(/{{approvalUrl}}/g, approvalUrl)
-                       .replace(/{{department}}/g, details.department || '')
-                       .replace(/{{ctcYearly}}/g, details.ctcYearly || '')
-                       .replace(/{{joiningDate}}/g, details.joiningDate || '')
-                       .replace(/{{currentDesignation}}/g, details.currentDesignation || (applicant ? applicant.currentDesignation : '') || '')
-                       .replace(/{{currentCTC}}/g, details.currentCTC || (applicant ? applicant.currentCTC : '') || '')
-                       .replace(/{{hikePercentage}}/g, hikePercentage)
-                       .replace(/{{ctcBreakdown}}/g, ctcBreakdown)
-                       .replace(/{{candidateDetails}}/g, candidateDetails);
+             html = this.replaceEmailPlaceholders(html, {
+                 candidateName,
+                 jobTitle,
+                 designation: jobTitle,
+                 companyName,
+                 approvalUrl,
+                 department: details.department || '',
+                 ctcYearly: details.ctcYearly || '',
+                 joiningDate: details.joiningDate || '',
+                 currentDesignation: details.currentDesignation || (applicant ? applicant.currentDesignation : '') || '',
+                 currentCTC: details.currentCTC || (applicant ? applicant.currentCTC : '') || '',
+                 hikePercentage,
+                 ctcBreakdown,
+                 candidateDetails
+             });
         }
 
         if (!html) {

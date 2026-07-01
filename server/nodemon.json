@@ -2,12 +2,16 @@
   "watch": ["."],
   "ext": "js,json",
   "ignore": [
+    "uploads",
     "uploads/**",
+    "**/uploads/**",
     "logs/**",
     "node_modules/**",
     ".git/**",
     "*.log",
     "*.txt",
+    "*.tmp",
+    "**/*.tmp",
     ".env"
   ]
 }
