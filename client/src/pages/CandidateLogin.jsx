@@ -118,7 +118,7 @@ export default function CandidateLogin() {
                 <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
                     <div className="p-8">
                         <div className="text-center mb-8">
-                            <h2 className="text-xl font-bold text-gray-900">Welcome Back</h2>
+                            <h2 className="text-xl font-bold text-gray-900">Welcome</h2>
                             <p className="text-sm text-gray-500 mt-1">Sign in to access your applications</p>
                         </div>
 
